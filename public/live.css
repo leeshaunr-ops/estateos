@@ -7,3 +7,4 @@
 
 .arrival-card{text-align:left;width:100%;cursor:pointer}.arrival-card h2{margin:8px 0}.substitution-input{max-width:220px}
 .portal-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:22px 0}.portal-tile{display:grid;gap:7px;text-align:left;min-height:106px;padding:15px;border:1px solid var(--line);background:#f8fbf9}.portal-tile strong{font-size:16px}.portal-tile span{font-size:12px;line-height:1.4;color:var(--muted);font-weight:400}.portal-tile.selected{background:#173e35;color:#fff;border-color:#173e35;box-shadow:0 8px 18px #153e3120}.portal-tile.selected span{color:#d2e5da}
+ .check-row small{display:block;color:var(--muted);font-size:12px}
