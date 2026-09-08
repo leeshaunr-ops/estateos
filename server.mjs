@@ -425,7 +425,10 @@ async function api(req, res, url, user) {
         roles(user, 'admin', 'employee');
         (await property(user, b.propertyId, 'operate'));
         const key = id();
-        (await run('INSERT INTO inspections(id,property_id,inspector_id,inspection_date,answers,created_at) VALUES(?,?,?,?,?,?)', key, b.propertyId, user.id, date(b.date), JSON.stringify(template), now()));
+        const inspectionDate = date(b.date), frequency = ['One-time', '7 days', '30 days', '60 days'].includes(b.frequency) ? b.frequency : (b.frequency === 'Custom' ? 'Custom' : 'One-time');
+        const customDays = frequency === 'Custom' ? Math.max(1, Math.min(3650, Number(b.customDays) || 0)) : ({ '7 days': 7, '30 days': 30, '60 days': 60 }[frequency] || 0);
+        const next = customDays ? (() => { const d = new Date(inspectionDate + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + customDays); return d.toISOString().slice(0, 10); })() : '';
+        (await run('INSERT INTO inspections(id,property_id,inspector_id,inspection_date,answers,created_at,frequency,next_due) VALUES(?,?,?,?,?,?,?,?)', key, b.propertyId, user.id, inspectionDate, JSON.stringify(template), now(), frequency, next));
         (await audit(user, 'inspection.started', key));
         result = { id: key };
     }
