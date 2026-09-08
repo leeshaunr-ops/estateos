@@ -518,6 +518,18 @@ async function api(req, res, url, user) {
         }
         result = { id: key };
     }
+    else if (p === '/api/shopping/update' || p === '/api/shopping/delete') {
+        roles(user, 'admin', 'employee', 'client');
+        const item = await entity(user, 'shopping_items', b.id);
+        if (p.endsWith('/delete')) {
+            await run('DELETE FROM shopping_items WHERE id=?', item.id);
+            await audit(user, 'shopping.removed', item.id);
+        } else {
+            await run('UPDATE shopping_items SET name=?,quantity=?,category=?,notes=? WHERE id=?', text(b.name, 'Item', 200), text(b.quantity, 'Quantity', 80), note(b.category, 100), note(b.notes), item.id);
+            await audit(user, 'shopping.updated', item.id);
+        }
+        result = {id:item.id};
+    }
     else if (p === '/api/shopping') {
         roles(user, 'admin', 'employee', 'client');
         (await property(user, b.propertyId));
