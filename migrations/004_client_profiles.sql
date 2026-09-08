@@ -1,0 +1,1 @@
+ALTER TABLE clients ADD COLUMN profile TEXT NOT NULL DEFAULT '{}';
