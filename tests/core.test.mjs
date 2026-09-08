@@ -1,0 +1,76 @@
+import {test,after} from 'node:test';
+import assert from 'node:assert/strict';
+import {spawn} from 'node:child_process';
+import {mkdtempSync,rmSync,readFileSync} from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const dir=mkdtempSync(path.join(os.tmpdir(),'estateos-tests-'));
+let proc,base,log='';
+async function start(){proc=spawn(process.execPath,['server.mjs'],{cwd:root,env:{...process.env,PORT:'0',ESTATEOS_DATA_DIR:dir},windowsHide:true});proc.stderr.on('data',chunk=>{log+=chunk;});base=await new Promise((resolve,reject)=>{proc.stdout.on('data',chunk=>{const line=String(chunk);const match=line.match(/http:\/\/127\.0\.0\.1:\d+/);if(match)resolve(match[0]);});proc.once('exit',code=>reject(Error('Server exited: '+code+' '+log)));setTimeout(()=>reject(Error('Startup timeout')),10000).unref();});}
+async function stop(){if(proc&&!proc.killed){proc.kill();await new Promise(resolve=>proc.once('exit',resolve));}}
+after(async()=>{await stop();rmSync(dir,{recursive:true,force:true});});
+function client(){let cookie='';return {async req(endpoint,b,expected=200){const res=await fetch(base+'/api/'+endpoint,{method:b===undefined?'GET':'POST',headers:{Origin:base,'Content-Type':'application/json',Cookie:cookie},body:b===undefined?undefined:JSON.stringify(b)});const set=res.headers.get('set-cookie');if(set)cookie=set.split(';')[0];const result=await res.json();assert.equal(res.status,expected,endpoint+': '+JSON.stringify(result)+' '+log);return result;},async raw(endpoint){return fetch(base+'/api/'+endpoint,{headers:{Cookie:cookie}});}};}
+const pw='Test-only-strong-password-928!';
+test('Real accounts, persistence, tenant scope, inspection/photo/PDF, vendor review, arrivals and billing',async()=>{
+ await start();const admin=client(),clientA=client(),clientB=client(),vendorA=client(),vendorB=client(),employee=client(),anonymous=client();
+ assert.equal((await admin.req('status')).configured,false);
+ await admin.req('setup',{company:'Integration test company',name:'Owner',email:'owner@example.test',password:pw},201);
+ await admin.req('setup',{company:'Other',name:'Other',email:'other@example.test',password:pw},409);
+ await anonymous.req('data',undefined,401);
+ const ca=await admin.req('clients',{name:'Family A'},201),cb=await admin.req('clients',{name:'Family B'},201);
+ const address={streetAddress:'1 Test Street',city:'Miami',state:'FL',postalCode:'33101',country:'United States'};
+ const pa=await admin.req('properties',{clientId:ca.id,name:'Residence A',...address,roomProfile:{bedrooms:2,fullBathrooms:2,halfBathrooms:0,rooms:[{key:'kitchen',name:'Kitchen'}]}},201),pb=await admin.req('properties',{clientId:cb.id,name:'Residence B',...address,streetAddress:'2 Test Street'},201);
+ const va=await admin.req('vendors',{name:'Vendor A',trade:'Pool'},201),vb=await admin.req('vendors',{name:'Vendor B'},201);
+ async function invite(client,role,email,extra={}){const inv=await admin.req('invitations',{role,email,...extra},201);const token=new URL('http://test'+inv.invitePath).searchParams.get('invite');return client.req('accept-invite',{token,name:email,password:pw},201);}
+ await invite(clientA,'client','a@example.test',{clientId:ca.id});await invite(clientB,'client','b@example.test',{clientId:cb.id});await invite(vendorA,'vendor','va@example.test',{vendorId:va.id});await invite(vendorB,'vendor','vb@example.test',{vendorId:vb.id});const emp=await invite(employee,'employee','employee@example.test');
+ assert.equal((await employee.req('data')).properties.length,0);await admin.req('access',{userId:emp.user.id,propertyId:pa.id},201);assert.equal((await employee.req('data')).properties.length,1);
+ assert.deepEqual((await clientA.req('data')).properties.map(p=>p.id),[pa.id]);
+ await clientA.req('requests',{propertyId:pb.id,title:'Unauthorized'},404);
+ await clientA.req('invoices',{clientId:ca.id},403);await vendorA.req('invoices',{},403);await employee.req('invoices',{},403);
+ const asset=await admin.req('assets',{propertyId:pa.id,name:'Generator',category:'Equipment'},201);
+ await admin.req('work',{propertyId:pb.id,assetId:asset.id,title:'Wrong property'},422);
+ const job=await admin.req('work',{propertyId:pa.id,assetId:asset.id,title:'Generator service',vendorId:va.id},201);
+ assert.equal((await vendorA.req('data')).work.length,1);assert.equal((await vendorB.req('data')).work.length,0);
+ await vendorB.req('work/action',{id:job.id,version:1,action:'start'},404);
+ const request=await clientA.req('requests',{propertyId:pa.id,title:'Service request'},201);await admin.req('requests/assign',{id:request.id,workId:job.id},201);
+ const inspection=await admin.req('inspections',{propertyId:pa.id,date:'2026-09-08'},201);
+ const initial=(await admin.req('data')).inspections.find(i=>i.id===inspection.id);
+ const answers=initial.answers.map(a=>({...a,status:'pass',note:''}));
+ answers[0].status='monitor';answers[1].status='unchecked';
+ await admin.req('inspections/save',{id:inspection.id,version:1,answers,summary:'Everything verified',notes:'For client',internalNotes:'PRIVATE STAFF NOTE'},201);
+ await admin.req('inspections/save',{id:inspection.id,version:1,answers},409);
+ const image=readFileSync(path.join(root,'tests/fixture.jpg')).toString('base64');
+ const photo=await admin.req('files',{propertyId:pa.id,inspectionId:inspection.id,name:'Evidence.jpg',base64:image},201);
+ assert.equal((await clientA.raw('files/'+photo.id)).status,404);
+ const payload={id:inspection.id,version:2,idempotencyKey:'publish-test'};await admin.req('inspections/publish',payload,201);await admin.req('inspections/publish',payload,200);
+ const clientData=await clientA.req('data');assert.equal(clientData.inspections.length,1);assert(!JSON.stringify(clientData).includes('PRIVATE STAFF NOTE'));assert.equal((await clientB.req('data')).inspections.length,0);
+ assert.equal((await clientA.raw('files/'+photo.id)).status,200);assert.equal((await clientB.raw('files/'+photo.id)).status,404);
+ const pdf=await clientA.raw('inspections/'+inspection.id+'/pdf');assert.equal(pdf.status,200);const bytes=Buffer.from(await pdf.arrayBuffer());assert.equal(bytes.subarray(0,5).toString(),'%PDF-');assert(bytes.includes(Buffer.from('Residence A')));assert(bytes.includes(Buffer.from('/Subtype /Image')));assert(!bytes.includes(Buffer.from('PRIVATE STAFF NOTE')));
+ assert.equal((await clientB.raw('inspections/'+inspection.id+'/pdf')).status,404);
+ await admin.req('inspections/save',{id:inspection.id,version:3,answers},409);
+ await vendorA.req('files',{propertyId:pa.id,workId:job.id,name:'Completed.jpg',base64:image},201);
+ await vendorA.req('work/action',{id:job.id,version:1,action:'submit',notes:'Service completed and photographed'},201);
+ await vendorA.req('work/action',{id:job.id,version:2,action:'accept'},403);
+ await admin.req('work/action',{id:job.id,version:2,action:'accept'},201);
+ assert.equal((await clientA.req('data')).requests.find(r=>r.id===request.id).status,'completed');
+ const grocery=await clientA.req('shopping',{propertyId:pa.id,name:'Water',quantity:'12'},201);
+ const arrival=await clientA.req('arrivals',{propertyId:pa.id,arrivalAt:'2026-10-01T15:00',needs:'Prepare guest rooms',itemIds:[grocery.id]},201);
+ await admin.req('arrivals/update',{id:arrival.id,version:1,status:'ready',confirmNeeds:true},422);
+ await admin.req('arrivals/update',{id:arrival.id,version:1,itemId:grocery.id,itemStatus:'stocked'},201);
+ let arrivalData=(await admin.req('data')).arrivals.find(a=>a.id===arrival.id);for(const room of arrivalData.room_status){await admin.req('arrivals/update',{id:arrival.id,version:arrivalData.version,roomKey:room.key,roomReady:true},201);arrivalData=(await admin.req('data')).arrivals.find(a=>a.id===arrival.id);}
+ await admin.req('arrivals/update',{id:arrival.id,version:arrivalData.version,status:'ready',confirmNeeds:true},201);
+ const plan=await admin.req('maintenance',{propertyId:pa.id,title:'Pool service',frequency:'Weekly',nextDue:'2026-09-09'},201);
+ const first=await admin.req('maintenance/generate',{id:plan.id},201),again=await admin.req('maintenance/generate',{id:plan.id},201);assert.equal(first.id,again.id);
+ const secondPlan=await admin.req('maintenance',{propertyId:pa.id,title:'Monthly walkthrough',frequency:'Monthly',nextDue:'2026-09-09'},201);
+ const run=await admin.req('maintenance/run-due',{until:'2026-10-01'},201);assert.equal(run.generatedCount,1);const nextMaintenance=(await admin.req('data')).maintenance.find(m=>m.id===secondPlan.id);assert.equal(nextMaintenance.next_due,'2026-10-09');
+ const invoice=await admin.req('invoices',{clientId:ca.id,number:'INV-1',description:'Management',amountMinor:12345,dueDate:'2026-09-30'},201);
+ await admin.req('payments',{invoiceId:invoice.id,amountMinor:2345,reference:'Check'},201);await admin.req('payments',{invoiceId:invoice.id,amountMinor:10001},422);
+ const bills=(await admin.req('data')).invoices;assert.equal(bills[0].paid_minor,2345);assert.equal((await clientA.req('data')).invoices.length,0);
+ await admin.req('properties/archive',{id:pb.id,confirm:true},201);assert.equal((await admin.req('data')).properties.some(p=>p.id===pb.id),false);
+ await admin.req('properties/restore',{id:pb.id},201);assert.equal((await admin.req('data')).properties.some(p=>p.id===pb.id),true);
+ const suspended=await admin.req('users/suspend',{userId:emp.user.id},201);await employee.req('data',undefined,401);
+ await stop();await start();const renewed=client();await renewed.req('login',{email:'owner@example.test',password:pw});assert.equal((await renewed.req('data')).properties.length,2);assert.equal((await renewed.req('data')).inspections[0].status,'published');
+ const csrf=await fetch(base+'/api/clients',{method:'POST',headers:{'Content-Type':'application/json',Origin:'http://evil.test'},body:'{}'});assert.equal(csrf.status,403);
+});
