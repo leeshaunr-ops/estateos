@@ -1,0 +1,198 @@
+[
+  {
+    "key": "item-0-0",
+    "section": "Water & Plumbing",
+    "label": "Exercise main water shutoff valve",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-0-1",
+    "section": "Water & Plumbing",
+    "label": "Run every sink faucet for 2–3 minutes",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-0-2",
+    "section": "Water & Plumbing",
+    "label": "Run showers and tubs",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-0-3",
+    "section": "Water & Plumbing",
+    "label": "Flush every toilet",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-0-4",
+    "section": "Water & Plumbing",
+    "label": "Check under sinks for leaks",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-0-5",
+    "section": "Water & Plumbing",
+    "label": "Check water heater / mechanical room for leaks",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-1-0",
+    "section": "HVAC & Interior",
+    "label": "Run HVAC and verify cooling / heating",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-1-1",
+    "section": "HVAC & Interior",
+    "label": "Record interior temperature and humidity",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-1-2",
+    "section": "HVAC & Interior",
+    "label": "Check thermostat batteries / alerts",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-1-3",
+    "section": "HVAC & Interior",
+    "label": "Check ceilings and walls for moisture",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-1-4",
+    "section": "HVAC & Interior",
+    "label": "Check doors, windows and locks",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-1-5",
+    "section": "HVAC & Interior",
+    "label": "Test smoke / CO detector status",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-2-0",
+    "section": "Kitchen & Appliances",
+    "label": "Verify refrigerator temperature",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-2-1",
+    "section": "Kitchen & Appliances",
+    "label": "Verify freezer temperature",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-2-2",
+    "section": "Kitchen & Appliances",
+    "label": "Run dishwasher quick cycle",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-2-3",
+    "section": "Kitchen & Appliances",
+    "label": "Run garbage disposal",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-2-4",
+    "section": "Kitchen & Appliances",
+    "label": "Check ice maker / water dispenser",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-2-5",
+    "section": "Kitchen & Appliances",
+    "label": "Inspect pantry / cabinets for pest activity",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-3-0",
+    "section": "Electrical & Backup Systems",
+    "label": "Check generator controller for alerts",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-3-1",
+    "section": "Electrical & Backup Systems",
+    "label": "Visual generator / battery inspection",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-3-2",
+    "section": "Electrical & Backup Systems",
+    "label": "Check electrical panels for obvious issues",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-3-3",
+    "section": "Electrical & Backup Systems",
+    "label": "Test key interior / exterior lighting",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-4-0",
+    "section": "Exterior & Amenities",
+    "label": "Walk exterior perimeter",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-4-1",
+    "section": "Exterior & Amenities",
+    "label": "Check roof / gutters from ground level",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-4-2",
+    "section": "Exterior & Amenities",
+    "label": "Inspect irrigation / landscaping issues",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-4-3",
+    "section": "Exterior & Amenities",
+    "label": "Inspect pool / spa equipment area",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-4-4",
+    "section": "Exterior & Amenities",
+    "label": "Check garage / vehicles / chargers",
+    "status": "unchecked",
+    "note": ""
+  },
+  {
+    "key": "item-4-5",
+    "section": "Exterior & Amenities",
+    "label": "Verify gates, cameras and security systems",
+    "status": "unchecked",
+    "note": ""
+  }
+]
