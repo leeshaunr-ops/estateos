@@ -252,10 +252,12 @@ async function api(req, res, url, user) {
         result = { id: key };
     }
     else if (p === '/api/clients/update' || p === '/api/clients/member' || p === '/api/clients/member/delete') {
-        roles(user, 'admin');
+        roles(user, 'admin', 'client');
         const c = (await get('SELECT * FROM clients WHERE id=? AND organization_id=?', b.id, user.organization_id));
         if (!c)
             fail(404, 'Family not found.');
+        if (user.role === 'client' && user.client_id !== c.id)
+            fail(403, 'You do not have permission for this family.');
         const old = JSON.parse(c.profile || '{}');
         if (p.endsWith('/member/delete')) {
             const members = old.members || [];
