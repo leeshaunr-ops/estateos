@@ -434,6 +434,15 @@ async function api(req, res, url, user) {
         (await audit(user, 'inspection.started', key));
         result = { id: key };
     }
+    else if (p === '/api/inspections/schedule') {
+        roles(user, 'admin', 'employee');
+        const row = (await entity(user, 'inspections', b.id, 'operate'));
+        const frequency = ['One-time', '7 days', '30 days', '60 days'].includes(b.frequency) ? b.frequency : (b.frequency === 'Custom' ? 'Custom' : 'One-time');
+        const days = frequency === 'Custom' ? Math.max(1, Math.min(3650, Number(b.customDays) || 0)) : ({'7 days':7,'30 days':30,'60 days':60}[frequency] || 0);
+        let next = ''; if (days) { const d = new Date(date(b.nextDue) + 'T12:00:00Z'); next = d.toISOString().slice(0,10); }
+        (await run('UPDATE inspections SET frequency=?,next_due=? WHERE id=?', frequency, next, row.id));
+        (await audit(user, 'inspection.schedule_updated', row.id)); result = { id: row.id, frequency, next_due: next };
+    }
     else if (p === '/api/inspections/save') {
         roles(user, 'admin', 'employee');
         const row = (await entity(user, 'inspections', b.id, 'operate'));
