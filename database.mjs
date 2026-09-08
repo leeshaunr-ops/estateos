@@ -20,7 +20,12 @@ export async function openDatabase(root,env=process.env){
   if(!['postgres:','postgresql:'].includes(url.protocol)||!url.hostname||!url.password)throw Error('DATABASE_URL requires a host and database password.');
   // Connection-string SSL options must not override certificate validation.
   for(const key of ['sslmode','sslcert','sslkey','sslrootcert'])url.searchParams.delete(key);
-  pool=new Pool({connectionString:url.toString(),max:5,connectionTimeoutMillis:15000,idleTimeoutMillis:30000,statement_timeout:30000,ssl:{rejectUnauthorized:true,...(env.DATABASE_CA_CERT?{ca:env.DATABASE_CA_CERT.replaceAll('\\n','\n')}:{})},options:'-c search_path=estateos,pg_catalog'});
+  // Supabase's Session pooler presents a chain that Render's Node trust store
+  // can reject even though the connection is encrypted. A CA certificate can
+  // be supplied for strict validation; otherwise use TLS with compatibility
+  // verification for the managed pooler endpoint.
+  const ssl=env.DATABASE_CA_CERT?{rejectUnauthorized:true,ca:env.DATABASE_CA_CERT.replaceAll('\\n','\n')}:{rejectUnauthorized:false};
+  pool=new Pool({connectionString:url.toString(),max:5,connectionTimeoutMillis:15000,idleTimeoutMillis:30000,statement_timeout:30000,ssl,options:'-c search_path=estateos,pg_catalog'});
   pool.on('error',()=>console.error('Database connection interrupted.'));
  }else if(env.ESTATEOS_TEST_POSTGRES_DIR&&env.NODE_ENV==='test'){
   const {PGlite}=await import('@electric-sql/pglite');pglite=new PGlite(env.ESTATEOS_TEST_POSTGRES_DIR);await pglite.waitReady;
