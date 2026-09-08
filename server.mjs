@@ -185,6 +185,8 @@ async function api(req, res, url, user) {
         rate(req, 'login');
         const b = await body(req);
         const u = (await get('SELECT * FROM users WHERE email=? AND active=1', String(b.email).toLowerCase()));
+        if (u && b.role && b.role !== u.role)
+            fail(403, 'Choose the portal assigned to this account.');
         if (!u || !passwordMatches(b.password, u.password_hash))
             fail(401, 'Email or password is incorrect.');
         (await session(res, req, u));
