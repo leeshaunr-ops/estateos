@@ -83,7 +83,7 @@ async function property(user, propertyId, operation = 'read') {
         return p;
     if (user.role === 'client' && p.client_id === user.client_id && operation !== 'operate')
         return p;
-    if (user.role === 'employee' && (await get('SELECT 1 FROM property_access WHERE user_id=? AND property_id=?', user.id, p.id)))
+    if (user.role === 'employee' && p.account_manager_id === user.id)
         return p;
     if (user.role === 'vendor' && operation === 'job' && (await get("SELECT 1 FROM work_orders WHERE property_id=? AND vendor_id=? AND status NOT IN ('cancelled')", p.id, user.vendor_id)))
         return p;
@@ -119,7 +119,7 @@ function assertVersion(row, b) { if (!Number.isInteger(b.version) || b.version !
     fail(409, 'This record changed. Reload it before saving.'); }
 const template = JSON.parse(fs.readFileSync(path.join(root, 'inspection-template.json'), 'utf8'));
 async function snapshot(user) {
-    const allProperties = (await all('SELECT properties.*, clients.name client_name, clients.profile client_profile FROM properties JOIN clients ON clients.id=properties.client_id WHERE properties.organization_id=? AND properties.archived_at IS NULL', user.organization_id));
+    const allProperties = (await all('SELECT properties.*, clients.name client_name, clients.profile client_profile, manager.name account_manager_name FROM properties JOIN clients ON clients.id=properties.client_id LEFT JOIN users manager ON manager.id=properties.account_manager_id WHERE properties.organization_id=? AND properties.archived_at IS NULL', user.organization_id));
     const archivedProperties = user.role === 'admin' ? (await all('SELECT properties.*, clients.name client_name FROM properties JOIN clients ON clients.id=properties.client_id WHERE properties.organization_id=? AND properties.archived_at IS NOT NULL ORDER BY properties.archived_at DESC', user.organization_id)) : [];
     const props = (await filterAsync(allProperties, async (p) => { try {
         (await property(user, p.id, user.role === 'vendor' ? 'job' : 'read'));
@@ -345,14 +345,18 @@ async function api(req, res, url, user) {
         (await audit(user, 'invitation.created', email));
         result = { invitePath: '/?invite=' + token, expiresInHours: 48 };
     }
-    else if (p === '/api/access') {
+    else if (p === '/api/access' || p === '/api/properties/manager') {
         roles(user, 'admin');
-        const member = (await get('SELECT * FROM users WHERE id=? AND organization_id=?', b.userId, user.organization_id));
-        if (!member || member.role !== 'employee')
-            fail(422, 'Select an employee.');
+        const member = b.userId ? (await get('SELECT * FROM users WHERE id=? AND organization_id=?', b.userId, user.organization_id)) : null;
+        if (b.userId && (!member || !member.active || !['admin','employee'].includes(member.role)))
+            fail(422, 'Select an active administrator or employee.');
         (await property(user, b.propertyId));
-        (await run('INSERT OR IGNORE INTO property_access VALUES(?,?)', member.id, b.propertyId));
-        (await audit(user, 'access.granted', member.id));
+        await transaction(async () => {
+            await run('UPDATE properties SET account_manager_id=? WHERE id=?', member?.id || null, b.propertyId);
+            await run('DELETE FROM property_access WHERE property_id=?', b.propertyId);
+            if (member?.role === 'employee') await run('INSERT INTO property_access VALUES(?,?)', member.id, b.propertyId);
+            await audit(user, 'property.butler_assigned', b.propertyId);
+        });
         result = { ok: true };
     }
     else if (p === '/api/users/suspend') {
