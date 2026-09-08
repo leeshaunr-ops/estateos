@@ -1,5 +1,21 @@
 # EstateOS — Working application foundation
 
+## Hosted Supabase configuration
+
+When running on Render with Supabase, set these environment variables in the Render service. Keep the database URL and service role key in Render only; never commit them to GitHub.
+
+```text
+DATABASE_URL=the Supabase Session pooler connection string
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_STORAGE_BUCKET=estateos-files
+SUPABASE_SERVICE_ROLE_KEY=the Supabase service role key
+ESTATEOS_HOST=0.0.0.0
+ESTATEOS_SECURE_COOKIES=1
+ESTATEOS_SETUP_KEY=a-long-random-first-setup-key
+```
+
+The `estateos-files` bucket must be private. On first startup, the server creates the `estateos` schema and applies the checked-in schema and migrations. The existing application login, role checks, audit records, and private file access continue to run through the server.
+
 This is a real locally running application, not a role-switching demo. It starts with **Create company**, creates a password-protected administrator account, and persists business records in a SQLite database. No sample accounts or residences are silently imported.
 
 ## Start
