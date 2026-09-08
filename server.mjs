@@ -119,7 +119,7 @@ function assertVersion(row, b) { if (!Number.isInteger(b.version) || b.version !
     fail(409, 'This record changed. Reload it before saving.'); }
 const template = JSON.parse(fs.readFileSync(path.join(root, 'inspection-template.json'), 'utf8'));
 async function snapshot(user) {
-    const allProperties = (await all('SELECT properties.*, clients.name client_name FROM properties JOIN clients ON clients.id=properties.client_id WHERE properties.organization_id=? AND properties.archived_at IS NULL', user.organization_id));
+    const allProperties = (await all('SELECT properties.*, clients.name client_name, clients.profile client_profile FROM properties JOIN clients ON clients.id=properties.client_id WHERE properties.organization_id=? AND properties.archived_at IS NULL', user.organization_id));
     const archivedProperties = user.role === 'admin' ? (await all('SELECT properties.*, clients.name client_name FROM properties JOIN clients ON clients.id=properties.client_id WHERE properties.organization_id=? AND properties.archived_at IS NOT NULL ORDER BY properties.archived_at DESC', user.organization_id)) : [];
     const props = (await filterAsync(allProperties, async (p) => { try {
         (await property(user, p.id, user.role === 'vendor' ? 'job' : 'read'));
@@ -249,13 +249,20 @@ async function api(req, res, url, user) {
         (await audit(user, 'client.created', key));
         result = { id: key };
     }
-    else if (p === '/api/clients/update' || p === '/api/clients/member') {
+    else if (p === '/api/clients/update' || p === '/api/clients/member' || p === '/api/clients/member/delete') {
         roles(user, 'admin');
         const c = (await get('SELECT * FROM clients WHERE id=? AND organization_id=?', b.id, user.organization_id));
         if (!c)
             fail(404, 'Family not found.');
         const old = JSON.parse(c.profile || '{}');
-        if (p.endsWith('/member')) {
+        if (p.endsWith('/member/delete')) {
+            const members = old.members || [];
+            if (!members.some(member => member.id === b.memberId))
+                fail(404, 'Family member not found.');
+            run('UPDATE clients SET profile=? WHERE id=?', JSON.stringify({ ...old, members: members.filter(member => member.id !== b.memberId) }), c.id);
+            audit(user, 'client.member_removed', c.id);
+        }
+        else if (p.endsWith('/member')) {
             const members = old.members || [];
             members.push({ id: id(), firstName: text(b.firstName, 'First name', 160), lastName: text(b.lastName, 'Last name', 160), relationship: note(b.relationship, 100), email: note(b.email, 254), phone: note(b.phone, 80), preferredContact: contactPreference(b.preferredContact) });
             (await run('UPDATE clients SET profile=? WHERE id=?', JSON.stringify({ ...old, members }), c.id));
