@@ -124,7 +124,7 @@ function usersView(){return head('Team & access','Each person uses their own log
 let routePlannerSelections=null;
 function routeWorkIds(){return new Set(data.work.filter(w=>!['completed','cancelled'].includes(w.status)).map(w=>w.property_id));}
 function routeSelected(id){const state=routePlannerSelections;if(state.manual.has(id))return state.manual.get(id);return state.inspections&&upcomingInspections().some(i=>i.property_id===id)||state.work&&routeWorkIds().has(id);}
-function routeView(){routePlannerSelections={inspections:true,work:false,manual:new Map()};return head('Plan your day','Choose groups of residences or select individual stops below.')+`<div class="panel">${input('origin','Starting address','text','',false)}<h3 class="summary">Add to route</h3><label class="check-row"><input type="checkbox" data-route-group="inspections" checked> Add inspections due in the next 3 days</label><label class="check-row"><input type="checkbox" data-route-group="work"> Add open work orders</label><p class="muted">You can also add or remove individual residences below. Each residence appears once in your route.</p><h3>Select residences for this route</h3>${data.properties.map(p=>`<label class="check-row"><input type="checkbox" class="route-stop" value="${esc(p.id)}" ${routeSelected(p.id)?'checked':''}><span><b>${esc(p.name)}</b><br><span class="muted">${esc(p.address||'Add an address before navigation')}${upcomingInspections().filter(i=>i.property_id===p.id).map(i=>' · Inspection due: '+esc(i.next_due)).join('')}${routeWorkIds().has(p.id)?' · Open work orders':''}</span></span></label>`).join('')||empty('No residences assigned.')}${btn('Open Google Maps directions','navigate-route','',true)}</div>`;}
+function routeView(){routePlannerSelections={inspections:true,work:false,manual:new Map()};return head('Plan your day','Choose groups of residences or select individual stops below.')+`<div class="panel">${input('origin','Starting address','text','',false)}<button type="button" id="routeLocate">Locate me</button><div id="routeOriginStatus" role="status" aria-live="polite"></div><div id="routeOriginResults" class="address-suggestions"></div><small>Address search by Photon · OpenStreetMap</small><h3 class="summary">Add to route</h3><label class="check-row"><input type="checkbox" data-route-group="inspections" checked> Add inspections due in the next 3 days</label><label class="check-row"><input type="checkbox" data-route-group="work"> Add open work orders</label><p class="muted">You can also add or remove individual residences below. Each residence appears once in your route.</p><h3>Select residences for this route</h3>${data.properties.map(p=>`<label class="check-row"><input type="checkbox" class="route-stop" value="${esc(p.id)}" ${routeSelected(p.id)?'checked':''}><span><b>${esc(p.name)}</b><br><span class="muted">${esc(p.address||'Add an address before navigation')}${upcomingInspections().filter(i=>i.property_id===p.id).map(i=>' · Inspection due: '+esc(i.next_due)).join('')}${routeWorkIds().has(p.id)?' · Open work orders':''}</span></span></label>`).join('')||empty('No residences assigned.')}${btn('Open Google Maps directions','navigate-route','',true)}</div>`;}
 document.addEventListener('change',event=>{const el=event.target;if(!routePlannerSelections)return;if(el.dataset.routeGroup){routePlannerSelections[el.dataset.routeGroup]=el.checked;document.querySelectorAll('.route-stop').forEach(stop=>{stop.checked=!!routeSelected(stop.value);});}else if(el.classList.contains('route-stop'))routePlannerSelections.manual.set(el.value,el.checked);});
 
 const residenceSelect=selected=>select('propertyId','Residence',option(data.properties,'id','name',selected||propertyId));
@@ -193,6 +193,45 @@ document.addEventListener('click',async event=>{const button=event.target.closes
 document.addEventListener('change',async event=>{const el=event.target;if(!el.dataset.arrival)return;const a=data.arrivals.find(a=>a.id===el.dataset.arrival);try{const payload={id:a.id,version:a.version};if(el.dataset.item){const field=el.dataset.itemField;if(field==='substitutionNeeded')Object.assign(payload,{itemId:el.dataset.item,substitutionNeeded:el.checked,substitution:el.closest('.actions')?.querySelector('[data-item-field=\"substitution\"]')?.value||''});else if(field==='substitution')Object.assign(payload,{itemId:el.dataset.item,substitutionNeeded:el.closest('.actions')?.querySelector('[data-item-field=\"substitutionNeeded\"]')?.checked||false,substitution:el.value});else Object.assign(payload,{itemId:el.dataset.item,itemStatus:el.checked?'purchased':'requested'});}if(el.dataset.roomKey)Object.assign(payload,{roomKey:el.dataset.roomKey,roomReady:el.checked});await api('arrivals/update',payload);await load();toast(el.dataset.roomKey?'Room readiness saved.':el.dataset.itemField==='substitutionNeeded'||el.dataset.itemField==='substitution'?'Substitution details saved.':'Purchase status saved.');}catch(error){toast(error.message);await load();}});
 async function boot(){try{const status=await api('status');const invitation=new URLSearchParams(location.search).get('invite');if(status.user&&!invitation)await load();else portalAuth(status.configured,invitation);}catch(error){$('app').innerHTML=`<div class="loading"><h1>EstateOS could not connect</h1><p>${esc(error.message)}</p><p>Keep the EstateOS server running, then refresh this page.</p></div>`;}}
 boot();
+let routeAddressTimer,routeAddressRequest,routeAddressRevision=0;
+document.addEventListener('input',event=>{
+ const field=event.target;if(field.id!=='f-origin')return;
+ const revision=++routeAddressRevision;clearTimeout(routeAddressTimer);routeAddressRequest?.abort();
+ const results=$('routeOriginResults'),status=$('routeOriginStatus');if(!results)return;
+ results.replaceChildren();status.textContent='';const q=field.value.trim();if(q.length<3)return;
+ routeAddressTimer=setTimeout(async()=>{
+  const controller=new AbortController();routeAddressRequest=controller;
+  status.textContent='Finding addresses…';
+  try{
+   const response=await fetch('https://photon.komoot.io/api/?limit=5&q='+encodeURIComponent(q),{signal:controller.signal});
+   if(!response.ok)throw Error('Lookup failed');
+   const body=await response.json();if(revision!==routeAddressRevision||!field.isConnected)return;
+   for(const feature of body.features||[]){
+    const p=feature.properties||{};
+    const address=[p.name,[p.housenumber,p.street].filter(Boolean).join(' '),p.city||p.town||p.village,p.state,p.postcode,p.country].filter(Boolean).join(', ');
+    if(!address)continue;
+    const button=document.createElement('button');button.type='button';button.className='address-suggestion';button.textContent=address;
+    button.onclick=()=>{++routeAddressRevision;field.value=address;results.replaceChildren();status.textContent='Starting address selected.';field.focus();};
+    results.appendChild(button);
+   }
+   status.textContent=results.children.length?'Select an address below.':'No matches. You can enter the address manually.';
+  }catch(error){if(error.name!=='AbortError'&&revision===routeAddressRevision)status.textContent='Address search unavailable. Enter your address manually.';}
+ },500);
+});
+document.addEventListener('click',async event=>{
+ if(event.target.id!=='routeLocate')return;
+ const button=event.target,field=$('f-origin'),status=$('routeOriginStatus');
+ ++routeAddressRevision;clearTimeout(routeAddressTimer);routeAddressRequest?.abort();$('routeOriginResults').replaceChildren();
+ if(!navigator.geolocation){status.textContent='Location is unavailable on this device. Enter an address manually.';return;}
+ const revision=routeAddressRevision;button.disabled=true;status.textContent='Finding your location…';
+ try{
+  const position=await new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true,timeout:15000,maximumAge:60000}));
+  if(!field.isConnected||revision!==routeAddressRevision)return;
+  field.value=position.coords.latitude.toFixed(6)+','+position.coords.longitude.toFixed(6);
+  status.textContent='Current location selected. These coordinates will be used as your starting point.';
+ }catch(error){if(field.isConnected&&revision===routeAddressRevision)status.textContent=error.code===1?'Location permission denied. Allow location access or enter an address manually.':'Could not find your location. Try again or enter an address manually.';}
+ finally{button.disabled=false;}
+});
 function globalSearch(){const q=search.trim().toLowerCase();if(!q)return view();const match=v=>Object.values(v||{}).some(x=>typeof x==='string'&&x.toLowerCase().includes(q));const props=data.properties.filter(match),jobs=data.work.filter(match);return head('Search results',`Matches for “${esc(search)}”`)+`<div class="panel"><h2>Residences</h2>${props.map(p=>`<div class="row"><strong>${esc(p.name)}</strong>${btn('View residence','property',p.id)}</div>`).join('')||empty('No matching residences.')}</div><div class="panel"><h2>Work orders</h2>${workRows(jobs)||empty('No matching work orders.')}</div>`;}
 window.addEventListener('focus',()=>{if(data&&page!=='inspection'&&!$('modal').open)load().catch(error=>toast(error.message));});
 if(document.modelContext?.registerTool){
