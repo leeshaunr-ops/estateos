@@ -29,7 +29,14 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id,creat
 
 CREATE TABLE IF NOT EXISTS schema_migrations(name TEXT PRIMARY KEY,applied_at TEXT NOT NULL);
 CREATE OR REPLACE FUNCTION estateos.protect_published() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN IF OLD.status='published' THEN RAISE EXCEPTION 'Published inspections are immutable'; END IF; RETURN NEW; END; $$;
+BEGIN
+ IF OLD.status='published' AND
+    (to_jsonb(NEW) - 'frequency' - 'next_due') IS DISTINCT FROM
+    (to_jsonb(OLD) - 'frequency' - 'next_due') THEN
+  RAISE EXCEPTION 'Published inspections are immutable';
+ END IF;
+ RETURN NEW;
+END; $$;
 DROP TRIGGER IF EXISTS protect_published_inspection ON inspections;
 CREATE TRIGGER protect_published_inspection BEFORE UPDATE ON inspections FOR EACH ROW EXECUTE FUNCTION estateos.protect_published();
 CREATE OR REPLACE FUNCTION estateos.protect_audit() RETURNS trigger LANGUAGE plpgsql AS $$
