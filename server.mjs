@@ -120,6 +120,7 @@ function assertVersion(row, b) { if (!Number.isInteger(b.version) || b.version !
     fail(409, 'This record changed. Reload it before saving.'); }
 const template = JSON.parse(fs.readFileSync(path.join(root, 'inspection-template.json'), 'utf8'));
 async function snapshot(user) {
+    const profile = await get('SELECT phone,preferred_contact FROM user_profiles WHERE user_id=?', user.id) || {phone:'',preferred_contact:'Email'};
     const allProperties = (await all('SELECT properties.*, clients.name client_name, clients.profile client_profile, manager.name account_manager_name FROM properties JOIN clients ON clients.id=properties.client_id LEFT JOIN users manager ON manager.id=properties.account_manager_id WHERE properties.organization_id=? AND properties.archived_at IS NULL', user.organization_id));
     const archivedProperties = user.role === 'admin' ? (await all('SELECT properties.*, clients.name client_name FROM properties JOIN clients ON clients.id=properties.client_id WHERE properties.organization_id=? AND properties.archived_at IS NOT NULL ORDER BY properties.archived_at DESC', user.organization_id)) : [];
     const props = (await filterAsync(allProperties, async (p) => { try {
@@ -143,7 +144,7 @@ async function snapshot(user) {
     const assets = user.role === 'vendor' ? [] : (await scoped('assets'));
     const assetIds = new Set(assets.map(a => a.id));
     const assetInspections = assetIds.size ? (await all('SELECT ai.* FROM asset_inspections ai JOIN assets a ON a.id=ai.asset_id WHERE a.id IN (' + [...assetIds].map(() => '?').join(',') + ')', ...assetIds)).map(i => ({ ...i, answers: JSON.parse(i.answers || '[]') })) : [];
-    return { user: safeUser(user), company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, properties: props.map(p => { if (user.role === 'vendor')
+    return { user: {...safeUser(user), ...profile}, company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, properties: props.map(p => { if (user.role === 'vendor')
             return { id: p.id, name: p.name, address: p.address }; if (user.role === 'client') {
             const { manual, ...safe } = p;
             return safe;
@@ -258,7 +259,39 @@ async function api(req, res, url, user) {
         fail(404, 'Endpoint not found.');
     const b = await body(req);
     let result;
-    if (p === '/api/clients') {
+    if (p === '/api/profile') {
+        const name = text(b.name, 'Name', 160), phone = note(b.phone, 80);
+        const preference = contactPreference(b.preferredContact);
+        await transaction(async () => {
+            await run('UPDATE users SET name=? WHERE id=?', name, user.id);
+            await run('INSERT INTO user_profiles(user_id,phone,preferred_contact) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET phone=excluded.phone,preferred_contact=excluded.preferred_contact', user.id, phone, preference);
+            await audit(user, 'profile.updated', user.id);
+        });
+        result = { saved: true };
+    }
+    else if (p === '/api/profile/password' || p === '/api/profile/email') {
+        rate(req, 'login');
+        await transaction(async () => {
+            const current = await get('SELECT * FROM users WHERE id=?', user.id);
+            if (!passwordMatches(b.currentPassword, current.password_hash)) fail(403, 'Current password is incorrect.');
+            if (p.endsWith('/password')) {
+                if (b.newPassword !== b.confirmPassword) fail(422, 'New passwords must match.');
+                const pw = passwordHash(b.newPassword);
+                await run('UPDATE users SET password_hash=? WHERE id=?', pw, user.id);
+                await audit(user, 'password.changed', user.id);
+            } else {
+                const email = text(b.email, 'Email', 254).toLowerCase();
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(422, 'Enter a valid email.');
+                if (await get('SELECT id FROM users WHERE LOWER(email)=? AND id<>?', email, user.id)) fail(409, 'That email is already in use.');
+                await run('UPDATE users SET email=? WHERE id=?', email, user.id);
+                await audit(user, 'email.changed', user.id);
+            }
+            await run('DELETE FROM sessions WHERE user_id=?', user.id);
+        });
+        await session(res, req, user);
+        result = { saved: true };
+    }
+    else if (p === '/api/clients') {
         roles(user, 'admin');
         const key = id();
         (await run('INSERT INTO clients(id,organization_id,name,email,phone,created_at,profile) VALUES(?,?,?,?,?,?,?)', key, user.organization_id, text(b.name || b.lastName, 'Family name', 160), note(b.email, 254), note(b.phone, 80), now(), JSON.stringify(clientProfile(b))));
