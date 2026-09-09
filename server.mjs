@@ -778,6 +778,13 @@ const server = http.createServer(async (req, res) => {
         }
         if (url.pathname.startsWith('/api/'))
             return await api(req, res, url, (await actor(req)));
+        if (['/waterfront.mp4', '/waterfront.jpg'].includes(url.pathname)) {
+            const mediaPath = path.join(root, 'public', url.pathname.slice(1));
+            const size = fs.statSync(mediaPath).size;
+            res.writeHead(200, {'Content-Type': url.pathname.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg', 'Content-Length': size, 'Cache-Control': 'public, max-age=86400'});
+            if (req.method === 'HEAD') return res.end();
+            return fs.createReadStream(mediaPath).pipe(res);
+        }
         const names = { '/': 'live.html', '/live.js': 'live.js', '/live.css': 'live.css' };
         const file = names[url.pathname];
         if (!file)
