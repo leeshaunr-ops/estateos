@@ -59,3 +59,11 @@ th{background:#faf8f3;color:#746c5e;font-weight:600}td{color:#514b41}a,.link-but
 .auth .auth-form .primary:hover,.auth .auth-form .portal-tile.selected:hover{background:#701c23;border-color:#701c23}
 .auth .auth-form .eyebrow,.auth .auth-form a,.auth .auth-form .link-button{color:#8b242b}
 .auth .auth-form input:focus-visible,.auth .auth-form button:focus-visible,.auth .auth-form a:focus-visible{outline-color:#8b242b}
+/* Restrained burgundy accents throughout the signed-in workspace. */
+.shell button.primary,.shell .button.primary,.shell .tabs button.active{background:#8b242b;border-color:#8b242b;color:#fff}
+.shell button.primary:hover,.shell .button.primary:hover,.shell .tabs button.active:hover{background:#701c23;border-color:#701c23}
+.shell nav button.active{background:#f7eeeb;color:#8b242b;border-left-color:#8b242b}
+.shell .residence .residence-top{border-top:3px solid #8b242b}
+.shell .residence .residence-top .eyebrow{color:#8b242b}
+.shell .stat-link b,.shell .link-button{color:#8b242b}
+.shell button:focus-visible,.shell input:focus-visible,.shell select:focus-visible,.shell textarea:focus-visible,.shell a:focus-visible{outline-color:#8b242b}
