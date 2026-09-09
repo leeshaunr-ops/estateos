@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {createSaas,platformOwner} from './saas.mjs';
 import {seal,unseal} from './vault.mjs';
 import { openDatabase } from './database.mjs';
 import { openStorage } from './storage.mjs';
@@ -70,7 +71,7 @@ catch {
 } }
 async function actor(req) { const token = (req.headers.cookie || '').match(/(?:^|; )estateos_session=([^;]+)/)?.[1]; if (!token)
     return null; return (await get('SELECT users.* FROM sessions JOIN users ON users.id=sessions.user_id WHERE token_hash=? AND expires_at>? AND users.active=1', hash(token), Date.now())) || null; }
-function safeUser(user) { return user ? { id: user.id, name: user.name, email: user.email, role: user.role } : null; }
+function safeUser(user) { return user ? { id: user.id, name: user.name, email: user.email, role: user.role, platformOwner: platformOwner(user) } : null; }
 function roles(user, ...allowed) { if (!user)
     fail(401, 'Please sign in.'); if (!allowed.includes(user.role))
     fail(403, 'You do not have permission for this action.'); }
@@ -131,7 +132,7 @@ async function snapshot(user) {
         return false;
     } }));
     const allowed = new Set(props.map(p => p.id));
-    const scoped = async (table) => (await all(`SELECT * FROM ${table}`)).filter(row => allowed.has(row.property_id));
+    const scoped = async (table) => (await all(`SELECT t.* FROM ${table} t JOIN properties p ON p.id=t.property_id WHERE p.organization_id=?`,user.organization_id)).filter(row => allowed.has(row.property_id));
     let jobs = (await scoped('work_orders'));
     if (user.role === 'vendor')
         jobs = jobs.filter(j => j.vendor_id === user.vendor_id);
@@ -144,7 +145,7 @@ async function snapshot(user) {
     const assets = user.role === 'vendor' ? [] : (await scoped('assets'));
     const assetIds = new Set(assets.map(a => a.id));
     const assetInspections = assetIds.size ? (await all('SELECT ai.* FROM asset_inspections ai JOIN assets a ON a.id=ai.asset_id WHERE a.id IN (' + [...assetIds].map(() => '?').join(',') + ')', ...assetIds)).map(i => ({ ...i, answers: JSON.parse(i.answers || '[]') })) : [];
-    return { user: {...safeUser(user), ...profile}, company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, properties: props.map(p => { if (user.role === 'vendor')
+    return { workspaceSupport:(await get('SELECT support_email FROM workspace_settings WHERE organization_id=?',user.organization_id))?.support_email||'', user: {...safeUser(user), ...profile}, company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, properties: props.map(p => { if (user.role === 'vendor')
             return { id: p.id, name: p.name, address: p.address }; if (user.role === 'client') {
             const { manual, ...safe } = p;
             return safe;
@@ -164,8 +165,12 @@ async function fileAllowed(user, f, inspectionIds, jobIds) {
 async function readFile(user, fileId) { const f = (await get('SELECT * FROM files WHERE id=?', fileId)); if (!f)
     fail(404, 'File not found.'); (await property(user, f.property_id, user.role === 'vendor' ? 'job' : 'read')); const ins = new Set((await all("SELECT id FROM inspections WHERE property_id=? AND status='published'", f.property_id)).map(x => x.id)); const jobs = new Set((await all('SELECT * FROM work_orders WHERE property_id=?', f.property_id)).filter(x => user.role !== 'vendor' || x.vendor_id === user.vendor_id).map(x => x.id)); if (!(await fileAllowed(user, f, ins, jobs)))
     fail(404, 'File not found.'); return f; }
+const saas = createSaas({get,all,run,transaction,fail,text,note,id,hash,now,passwordHash,session,json,body,rate,audit,randomBytes});
+async function assertWorkspaceActive(organizationId){if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',organizationId))?.status==='suspended')fail(403,'This company workspace is suspended. Contact support.');}
 async function api(req, res, url, user) {
     const method = req.method, p = url.pathname;
+    if(user)await assertWorkspaceActive(user.organization_id);
+    if(await saas(req,res,url,user))return;
     if (p === '/api/status' && method === 'GET')
         return json(res, 200, { configured: !!(await get('SELECT id FROM users LIMIT 1')), user: safeUser(user) });
     if (p === '/api/setup' && method === 'POST') {
@@ -173,7 +178,7 @@ async function api(req, res, url, user) {
         const b = await body(req);
         if ((await get('SELECT id FROM users LIMIT 1')))
             fail(409, 'Setup is already complete.');
-        if (process.env.ESTATEOS_HOST && process.env.ESTATEOS_HOST !== '127.0.0.1' && b.setupKey !== process.env.ESTATEOS_SETUP_KEY)
+        if (process.env.ESTATEOS_HOST && process.env.ESTATEOS_HOST !== '127.0.0.1' && (!process.env.ESTATEOS_SETUP_KEY || b.setupKey !== process.env.ESTATEOS_SETUP_KEY))
             fail(403, 'Setup key required.');
         const pw = passwordHash(b.password);
         const email = text(b.email, 'Email', 254).toLowerCase();
@@ -194,6 +199,7 @@ async function api(req, res, url, user) {
             fail(403, 'Choose the portal assigned to this account.');
         if (!u || !passwordMatches(b.password, u.password_hash))
             fail(401, 'Email or password is incorrect.');
+        await assertWorkspaceActive(u.organization_id);
         (await session(res, req, u));
         return json(res, 200, { user: safeUser(u) });
     }
@@ -203,6 +209,7 @@ async function api(req, res, url, user) {
         const invitation = (await get('SELECT * FROM invitations WHERE token_hash=? AND used_at IS NULL AND expires_at>?', hash(String(b.token)), Date.now()));
         if (!invitation)
             fail(422, 'Invitation expired or already used.');
+        await assertWorkspaceActive(invitation.organization_id);
         const pw = passwordHash(b.password), uid = id();
         (await transaction(async () => { const fresh = (await get('SELECT * FROM invitations WHERE token_hash=? AND used_at IS NULL', hash(String(b.token)))); if (!fresh)
             fail(409, 'Invitation already used.'); (await run('INSERT INTO users VALUES(?,?,?,?,?,?,?,?,?,?)', uid, invitation.organization_id, text(b.name, 'Name', 160), invitation.email, pw, invitation.role, invitation.client_id, invitation.vendor_id, 1, now())); (await run('UPDATE invitations SET used_at=? WHERE token_hash=?', now(), invitation.token_hash)); }));
@@ -251,8 +258,13 @@ async function api(req, res, url, user) {
         roles(user, 'admin');
         const tables = ['organizations', 'clients', 'properties', 'vendors', 'assets', 'asset_inspections', 'work_orders', 'requests', 'inspections', 'files', 'shopping_items', 'arrivals', 'maintenance_plans', 'invoices', 'payments', 'notes', 'audit'];
         const backup = { version: 1, createdAt: now(), tables: {} };
-        for (const table of tables)
-            backup.tables[table] = (await all(`SELECT * FROM ${table}`));
+        for (const table of tables) {
+            if(table==='organizations')backup.tables[table]=await all('SELECT * FROM organizations WHERE id=?',user.organization_id);
+            else if(['clients','properties','vendors','invoices','audit'].includes(table))backup.tables[table]=await all(`SELECT * FROM ${table} WHERE organization_id=?`,user.organization_id);
+            else if(table==='payments')backup.tables[table]=await all('SELECT pay.* FROM payments pay JOIN invoices i ON i.id=pay.invoice_id WHERE i.organization_id=?',user.organization_id);
+            else if(table==='asset_inspections')backup.tables[table]=await all('SELECT ai.* FROM asset_inspections ai JOIN assets a ON a.id=ai.asset_id JOIN properties p ON p.id=a.property_id WHERE p.organization_id=?',user.organization_id);
+            else backup.tables[table]=await all(`SELECT t.* FROM ${table} t JOIN properties p ON p.id=t.property_id WHERE p.organization_id=?`,user.organization_id);
+        }
         return json(res, 200, backup, { 'Content-Disposition': 'attachment; filename="EstateOS-records.json"' });
     }
     if (method !== 'POST')
