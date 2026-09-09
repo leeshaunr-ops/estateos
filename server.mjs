@@ -42,13 +42,13 @@ function addressFields(b) {
 }
 function roomProfile(value) { try {
     const p = typeof value === 'string' ? JSON.parse(value || '{}') : value || {};
-    const rooms = Array.isArray(p.rooms) ? p.rooms.filter(r => r && typeof r.key === 'string' && typeof r.name === 'string').map(r => ({ key: r.key, name: r.name })) : [];
+    const rooms = Array.isArray(p.rooms) ? p.rooms.filter(r => r && typeof r.key === 'string' && typeof r.name === 'string').map(r => ({ key: r.key, name: r.name, type: note(r.type, 100), floor: note(r.floor, 100), assignment: note(r.assignment, 160), assignedName: note(r.assignedName, 200), notes: note(r.notes) })) : [];
     return { bedrooms: Math.max(0, Number(p.bedrooms) || 0), fullBathrooms: Math.max(0, Number(p.fullBathrooms) || 0), halfBathrooms: Math.max(0, Number(p.halfBathrooms) || 0), rooms };
 }
 catch {
     return { bedrooms: 0, fullBathrooms: 0, halfBathrooms: 0, rooms: [] };
 } }
-function roomStatusFor(p) { return roomProfile(p.room_profile).rooms.map(r => ({ key: r.key, name: r.name, ready: false, notes: '' })); }
+function roomStatusFor(p) { return roomProfile(p.room_profile).rooms.map(r => ({ ...r, ready: false })); }
 function date(s) { if (!/^\d{4}-\d{2}-\d{2}$/.test(s || '') || Number.isNaN(Date.parse(s + 'T12:00:00Z')) || new Date(s + 'T12:00:00Z').toISOString().slice(0, 10) !== s)
     fail(422, 'Choose a valid date.'); return s; }
 function nextDue(value, frequency) { const d = new Date(value + 'T12:00:00Z'); if (frequency === 'Weekly')
