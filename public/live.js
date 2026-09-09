@@ -255,8 +255,8 @@ document.addEventListener('click',async event=>{
  try{
   const position=await new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true,timeout:15000,maximumAge:60000}));
   if(!field.isConnected||revision!==routeAddressRevision)return;
-  field.value=position.coords.latitude.toFixed(6)+','+position.coords.longitude.toFixed(6);
-  status.textContent='Current location selected. These coordinates will be used as your starting point.';
+  const lat=position.coords.latitude,lon=position.coords.longitude;
+  try{const response=await fetch(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}`,{signal:AbortSignal.timeout(8000)});const body=await response.json();const p=body.features?.[0]?.properties||{};const address=[p.name,[p.housenumber,p.street].filter(Boolean).join(' '),p.city||p.town||p.village,p.state,p.postcode,p.country].filter(Boolean).join(', ');field.value=address||`${lat.toFixed(6)},${lon.toFixed(6)}`;status.textContent=address?'Current address found.':'Current location selected.';}catch{field.value=`${lat.toFixed(6)},${lon.toFixed(6)}`;status.textContent='Location selected. Coordinates will be used as your starting point.';}
  }catch(error){if(field.isConnected&&revision===routeAddressRevision)status.textContent=error.code===1?'Location permission denied. Allow location access or enter an address manually.':'Could not find your location. Try again or enter an address manually.';}
  finally{button.disabled=false;}
 });
