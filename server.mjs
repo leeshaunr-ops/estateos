@@ -236,9 +236,19 @@ async function api(req, res, url, user) {
         res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="EstateOS-Inspection-${row.id}.pdf"`, 'Cache-Control': 'no-store' });
         return res.end(pdf);
     }
+    if (/^\/api\/asset-inspections\/[^/]+\/pdf$/.test(p) && method === 'GET') {
+        const row = await get('SELECT ai.*,a.name asset_name,a.category,a.property_id FROM asset_inspections ai JOIN assets a ON a.id=ai.asset_id WHERE ai.id=?', p.split('/')[3]);
+        if (!row) fail(404, 'Asset inspection not found.');
+        await property(user, row.property_id, 'read');
+        const prop = await get('SELECT name FROM properties WHERE id=?', row.property_id);
+        const report = { company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, property: prop.name, client: '', date: row.inspection_date, inspector: (await get('SELECT name FROM users WHERE id=?', row.inspector_id)).name, overall: JSON.parse(row.answers || '[]').some(a => a.status === 'attention') ? 'Action needed' : 'Passed', answers: JSON.parse(row.answers || '[]'), summary: `${row.asset_name} inspection`, notes: row.notes || '', fileIds: [] };
+        const pdf = inspectionPdf(report, []);
+        res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="EstateOS-${row.asset_name.replace(/[^a-zA-Z0-9._ -]/g, '_')}-Inspection.pdf`, 'Cache-Control': 'no-store' });
+        return res.end(pdf);
+    }
     if (p === '/api/backup' && method === 'GET') {
         roles(user, 'admin');
-        const tables = ['organizations', 'clients', 'properties', 'vendors', 'assets', 'work_orders', 'requests', 'inspections', 'files', 'shopping_items', 'arrivals', 'maintenance_plans', 'invoices', 'payments', 'notes', 'audit'];
+        const tables = ['organizations', 'clients', 'properties', 'vendors', 'assets', 'asset_inspections', 'work_orders', 'requests', 'inspections', 'files', 'shopping_items', 'arrivals', 'maintenance_plans', 'invoices', 'payments', 'notes', 'audit'];
         const backup = { version: 1, createdAt: now(), tables: {} };
         for (const table of tables)
             backup.tables[table] = (await all(`SELECT * FROM ${table}`));
