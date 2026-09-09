@@ -391,11 +391,19 @@ async function api(req, res, url, user) {
         (await audit(user, 'user.suspended', member.id));
         result = { ok: true };
     }
+    else if (p === '/api/assets/update') {
+        roles(user, 'admin', 'employee');
+        const asset = await get('SELECT * FROM assets WHERE id=?', b.id);
+        if (!asset) fail(404, 'Asset not found.');
+        await property(user, asset.property_id, 'operate');
+        await run('UPDATE assets SET name=?,category=?,model=?,serial=?,location=?,warranty=?,mileage=?,hours=?,notes=? WHERE id=?', text(b.name, 'Asset name', 200), text(b.category || 'Other', 'Category', 100), note(b.model, 160), note(b.serial, 160), note(b.location, 200), note(b.warranty, 200), note(b.mileage, 80), note(b.hours, 80), note(b.notes), asset.id);
+        await audit(user, 'asset.updated', asset.id); result = {id:asset.id};
+    }
     else if (p === '/api/assets') {
         roles(user, 'admin', 'employee');
         (await property(user, b.propertyId, 'operate'));
         const key = id();
-        (await run('INSERT INTO assets VALUES(?,?,?,?,?,?,?,?,?)', key, b.propertyId, text(b.name, 'Asset', 160), note(b.category, 100), note(b.model, 160), note(b.serial, 160), note(b.location, 200), note(b.warranty, 100), now()));
+        (await run('INSERT INTO assets(id,property_id,name,category,model,serial,location,warranty,created_at,mileage,hours,notes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)', key, b.propertyId, text(b.name, 'Asset', 160), note(b.category, 100), note(b.model, 160), note(b.serial, 160), note(b.location, 200), note(b.warranty, 100), now(), note(b.mileage, 80), note(b.hours, 80), note(b.notes)));
         (await audit(user, 'asset.created', key));
         result = { id: key };
     }
