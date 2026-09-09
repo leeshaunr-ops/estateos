@@ -15,3 +15,6 @@
 .panel #routeLocate{display:none}
 .panel.route-planner #f-origin{width:100%}
 @media(max-width:760px){.panel #routeLocate{display:block;width:100%;margin:8px 0 0}}
+
+/* Residence Privé wordmark */
+.brand{gap:10px;line-height:1.25}.shell aside .brand{font-size:19px;letter-spacing:-.5px}.shell aside .brand svg{width:36px;height:40px}.auth-intro .brand{font-size:clamp(24px,3vw,34px)}
