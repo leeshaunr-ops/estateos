@@ -33,6 +33,10 @@ This is a separate privilege from a company's administrator role. Other company 
 
 Each login currently belongs to one company. Use a different administrator email for each company; multi-company account switching is not included.
 
+## Create a sales demo company
+
+After `ESTATEOS_PLATFORM_OWNER_ID` is enabled, open **Companies → Create demo company** once. EstateOS creates a separate **EstateOS Demo Company** with sample residences, rooms, an arrival, shopping, an open work order, a boat asset, and an inspection draft. The page displays a demo administrator email and password for sharing with prospects. The demo is isolated from your real company. The button can only be used once; use **Invite company** for additional real companies.
+
 ## Company settings and access
 
 - Company administrators can edit their own company name and support email in **Company settings**. The support email is stored, not an email delivery connection.

@@ -37,6 +37,32 @@ export function createSaas({get,all,run,transaction,fail,text,note,id,hash,now,p
    await run('INSERT INTO workspace_invites VALUES(?,?,?,?,?,?)',hash(token),company,address,user.id,Date.now()+48*3600000,null);
    await audit(user,'workspace.invited',company);json(res,201,{invitePath:'/?workspaceInvite='+token});return true;
   }
+  if(p==='/api/platform/demo'){
+   const existing=await get("SELECT id FROM organizations WHERE name='EstateOS Demo Company'");
+   if(existing)fail(409,'The demo company already exists.');
+   const org=id(),admin=id(),client=id(),prop1=id(),prop2=id(),asset=id(),job=id(),inspection=id(),shopping=id(),arrival=id(),member=id();
+   const demoEmail='demo@estateos.example',demoPassword=process.env.ESTATEOS_DEMO_PASSWORD||'EstateOS-Demo-2026!';
+   await transaction(async()=>{
+    await run('INSERT INTO organizations VALUES(?,?,?)',org,'EstateOS Demo Company',now());await run('INSERT INTO workspace_settings(organization_id) VALUES(?)',org);
+    await run('INSERT INTO users VALUES(?,?,?,?,?,?,?,?,?,?)',admin,org,'Demo Administrator',demoEmail,passwordHash(demoPassword),'admin',null,null,1,now());
+    const profile=JSON.stringify({firstName:'Alex',lastName:'Rivera',preferredContact:'Email',members:[{id:member,firstName:'Jordan',lastName:'Rivera',relationship:'Guest',email:'',phone:'',preferredContact:'Text message'}]});
+    await run('INSERT INTO clients(id,organization_id,name,email,phone,created_at,profile) VALUES(?,?,?,?,?,?,?)',client,org,'Rivera Family','demo-client@estateos.example','(555) 010-2026',now(),profile);
+    const rooms1=JSON.stringify({bedrooms:3,fullBathrooms:3,halfBathrooms:1,rooms:[{key:'master',type:'Bedroom',name:'Ocean Master Suite',floor:'Second floor',assignment:'other',assignedName:'Alex Rivera',notes:'King bed; blackout curtains'},{key:'guest',type:'Bedroom',name:'Palm Guest Suite',floor:'First floor',assignment:'member:'+member,assignedName:'Jordan Rivera',notes:'Extra towels'},{key:'kitchen',type:'Kitchen',name:'Chef Kitchen',floor:'First floor',assignment:'',assignedName:'',notes:'Island and outdoor service door'}]});
+    const rooms2=JSON.stringify({bedrooms:2,fullBathrooms:2,halfBathrooms:0,rooms:[{key:'suite',type:'Bedroom',name:'Guest Suite',floor:'Second floor',assignment:'guest',assignedName:'',notes:''},{key:'pool',type:'Pool house',name:'Pool House',floor:'Ground level',assignment:'',assignedName:'',notes:'Keep towels stocked'}]});
+    const a1={street_address:'100 Ocean Palm Drive',address_line2:'',city:'Palm Beach',state:'FL',postal_code:'33480',country:'United States'};const a2={street_address:'48 Harbor View Lane',address_line2:'',city:'Jupiter',state:'FL',postal_code:'33477',country:'United States'};
+    await run('INSERT INTO properties(id,organization_id,client_id,name,address,timezone,manual,created_at,street_address,address_line2,city,state,postal_code,country,room_profile) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',prop1,org,client,'Ocean Palm Residence',[a1.street_address,a1.city,a1.state,a1.postal_code].join(', '),'America/New_York','Welcome to the demo residence.',now(),a1.street_address,'',a1.city,a1.state,a1.postal_code,a1.country,rooms1);
+    await run('INSERT INTO properties(id,organization_id,client_id,name,address,timezone,manual,created_at,street_address,address_line2,city,state,postal_code,country,room_profile) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',prop2,org,client,'Harbor View Retreat',[a2.street_address,a2.city,a2.state,a2.postal_code].join(', '),'America/New_York','Demo retreat house manual.',now(),a2.street_address,'',a2.city,a2.state,a2.postal_code,a2.country,rooms2);
+    await run('INSERT INTO assets(id,property_id,name,category,model,serial,location,warranty,created_at,mileage,hours,notes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',asset,prop1,'Sea Ray 310','Boat','310 Sundancer','DEMO-310','Dock A','2028-06',now(),'','126','Demo asset for inspection walkthrough.');
+    await run('INSERT INTO work_orders(id,property_id,asset_id,title,description,priority,due_date,status,created_by,service_notes,created_at,version) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',job,prop1,asset,'Schedule annual boat service','Review engines, batteries and safety gear.','Normal','2026-10-15','open',admin,'',now(),1);
+    const template=[{key:'arrival',section:'Exterior',label:'Exterior condition',status:'pass',note:''},{key:'systems',section:'Systems',label:'Systems and safety equipment',status:'monitor',note:'Demo result for walkthrough.'}];
+    await run('INSERT INTO inspections(id,property_id,inspector_id,inspection_date,status,answers,summary,notes,created_at,frequency,next_due) VALUES(?,?,?,?,?,?,?,?,?,?,?)',inspection,prop1,admin,'2026-09-09','draft',JSON.stringify(template),'Demo inspection in progress.','Review the checklist and save a draft.',now(),'30 days','2026-10-09');
+    await run('INSERT INTO shopping_items VALUES(?,?,?,?,?,?,?)',shopping,prop1,'Sparkling water','4 case','Beverages','Brand: LaCroix\nDemo preferred item.',now());
+    const items=JSON.stringify([{id:shopping,name:'Sparkling water',quantity:'4 case',category:'Beverages',notes:'Brand: LaCroix',status:'needed',substitutionNeeded:false,substitution:''}]);
+    await run('INSERT INTO arrivals(id,property_id,created_by,arrival_at,needs,status,items,created_at,version,room_status,guests) VALUES(?,?,?,?,?,?,?,?,?,?,?)',arrival,prop1,admin,'2026-10-01T15:00','Prepare the guest suite and stock the kitchen.','submitted',items,now(),1,JSON.stringify([]),JSON.stringify([member]));
+    await audit({id:admin,organization_id:org},'workspace.demo_created',org);
+   });
+   json(res,201,{company:'EstateOS Demo Company',email:demoEmail,password:demoPassword});return true;
+  }
   if(p==='/api/platform/status'){
    if(b.organizationId===user.organization_id)fail(422,'You cannot suspend your own company.');
    if(!['active','suspended'].includes(b.status))fail(422,'Invalid company status.');
