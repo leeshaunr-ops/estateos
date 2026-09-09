@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {seal,unseal} from './vault.mjs';
 import { openDatabase } from './database.mjs';
 import { openStorage } from './storage.mjs';
 import { randomUUID, randomBytes, createHash, scryptSync, timingSafeEqual } from 'node:crypto';
@@ -311,6 +312,27 @@ async function api(req, res, url, user) {
         (await run('UPDATE properties SET archived_at=NULL WHERE id=?', row.id));
         (await audit(user, 'property.restored', row.id));
         result = { id: row.id, archived: false };
+    }
+    else if (p === '/api/access-codes/read' || p === '/api/access-codes/save') {
+        roles(user, 'admin', 'employee');
+        result = await transaction(async()=>{
+            const home = await property(user, b.propertyId, 'operate');
+            const context = home.organization_id + ':' + home.id;
+            const saved = await get('SELECT * FROM property_vault WHERE property_id=?',home.id);
+            if (p.endsWith('/read')) {
+                const details=unseal(saved?.encrypted_details,context);
+                await audit(user,'access_codes.viewed',home.id);
+                return {details,version:saved?.version||0};
+            }
+            if(b.version!==(saved?.version||0))fail(409,'These details changed. Close and reopen them before saving.');
+            const details={};
+            for(const field of ['gate','door','alarm','lockbox','instructions'])details[field]=note(b.details?.[field],4000);
+            const encrypted=seal(details,context);
+            if(saved)await run('UPDATE property_vault SET encrypted_details=?,version=version+1,updated_at=? WHERE property_id=?',encrypted,now(),home.id);
+            else await run('INSERT INTO property_vault VALUES(?,?,?,?)',home.id,encrypted,1,now());
+            await audit(user,'access_codes.updated',home.id);
+            return {ok:true};
+        });
     }
     else if (p === '/api/manual') {
         roles(user, 'admin', 'employee');
