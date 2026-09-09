@@ -140,11 +140,14 @@ async function snapshot(user) {
     const jobIds = new Set(jobs.map(j => j.id));
     const inspectionIds = new Set(inspections.map(i => i.id));
     const files = (await filterAsync((await scoped('files')), async (f) => (await fileAllowed(user, f, inspectionIds, jobIds)))).map(({ storage_key, ...f }) => f);
+    const assets = user.role === 'vendor' ? [] : (await scoped('assets'));
+    const assetIds = new Set(assets.map(a => a.id));
+    const assetInspections = assetIds.size ? (await all('SELECT ai.* FROM asset_inspections ai JOIN assets a ON a.id=ai.asset_id WHERE a.id IN (' + [...assetIds].map(() => '?').join(',') + ')', ...assetIds)).map(i => ({ ...i, answers: JSON.parse(i.answers || '[]') })) : [];
     return { user: safeUser(user), company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, properties: props.map(p => { if (user.role === 'vendor')
             return { id: p.id, name: p.name, address: p.address }; if (user.role === 'client') {
             const { manual, ...safe } = p;
             return safe;
-        } return p; }), archivedProperties, clients: user.role === 'admin' ? (await all('SELECT * FROM clients WHERE organization_id=?', user.organization_id)) : [], vendors: ['admin', 'employee'].includes(user.role) ? (await all('SELECT * FROM vendors WHERE organization_id=?', user.organization_id)) : [], users: user.role === 'admin' ? (await all('SELECT id,name,email,role,client_id,vendor_id,active FROM users WHERE organization_id=?', user.organization_id)) : [], assets: user.role === 'vendor' ? [] : (await scoped('assets')), work: jobs, requests: user.role === 'vendor' ? [] : (await scoped('requests')), inspections, files, shopping: user.role === 'vendor' ? [] : (await scoped('shopping_items')), arrivals: user.role === 'vendor' ? [] : (await scoped('arrivals')).map(a => ({ ...a, items: JSON.parse(a.items), room_status: JSON.parse(a.room_status || '[]'), guests: JSON.parse(a.guests || '[]') })), maintenance: ['admin', 'employee'].includes(user.role) ? (await scoped('maintenance_plans')) : [], notes: ['admin', 'employee'].includes(user.role) ? (await scoped('notes')) : [], invoices: user.role === 'admin' ? (await all('SELECT invoices.*,clients.name client_name,COALESCE((SELECT SUM(amount_minor) FROM payments WHERE invoice_id=invoices.id),0) paid_minor FROM invoices JOIN clients ON clients.id=invoices.client_id WHERE invoices.organization_id=?', user.organization_id)) : [], audit: user.role === 'admin' ? (await all('SELECT audit.*,users.name actor_name FROM audit JOIN users ON users.id=audit.actor_id WHERE audit.organization_id=? ORDER BY audit.created_at DESC LIMIT 100', user.organization_id)) : [], notifications: (await all('SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 100', user.id)), template };
+    } return p; }), archivedProperties, clients: user.role === 'admin' ? (await all('SELECT * FROM clients WHERE organization_id=?', user.organization_id)) : [], vendors: ['admin', 'employee'].includes(user.role) ? (await all('SELECT * FROM vendors WHERE organization_id=?', user.organization_id)) : [], users: user.role === 'admin' ? (await all('SELECT id,name,email,role,client_id,vendor_id,active FROM users WHERE organization_id=?', user.organization_id)) : [], assets, asset_inspections: assetInspections, work: jobs, requests: user.role === 'vendor' ? [] : (await scoped('requests')), inspections, files, shopping: user.role === 'vendor' ? [] : (await scoped('shopping_items')), arrivals: user.role === 'vendor' ? [] : (await scoped('arrivals')).map(a => ({ ...a, items: JSON.parse(a.items), room_status: JSON.parse(a.room_status || '[]'), guests: JSON.parse(a.guests || '[]') })), maintenance: ['admin', 'employee'].includes(user.role) ? (await scoped('maintenance_plans')) : [], notes: ['admin', 'employee'].includes(user.role) ? (await scoped('notes')) : [], invoices: user.role === 'admin' ? (await all('SELECT invoices.*,clients.name client_name,COALESCE((SELECT SUM(amount_minor) FROM payments WHERE invoice_id=invoices.id),0) paid_minor FROM invoices JOIN clients ON clients.id=invoices.client_id WHERE invoices.organization_id=?', user.organization_id)) : [], audit: user.role === 'admin' ? (await all('SELECT audit.*,users.name actor_name FROM audit JOIN users ON users.id=audit.actor_id WHERE audit.organization_id=? ORDER BY audit.created_at DESC LIMIT 100', user.organization_id)) : [], notifications: (await all('SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 100', user.id)), template };
 }
 async function fileAllowed(user, f, inspectionIds, jobIds) {
     if (['admin', 'employee'].includes(user.role))
@@ -406,6 +409,16 @@ async function api(req, res, url, user) {
         (await run('INSERT INTO assets(id,property_id,name,category,model,serial,location,warranty,created_at,mileage,hours,notes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)', key, b.propertyId, text(b.name, 'Asset', 160), note(b.category, 100), note(b.model, 160), note(b.serial, 160), note(b.location, 200), note(b.warranty, 100), now(), note(b.mileage, 80), note(b.hours, 80), note(b.notes)));
         (await audit(user, 'asset.created', key));
         result = { id: key };
+    }
+    else if (p === '/api/asset-inspections') {
+        roles(user, 'admin', 'employee');
+        const asset = await get('SELECT * FROM assets WHERE id=?', b.assetId);
+        if (!asset) fail(404, 'Asset not found.');
+        await property(user, asset.property_id, 'operate');
+        const answers = Array.isArray(b.answers) ? b.answers.map(a => ({ key: text(a.key, 'Checklist item', 80), label: text(a.label, 'Checklist item', 200), status: ['pass', 'attention', 'na'].includes(a.status) ? a.status : 'pass', note: note(a.note, 300) })) : [];
+        const id = randomUUID();
+        await run('INSERT INTO asset_inspections(id,asset_id,inspector_id,inspection_date,answers,notes,created_at) VALUES(?,?,?,?,?,?,?)', id, asset.id, user.id, date(b.date || now().slice(0, 10)), JSON.stringify(answers), note(b.notes), now());
+        await audit(user, 'asset_inspection.completed', id); result = { id };
     }
     else if (p === '/api/work') {
         roles(user, 'admin', 'employee');
