@@ -58,6 +58,23 @@ export function createStaff({get,all,run,transaction,fail,text,note,id,now,passw
   if(url.pathname==='/api/staff/schedule/remove'){
    await transaction(async()=>{if(!await get('SELECT id FROM staff_schedules WHERE id=? AND organization_id=?',b.id,user.organization_id))fail(404,'Schedule not found.');await run('UPDATE work_staff SET schedule_id=NULL WHERE schedule_id=?',b.id);await run('DELETE FROM staff_schedules WHERE id=?',b.id);await audit(user,'staff.schedule_removed',b.id);});json(res,200,{ok:true});return true;
   }
+  if(url.pathname==='/api/staff/task'){
+   const kinds={inspection:'Residence inspection',arrival:'Arrival preparation',asset:'Asset inspection',other:'Other'};
+   if(!kinds[b.kind])fail(422,'Choose a work type.');
+   const key=id();await transaction(async()=>{
+    const s=await get('SELECT * FROM staff_schedules WHERE id=? AND organization_id=?',b.scheduleId,user.organization_id);if(!s)fail(404,'Schedule not found.');
+    const prop=await get('SELECT * FROM properties WHERE id=? AND organization_id=? AND archived_at IS NULL',b.propertyId,user.organization_id);if(!prop)fail(422,'Choose a residence.');
+    if(s.property_id&&s.property_id!==prop.id)fail(422,'Choose the scheduled residence.');
+    let reference=null,detail='';
+    if(b.kind==='arrival'){reference=await get('SELECT id,arrival_at FROM arrivals WHERE id=? AND property_id=?',b.referenceId,prop.id);if(!reference)fail(422,'Choose an arrival at this residence.');detail=' · '+reference.arrival_at;}
+    if(b.kind==='asset'){reference=await get('SELECT id,name FROM assets WHERE id=? AND property_id=?',b.referenceId,prop.id);if(!reference)fail(422,'Choose an asset at this residence.');detail=' · '+reference.name;}
+    const title=b.kind==='other'?text(b.title,'Task title',200):kinds[b.kind]+detail;
+    const description=b.kind==='other'?text(b.instructions,'What needs to be done',4000):note(b.instructions,4000);
+    await run('INSERT INTO work_orders(id,property_id,asset_id,title,description,priority,due_date,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?)',key,prop.id,b.kind==='asset'?reference.id:null,title,description,'Normal',s.starts_at.slice(0,10),user.id,now());
+    await run('INSERT INTO scheduled_work_types(work_id,kind,reference_id) VALUES(?,?,?)',key,b.kind,reference?.id||prop.id);
+    await assignment(user,key,{staffId:s.user_id,scheduleId:s.id});await audit(user,'schedule.task_created',key);
+   });json(res,200,{id:key});return true;
+  }
   if(url.pathname==='/api/staff/assign'){await transaction(()=>assignment(user,b.workId,b));json(res,200,{ok:true});return true;}
   fail(404,'Endpoint not found.');
  }

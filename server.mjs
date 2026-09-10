@@ -266,6 +266,7 @@ async function api(req, res, url, user) {
         backup.tables.staff_profiles=await all('SELECT sp.* FROM staff_profiles sp JOIN users u ON u.id=sp.user_id WHERE u.organization_id=?',user.organization_id);
         backup.tables.staff_schedules=await all('SELECT * FROM staff_schedules WHERE organization_id=?',user.organization_id);
         backup.tables.work_staff=await all('SELECT a.* FROM work_staff a JOIN work_orders w ON w.id=a.work_id JOIN properties p ON p.id=w.property_id WHERE p.organization_id=?',user.organization_id);
+        backup.tables.scheduled_work_types=await all('SELECT t.* FROM scheduled_work_types t JOIN work_orders w ON w.id=t.work_id JOIN properties p ON p.id=w.property_id WHERE p.organization_id=?',user.organization_id);
         for (const table of tables) {
             if(table==='organizations')backup.tables[table]=await all('SELECT * FROM organizations WHERE id=?',user.organization_id);
             else if(['clients','properties','vendors','invoices','audit'].includes(table))backup.tables[table]=await all(`SELECT * FROM ${table} WHERE organization_id=?`,user.organization_id);
