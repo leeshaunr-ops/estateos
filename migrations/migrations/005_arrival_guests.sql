@@ -1,0 +1,1 @@
+ALTER TABLE arrivals ADD COLUMN guests TEXT NOT NULL DEFAULT '[]';

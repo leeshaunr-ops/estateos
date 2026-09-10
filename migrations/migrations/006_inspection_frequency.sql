@@ -1,0 +1,2 @@
+ALTER TABLE inspections ADD COLUMN frequency TEXT NOT NULL DEFAULT 'One-time';
+ALTER TABLE inspections ADD COLUMN next_due TEXT NOT NULL DEFAULT '';

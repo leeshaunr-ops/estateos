@@ -1,0 +1,2 @@
+ALTER TABLE properties ADD COLUMN room_profile TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE arrivals ADD COLUMN room_status TEXT NOT NULL DEFAULT '[]';
