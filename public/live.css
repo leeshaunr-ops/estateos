@@ -67,3 +67,17 @@ th{background:#faf8f3;color:#746c5e;font-weight:600}td{color:#514b41}a,.link-but
 .shell .residence .residence-top .eyebrow{color:#8b242b}
 .shell .stat-link b,.shell .link-button{color:#8b242b}
 .shell button:focus-visible,.shell input:focus-visible,.shell select:focus-visible,.shell textarea:focus-visible,.shell a:focus-visible{outline-color:#8b242b}
+/* Collapsible navigation uses native, keyboard-accessible disclosure controls. */
+.shell aside .grouped-nav{display:grid;gap:8px}
+.nav-group summary{display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;list-style:none;padding:13px 8px;color:#746b5d;font-size:12px;font-weight:650;letter-spacing:.02em;min-height:44px;border-radius:5px}
+.nav-group summary::-webkit-details-marker{display:none}
+.nav-group summary:hover{background:#f7f4ed;color:#8b242b}
+.nav-group summary:focus-visible{outline:2px solid #8b242b;outline-offset:2px}
+.nav-chevron{font-size:21px;font-weight:400;transition:transform .15s}
+.nav-group[open] .nav-chevron{transform:rotate(90deg)}
+.nav-group-items{display:grid;gap:3px;padding:0 0 8px 7px}
+.shell .nav-group-items button{font-size:13px;padding:10px 12px;text-align:left;width:100%}
+.shell aside .account-nav{margin-top:auto;padding-top:24px;border-top:1px solid var(--line)}
+.shell aside .identity{margin-top:16px;padding-top:16px}
+.shell aside{height:100dvh;overflow-y:auto;position:sticky;top:0;min-height:0}
+@media(max-width:760px){.shell aside{position:fixed}.shell .nav-group-items button{min-height:44px}.shell aside .account-nav{padding-top:18px}}
