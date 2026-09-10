@@ -833,6 +833,16 @@ const server = http.createServer(async (req, res) => {
             res.end();
             return;
         }
+        if (url.pathname.startsWith('/marketing/')) {
+            const name = path.basename(url.pathname);
+            if (!/^[a-z0-9-]+\.png$/i.test(name)) return fail(404, 'Page not found.');
+            const marketingPath = path.join(root, 'public', 'marketing', name);
+            if (!fs.existsSync(marketingPath)) return fail(404, 'Page not found.');
+            const stat = fs.statSync(marketingPath);
+            res.writeHead(200, {'Content-Type':'image/png','Content-Length':stat.size,'Cache-Control':'public, max-age=86400'});
+            fs.createReadStream(marketingPath).pipe(res);
+            return;
+        }
         const status = error.status || 500;
         if (status === 500)
             console.error('Request failed:', error.message);
