@@ -178,6 +178,20 @@ async function api(req, res, url, user) {
     if(await staff.handle(req,res,url,user))return;
     if (p === '/api/status' && method === 'GET')
         return json(res, 200, { configured: !!(await get('SELECT id FROM users LIMIT 1')), user: safeUser(user) });
+    if (p === '/api/geocode/autocomplete' && method === 'GET') {
+        if (!process.env.GEOAPIFY_API_KEY) return json(res, 503, { error: 'Address search is not configured.' });
+        const q = String(url.searchParams.get('q') || '').trim();
+        if (q.length < 3) return json(res, 200, { features: [] });
+        const remote = await fetch('https://api.geoapify.com/v1/geocode/autocomplete?text=' + encodeURIComponent(q) + '&filter=countrycode:us&limit=5&apiKey=' + encodeURIComponent(process.env.GEOAPIFY_API_KEY));
+        if (!remote.ok) return json(res, 502, { error: 'Address search is temporarily unavailable.' });
+        return json(res, 200, await remote.json());
+    }
+    if (p === '/api/geocode/reverse' && method === 'GET') {
+        if (!process.env.GEOAPIFY_API_KEY) return json(res, 503, { error: 'Address search is not configured.' });
+        const remote = await fetch('https://api.geoapify.com/v1/geocode/reverse?lat=' + encodeURIComponent(url.searchParams.get('lat') || '') + '&lon=' + encodeURIComponent(url.searchParams.get('lon') || '') + '&apiKey=' + encodeURIComponent(process.env.GEOAPIFY_API_KEY));
+        if (!remote.ok) return json(res, 502, { error: 'Location lookup is temporarily unavailable.' });
+        return json(res, 200, await remote.json());
+    }
     if (p === '/api/setup' && method === 'POST') {
         rate(req, 'setup');
         const b = await body(req);
