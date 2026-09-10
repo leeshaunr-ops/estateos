@@ -1,5 +1,6 @@
 import http from 'node:http';
 import {createSaas,platformOwner} from './saas.mjs';
+import {createStaff} from './staff.mjs';
 import {seal,unseal} from './vault.mjs';
 import { openDatabase } from './database.mjs';
 import { openStorage } from './storage.mjs';
@@ -93,7 +94,7 @@ async function property(user, propertyId, operation = 'read') {
 }
 async function entity(user, table, entityId, operation = 'read') { const row = (await get(`SELECT * FROM ${table} WHERE id=?`, entityId)); if (!row)
     fail(404, 'Record not found.'); (await property(user, row.property_id, operation)); return row; }
-async function work(user, workId) { const row = (await entity(user, 'work_orders', workId, user.role === 'vendor' ? 'job' : 'read')); if (user.role === 'vendor' && row.vendor_id !== user.vendor_id)
+async function work(user, workId) { if(user.role==='employee'){const assigned=await get('SELECT w.* FROM work_orders w JOIN work_staff a ON a.work_id=w.id JOIN properties p ON p.id=w.property_id WHERE w.id=? AND a.user_id=? AND p.organization_id=?',workId,user.id,user.organization_id);if(assigned)return assigned;} const row = (await entity(user, 'work_orders', workId, user.role === 'vendor' ? 'job' : 'read')); if (user.role === 'vendor' && row.vendor_id !== user.vendor_id)
     fail(404, 'Job not found.'); return row; }
 async function audit(user, action, entityId) { (await run('INSERT INTO audit VALUES(?,?,?,?,?,?)', id(), user.organization_id, user.id, action, entityId, now())); }
 async function notifyProperty(p, title, entityId, audience = 'staff') { const recipients = (await filterAsync((await all('SELECT * FROM users WHERE organization_id=? AND active=1', p.organization_id)), async (u) => audience === 'client' ? u.role === 'client' && u.client_id === p.client_id : u.role === 'admin' || u.role === 'employee' && (await get('SELECT 1 FROM property_access WHERE user_id=? AND property_id=?', u.id, p.id)))); for (const u of recipients)
@@ -134,6 +135,7 @@ async function snapshot(user) {
     const allowed = new Set(props.map(p => p.id));
     const scoped = async (table) => (await all(`SELECT t.* FROM ${table} t JOIN properties p ON p.id=t.property_id WHERE p.organization_id=?`,user.organization_id)).filter(row => allowed.has(row.property_id));
     let jobs = (await scoped('work_orders'));
+    if(user.role==='employee'){const assigned=await all('SELECT w.*,p.name property_name FROM work_orders w JOIN work_staff a ON a.work_id=w.id JOIN properties p ON p.id=w.property_id WHERE a.user_id=? AND p.organization_id=?',user.id,user.organization_id);jobs=[...new Map([...jobs,...assigned].map(w=>[w.id,w])).values()];}
     if (user.role === 'vendor')
         jobs = jobs.filter(j => j.vendor_id === user.vendor_id);
     if (user.role === 'client')
@@ -141,7 +143,8 @@ async function snapshot(user) {
     const inspections = user.role === 'vendor' ? [] : (await scoped('inspections')).filter(i => user.role !== 'client' || i.status === 'published').map(i => { const { internal_notes, report_snapshot, ...visible } = i; return { ...visible, answers: JSON.parse(i.answers), ...(user.role === 'admin' || user.role === 'employee' ? { internal_notes } : {}) }; });
     const jobIds = new Set(jobs.map(j => j.id));
     const inspectionIds = new Set(inspections.map(i => i.id));
-    const files = (await filterAsync((await scoped('files')), async (f) => (await fileAllowed(user, f, inspectionIds, jobIds)))).map(({ storage_key, ...f }) => f);
+    const fileCandidates=await all('SELECT f.* FROM files f JOIN properties p ON p.id=f.property_id WHERE p.organization_id=?',user.organization_id);
+    const files = (await filterAsync(fileCandidates.filter(f=>allowed.has(f.property_id)||(user.role==='employee'&&jobIds.has(f.work_order_id))), async (f) => (await fileAllowed(user, f, inspectionIds, jobIds)))).map(({ storage_key, ...f }) => f);
     const assets = user.role === 'vendor' ? [] : (await scoped('assets'));
     const assetIds = new Set(assets.map(a => a.id));
     const assetInspections = assetIds.size ? (await all('SELECT ai.* FROM asset_inspections ai JOIN assets a ON a.id=ai.asset_id WHERE a.id IN (' + [...assetIds].map(() => '?').join(',') + ')', ...assetIds)).map(i => ({ ...i, answers: JSON.parse(i.answers || '[]') })) : [];
@@ -163,14 +166,16 @@ async function fileAllowed(user, f, inspectionIds, jobIds) {
     return f.visibility === 'client';
 }
 async function readFile(user, fileId) { const f = (await get('SELECT * FROM files WHERE id=?', fileId)); if (!f)
-    fail(404, 'File not found.'); (await property(user, f.property_id, user.role === 'vendor' ? 'job' : 'read')); const ins = new Set((await all("SELECT id FROM inspections WHERE property_id=? AND status='published'", f.property_id)).map(x => x.id)); const jobs = new Set((await all('SELECT * FROM work_orders WHERE property_id=?', f.property_id)).filter(x => user.role !== 'vendor' || x.vendor_id === user.vendor_id).map(x => x.id)); if (!(await fileAllowed(user, f, ins, jobs)))
+    fail(404, 'File not found.'); if(user.role==='employee'&&f.work_order_id){await work(user,f.work_order_id);return f;} (await property(user, f.property_id, user.role === 'vendor' ? 'job' : 'read')); const ins = new Set((await all("SELECT id FROM inspections WHERE property_id=? AND status='published'", f.property_id)).map(x => x.id)); const jobs = new Set((await all('SELECT * FROM work_orders WHERE property_id=?', f.property_id)).filter(x => user.role !== 'vendor' || x.vendor_id === user.vendor_id).map(x => x.id)); if (!(await fileAllowed(user, f, ins, jobs)))
     fail(404, 'File not found.'); return f; }
 const saas = createSaas({get,all,run,transaction,fail,text,note,id,hash,now,passwordHash,session,json,body,rate,audit,randomBytes});
+const staff = createStaff({get,all,run,transaction,fail,text,note,id,now,passwordHash,json,body,audit});
 async function assertWorkspaceActive(organizationId){if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',organizationId))?.status==='suspended')fail(403,'This company workspace is suspended. Contact support.');}
 async function api(req, res, url, user) {
     const method = req.method, p = url.pathname;
     if(user)await assertWorkspaceActive(user.organization_id);
     if(await saas(req,res,url,user))return;
+    if(await staff.handle(req,res,url,user))return;
     if (p === '/api/status' && method === 'GET')
         return json(res, 200, { configured: !!(await get('SELECT id FROM users LIMIT 1')), user: safeUser(user) });
     if (p === '/api/setup' && method === 'POST') {
@@ -258,6 +263,9 @@ async function api(req, res, url, user) {
         roles(user, 'admin');
         const tables = ['organizations', 'clients', 'properties', 'vendors', 'assets', 'asset_inspections', 'work_orders', 'requests', 'inspections', 'files', 'shopping_items', 'arrivals', 'maintenance_plans', 'invoices', 'payments', 'notes', 'audit'];
         const backup = { version: 1, createdAt: now(), tables: {} };
+        backup.tables.staff_profiles=await all('SELECT sp.* FROM staff_profiles sp JOIN users u ON u.id=sp.user_id WHERE u.organization_id=?',user.organization_id);
+        backup.tables.staff_schedules=await all('SELECT * FROM staff_schedules WHERE organization_id=?',user.organization_id);
+        backup.tables.work_staff=await all('SELECT a.* FROM work_staff a JOIN work_orders w ON w.id=a.work_id JOIN properties p ON p.id=w.property_id WHERE p.organization_id=?',user.organization_id);
         for (const table of tables) {
             if(table==='organizations')backup.tables[table]=await all('SELECT * FROM organizations WHERE id=?',user.organization_id);
             else if(['clients','properties','vendors','invoices','audit'].includes(table))backup.tables[table]=await all(`SELECT * FROM ${table} WHERE organization_id=?`,user.organization_id);
@@ -476,6 +484,7 @@ async function api(req, res, url, user) {
         await audit(user, 'asset_inspection.completed', id); result = { id };
     }
     else if (p === '/api/work') {
+        await transaction(async()=>{
         roles(user, 'admin', 'employee');
         (await property(user, b.propertyId, 'operate'));
         if (b.assetId && !(await get('SELECT id FROM assets WHERE id=? AND property_id=?', b.assetId, b.propertyId)))
@@ -485,7 +494,9 @@ async function api(req, res, url, user) {
         const key = id();
         (await run('INSERT INTO work_orders(id,property_id,asset_id,title,description,priority,due_date,vendor_id,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)', key, b.propertyId, b.assetId || null, text(b.title, 'Work title', 200), note(b.description), ['Normal', 'High', 'Urgent'].includes(b.priority) ? b.priority : 'Normal', b.dueDate ? date(b.dueDate) : '', b.vendorId || null, user.id, now()));
         (await audit(user, 'work.created', key));
+        if(b.staffId||b.scheduleId)await staff.assignment(user,key,b);
         result = { id: key };
+        });
     }
     else if (p === '/api/work/action') {
         roles(user, 'admin', 'employee', 'vendor');
@@ -499,7 +510,7 @@ async function api(req, res, url, user) {
         if (b.action === 'submit' && !(await get('SELECT 1 FROM files WHERE work_order_id=?', row.id)))
             fail(422, 'Add at least one completion photo.');
         const status = { start: 'in_progress', submit: 'submitted', accept: 'completed', return: 'in_progress' }[b.action];
-        const pRow = (await property(user, row.property_id, user.role === 'vendor' ? 'job' : 'operate'));
+        const pRow = await get('SELECT * FROM properties WHERE id=? AND organization_id=?',row.property_id,user.organization_id);
         (await transaction(async () => { (await run('UPDATE work_orders SET status=?,service_notes=?,completed_at=?,version=version+1 WHERE id=?', status, b.action === 'submit' ? text(b.notes, 'Completion notes') : row.service_notes, status === 'completed' ? now() : null, row.id)); if (status === 'completed') {
             (await run("UPDATE requests SET status='completed' WHERE work_order_id=?", row.id));
             (await notifyProperty(pRow, 'Service completed: ' + row.title, row.id, 'client'));
@@ -580,7 +591,8 @@ async function api(req, res, url, user) {
     }
     else if (p === '/api/files') {
         roles(user, 'admin', 'employee', 'vendor');
-        const pRow = (await property(user, b.propertyId, user.role === 'vendor' ? 'job' : 'operate'));
+        const authorizedJob=b.workId?await work(user,b.workId):null;
+        const pRow = authorizedJob&&authorizedJob.property_id===b.propertyId?await get('SELECT * FROM properties WHERE id=? AND organization_id=?',b.propertyId,user.organization_id):(await property(user, b.propertyId, user.role === 'vendor' ? 'job' : 'operate'));
         if (b.inspectionId) {
             roles(user, 'admin', 'employee');
             const inspection = (await entity(user, 'inspections', b.inspectionId, 'operate'));
