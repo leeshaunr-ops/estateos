@@ -524,8 +524,18 @@ async function api(req, res, url, user) {
         roles(user, 'admin', 'employee', 'client');
         const pRow = (await property(user, b.propertyId));
         const key = id();
-        (await transaction(async () => { (await run('INSERT INTO requests VALUES(?,?,?,?,?,?,?,?)', key, pRow.id, user.id, text(b.title, 'Request', 200), note(b.description), 'new', null, now())); (await notifyProperty(pRow, 'New request: ' + b.title, key)); (await audit(user, 'request.created', key)); }));
+        const priority=b.priority||'Normal';if(!['Low','Normal','High','Urgent'].includes(priority))fail(422,'Choose a valid priority.');
+        (await transaction(async () => { (await run('INSERT INTO requests(id,property_id,created_by,title,description,status,work_order_id,created_at,priority) VALUES(?,?,?,?,?,?,?,?,?)', key, pRow.id, user.id, text(b.title, 'Request', 200), note(b.description), 'new', null, now(),priority)); (await notifyProperty(pRow, 'New request: ' + b.title, key)); (await audit(user, 'request.created', key)); }));
         result = { id: key };
+    }
+    else if (p === '/api/requests/priority') {
+        roles(user,'admin');await entity(user,'requests',b.id,'operate');
+        if(!['Low','Normal','High','Urgent'].includes(b.priority))fail(422,'Choose a valid priority.');
+        await transaction(async()=>{await run('UPDATE requests SET priority=? WHERE id=?',b.priority,b.id);await audit(user,'request.priority_updated',b.id);});result={ok:true};
+    }
+    else if (p === '/api/requests/create-work') {
+        roles(user,'admin','employee');
+        await transaction(async()=>{const row=await entity(user,'requests',b.id,'operate');if(row.work_order_id||row.status==='completed')fail(409,'This request already has work linked or is completed.');const key=id();await run('INSERT INTO work_orders(id,property_id,title,description,priority,created_by,created_at) VALUES(?,?,?,?,?,?,?)',key,row.property_id,row.title,row.description,row.priority,user.id,now());await run("UPDATE requests SET work_order_id=?,status='in_progress' WHERE id=?",key,row.id);await audit(user,'request.work_created',row.id);result={id:key};});
     }
     else if (p === '/api/requests/assign') {
         roles(user, 'admin', 'employee');
