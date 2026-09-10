@@ -305,5 +305,18 @@ async function staffAction(name,key){
  }
  if(name==='schedule-remove'){if(confirm('Remove this schedule? Work orders and staff assignments will be kept.')){await api('staff/schedule/remove',{id:key});await load();}return;}
  if(name==='work-assignment'){const w=data.work.find(w=>w.id===key),a=data.staff.assignments.find(a=>a.work_id===key)||{};return createForm('Assign work / add to schedule',staffAssignmentFields(a)+select('vendorId','Assigned vendor (choose staff OR vendor)','<option value="">No vendor assigned</option>'+option(data.vendors,'id','name',w.vendor_id)),'staff/assign',{workId:key});}
- if(name==='schedule-work'){const s=data.staff.schedules.find(s=>s.id===key);return createForm('Add work to schedule',select('workId','Work order',option(data.work.filter(w=>!['completed','cancelled'].includes(w.status)&&(!s.property_id||s.property_id===w.property_id)),'id','title')),'staff/assign',{staffId:s.user_id,scheduleId:s.id});}
+ if(name==='schedule-work')return scheduleTaskForm(key);
+}
+function scheduleTaskForm(key){
+ const s=data.staff.schedules.find(s=>s.id===key);
+ dialog('Assign work',select('kind','Work type','<option value="work">Work order</option><option value="inspection">Residence inspection</option><option value="arrival">Arrival preparation</option><option value="asset">Asset inspection</option><option value="other">Other</option>')+'<div id="schedule-task-fields" class="field full"></div>','Assign',async b=>{
+  if(b.kind==='work')await api('staff/assign',{workId:b.workId,staffId:s.user_id,scheduleId:s.id});
+  else await api('staff/task',{...b,scheduleId:s.id});
+ });
+ const draw=()=>{const kind=$('f-kind').value,slot=$('schedule-task-fields');
+  if(kind==='work'){slot.innerHTML=select('workId','Existing work order','<option value="">Choose work order</option>'+option(data.work.filter(w=>!['completed','cancelled'].includes(w.status)&&(!s.property_id||s.property_id===w.property_id)),'id','title'));return;}
+  slot.innerHTML=select('propertyId','Residence',option(data.properties.filter(p=>!s.property_id||p.id===s.property_id)))+'<div id="schedule-task-reference"></div>'+(kind==='other'?input('title','Task title'):'')+textarea('instructions',kind==='other'?'What needs to be done':'Instructions (optional)');
+  const refs=()=>{const pid=$('f-propertyId').value,target=$('schedule-task-reference');target.innerHTML=kind==='asset'?select('referenceId','Asset','<option value="">Choose asset</option>'+option(data.assets.filter(a=>a.property_id===pid))):kind==='arrival'?select('referenceId','Arrival','<option value="">Choose arrival</option>'+data.arrivals.filter(a=>a.property_id===pid).map(a=>`<option value="${esc(a.id)}">${esc(new Date(a.arrival_at).toLocaleString())} · ${esc(label(a.status))}</option>`).join('')):'';};
+  $('f-propertyId').onchange=refs;refs();
+ };$('f-kind').onchange=draw;draw();
 }
