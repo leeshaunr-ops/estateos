@@ -820,7 +820,7 @@ const server = http.createServer(async (req, res) => {
             if (req.method === 'HEAD') return res.end();
             return fs.createReadStream(mediaPath).pipe(res);
         }
-        const names = { '/': 'live.html', '/live.js': 'live.js', '/live.css': 'live.css' };
+        const names = { '/': 'live.html', '/learn-more': 'live.html', '/live.js': 'live.js', '/live.css': 'live.css' };
         const file = names[url.pathname];
         if (!file)
             fail(404, 'Page not found.');
