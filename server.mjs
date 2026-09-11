@@ -1,3 +1,4 @@
+import {sendInspectionEmail} from './inspection-email.mjs';
 import {lockFamily, linkAcceptedMember, revokeMemberAccess} from './family-access.mjs';
 import {invitationHistory, cancelInvitation, claimInvitation} from './invitations.mjs';
 import {sendInvitation} from './email.mjs';
@@ -143,7 +144,7 @@ async function snapshot(user) {
         jobs = jobs.filter(j => j.vendor_id === user.vendor_id);
     if (user.role === 'client')
         jobs = jobs.map(({ description, ...j }) => ({ ...j, description: '', service_notes: j.status === 'completed' ? j.service_notes : '' }));
-    const inspections = user.role === 'vendor' ? [] : (await scoped('inspections')).filter(i => user.role !== 'client' || i.status === 'published').map(i => { const { internal_notes, report_snapshot, ...visible } = i; return { ...visible, answers: JSON.parse(i.answers), ...(user.role === 'admin' || user.role === 'employee' ? { internal_notes } : {}) }; });
+    const inspections = user.role === 'vendor' ? [] : await mapAsync((await scoped('inspections')).filter(i=>user.role!=='client'||i.status==='published'),async i=>{const {internal_notes,report_snapshot,report_email,email_status,email_attempted_at,...visible}=i;return {...visible,inspector_name:(await get('SELECT name FROM users WHERE id=?',i.inspector_id))?.name||'Not recorded',answers:JSON.parse(i.answers),...(['admin','employee'].includes(user.role)?{internal_notes,report_email,email_status:(await get('SELECT email_status FROM inspection_email_delivery WHERE inspection_id=?',i.id))?.email_status||'not_requested'}:{})};});
     const jobIds = new Set(jobs.map(j => j.id));
     const inspectionIds = new Set(inspections.map(i => i.id));
     const fileCandidates=await all('SELECT f.* FROM files f JOIN properties p ON p.id=f.property_id WHERE p.organization_id=?',user.organization_id);
@@ -264,10 +265,10 @@ async function api(req, res, url, user) {
         const row = (await entity(user, 'inspections', p.split('/')[3]));
         if (row.status !== 'published')
             fail(409, 'Publish the inspection first.');
-        const report = JSON.parse(row.report_snapshot);
+        const report = {...JSON.parse(row.report_snapshot), completedAt:JSON.parse(row.report_snapshot).completedAt||row.published_at};
         const photos = (await mapAsync(report.fileIds, async (fileId) => { const f = (await readFile(user, fileId)); return { name: f.name, bytes: (await readBytes(f.storage_key)) }; }));
         const pdf = inspectionPdf(report, photos);
-        res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="EstateOS-Inspection-${row.id}.pdf"`, 'Cache-Control': 'no-store' });
+        res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="EstateAegis-Inspection-${row.id}.pdf"`, 'Cache-Control': 'no-store' });
         return res.end(pdf);
     }
     if (/^\/api\/asset-inspections\/[^/]+\/pdf$/.test(p) && method === 'GET') {
@@ -275,7 +276,7 @@ async function api(req, res, url, user) {
         if (!row) fail(404, 'Asset inspection not found.');
         await property(user, row.property_id, 'read');
         const prop = await get('SELECT name FROM properties WHERE id=?', row.property_id);
-        const report = { company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, property: prop.name, client: '', date: row.inspection_date, inspector: (await get('SELECT name FROM users WHERE id=?', row.inspector_id)).name, overall: JSON.parse(row.answers || '[]').some(a => a.status === 'attention') ? 'Action needed' : 'Passed', answers: JSON.parse(row.answers || '[]'), summary: `${row.asset_name} inspection`, notes: row.notes || '', fileIds: [] };
+        const report = { id:row.id, completedAt:row.created_at, timezone:prop.timezone||'UTC', company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, property: prop.name, client: '', date: row.inspection_date, inspector: (await get('SELECT name FROM users WHERE id=?', row.inspector_id)).name, overall: JSON.parse(row.answers || '[]').some(a => a.status === 'attention') ? 'Action needed' : 'Passed', answers: JSON.parse(row.answers || '[]'), summary: `${row.asset_name} inspection`, notes: row.notes || '', fileIds: [] };
         const pdf = inspectionPdf(report, []);
         res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="EstateOS-${row.asset_name.replace(/[^a-zA-Z0-9._ -]/g, '_')}-Inspection.pdf`, 'Cache-Control': 'no-store' });
         return res.end(pdf);
@@ -651,12 +652,15 @@ async function api(req, res, url, user) {
     }
     else if (p === '/api/inspections') {
         roles(user, 'admin', 'employee');
-        (await property(user, b.propertyId, 'operate'));
+        const inspectionProperty = await property(user, b.propertyId, 'operate');
         const key = id();
         const inspectionDate = date(b.date), frequency = ['One-time', '7 days', '30 days', '60 days'].includes(b.frequency) ? b.frequency : (b.frequency === 'Custom' ? 'Custom' : 'One-time');
         const customDays = frequency === 'Custom' ? Math.max(1, Math.min(3650, Number(b.customDays) || 0)) : ({ '7 days': 7, '30 days': 30, '60 days': 60 }[frequency] || 0);
         const next = customDays ? (() => { const d = new Date(inspectionDate + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + customDays); return d.toISOString().slice(0, 10); })() : '';
         (await run('INSERT INTO inspections(id,property_id,inspector_id,inspection_date,answers,created_at,frequency,next_due) VALUES(?,?,?,?,?,?,?,?)', key, b.propertyId, user.id, inspectionDate, JSON.stringify(template), now(), frequency, next));
+        const previousRecipient=await get("SELECT report_email FROM inspections WHERE property_id=? AND id<>? ORDER BY created_at DESC LIMIT 1",b.propertyId,key);
+        const defaultEmail=previousRecipient?.report_email??(await get('SELECT email FROM clients WHERE id=?',inspectionProperty.client_id))?.email??'';
+        await run('UPDATE inspections SET report_email=? WHERE id=?',defaultEmail,key);
         (await audit(user, 'inspection.started', key));
         result = { id: key };
     }
@@ -676,9 +680,18 @@ async function api(req, res, url, user) {
         if (row.status !== 'draft')
             fail(409, 'Published reports cannot be edited.');
         const answers = validateAnswers(b.answers);
-        (await run('UPDATE inspections SET answers=?,summary=?,notes=?,internal_notes=?,version=version+1 WHERE id=?', JSON.stringify(answers), note(b.summary), note(b.notes), note(b.internalNotes), row.id));
+        const recipient=note(b.reportEmail===undefined?row.report_email:b.reportEmail,254).trim().toLowerCase();
+        if(recipient&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient))fail(422,'Enter a valid report email.');
+        const changed=await run("UPDATE inspections SET answers=?,summary=?,notes=?,internal_notes=?,report_email=?,version=version+1 WHERE id=? AND status='draft' AND version=?",JSON.stringify(answers),note(b.summary),note(b.notes),note(b.internalNotes),recipient,row.id,row.version);
+        if(changed.changes!==1)fail(409,'This inspection changed. Refresh before saving.');
         (await audit(user, 'inspection.saved', row.id));
         result = { id: row.id, version: row.version + 1 };
+    }
+    else if (p === '/api/inspections/email') {
+        roles(user,'admin');
+        const row=await entity(user,'inspections',b.id,'operate');
+        if(row.status!=='published')fail(409,'Publish this report first.');
+        result=await deliverInspection(user,row.id);
     }
     else if (p === '/api/inspections/publish') {
         roles(user, 'admin');
@@ -694,13 +707,23 @@ async function api(req, res, url, user) {
         if (row.status !== 'draft')
             fail(409, 'Already published.');
         const answers = JSON.parse(row.answers);
+        if(answers.some(a=>a.status==='unchecked'))fail(422,'Complete every checklist item before publishing.');
         if (!row.summary.trim())
             fail(422, 'Add an inspection summary.');
         const pRow = (await property(user, row.property_id));
         const fileIds = (await all('SELECT id FROM files WHERE inspection_id=? ORDER BY created_at', row.id)).map(f => f.id);
-        const report = { id: row.id, company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, property: pRow.name, client: (await get('SELECT name FROM clients WHERE id=?', pRow.client_id)).name, date: row.inspection_date, inspector: (await get('SELECT name FROM users WHERE id=?', row.inspector_id)).name, overall: answers.some(a => a.status === 'attention') ? 'Action needed' : answers.some(a => a.status === 'monitor') ? 'Monitor' : answers.every(a => a.status === 'na') ? 'Not assessed' : 'Passed', answers, summary: row.summary, notes: row.notes, fileIds };
+        const completedAt=now();
+        const report = { id: row.id, completedAt, timezone:pRow.timezone||'UTC', company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, property: pRow.name, client: (await get('SELECT name FROM clients WHERE id=?', pRow.client_id)).name, date: row.inspection_date, inspector: (await get('SELECT name FROM users WHERE id=?', row.inspector_id)).name, overall: answers.some(a => a.status === 'attention') ? 'Action needed' : answers.some(a => a.status === 'monitor') ? 'Monitor' : answers.every(a => a.status === 'na') ? 'Not assessed' : 'Passed', answers, summary: row.summary, notes: row.notes, fileIds };
         result = { id: row.id, published: true };
-        (await transaction(async () => { (await run("UPDATE inspections SET status='published',published_at=?,report_snapshot=?,version=version+1 WHERE id=?", now(), JSON.stringify(report), row.id)); (await notifyProperty(pRow, 'Inspection report available: ' + pRow.name, row.id, 'client')); (await audit(user, 'inspection.published', row.id)); (await run('INSERT INTO idempotency VALUES(?,?,?,?,?)', user.id, key, p, requestHash, JSON.stringify(result))); }));
+        await transaction(async()=>{
+            const updated=await run("UPDATE inspections SET status='published',published_at=?,report_snapshot=?,version=version+1 WHERE id=? AND status='draft' AND version=?",completedAt,JSON.stringify(report),row.id,row.version);
+            if(updated.changes!==1)fail(409,'This report changed or was already published.');
+            await notifyProperty(pRow,'Inspection report available: '+pRow.name,row.id,'client');
+            await audit(user,'inspection.published',row.id);
+            await run('INSERT INTO idempotency VALUES(?,?,?,?,?)',user.id,key,p,requestHash,JSON.stringify(result));
+        });
+        result={...result,...await deliverInspection(user,row.id)};
+        await run('UPDATE idempotency SET response=? WHERE user_id=? AND key=? AND route=?',JSON.stringify(result),user.id,key,p);
     }
     else if (p === '/api/files') {
         roles(user, 'admin', 'employee', 'vendor');
@@ -946,3 +969,21 @@ if (host !== '127.0.0.1' && (!process.env.ESTATEOS_SETUP_KEY || process.env.ESTA
     throw Error('Nonlocal hosting requires a strong setup key, HTTPS termination and secure cookies. Complete the production deployment review first.');
 server.listen(port, host, () => console.log(`EstateOS running at http://${host}:${server.address().port}`));
 process.on('SIGTERM', () => server.close(async () => { await db.close(); process.exit(0); }));
+
+async function deliverInspection(user,inspectionId){
+ const row=await entity(user,'inspections',inspectionId,'operate');
+ if(!row.report_email)return {emailStatus:'not_requested'};
+ await run("INSERT INTO inspection_email_delivery(inspection_id,email_status) VALUES(?,'not_requested') ON CONFLICT(inspection_id) DO NOTHING",row.id);
+ const delivery=await get('SELECT * FROM inspection_email_delivery WHERE inspection_id=?',row.id);
+ if(delivery.email_status==='sent')return {emailStatus:'sent'};
+ const claimed=await run("UPDATE inspection_email_delivery SET email_status='sending',email_attempted_at=? WHERE inspection_id=? AND email_status<>'sent' AND (email_status<>'sending' OR email_attempted_at<?)",now(),row.id,new Date(Date.now()-60000).toISOString());
+ if(!claimed.changes)return {emailStatus:'sending'};
+ let result;
+ try{
+  const report={...JSON.parse(row.report_snapshot),completedAt:JSON.parse(row.report_snapshot).completedAt||row.published_at};
+  const photos=await mapAsync(report.fileIds||[],async fileId=>{const f=await readFile(user,fileId);return {name:f.name,bytes:await readBytes(f.storage_key)};});
+  result=await sendInspectionEmail({to:row.report_email,report,pdf:inspectionPdf(report,photos)});
+ }catch{result={emailStatus:'failed'};}
+ await run('UPDATE inspection_email_delivery SET email_status=? WHERE inspection_id=?',result.emailStatus,row.id);
+ return result;
+}
