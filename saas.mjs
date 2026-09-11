@@ -1,3 +1,4 @@
+import {sendInvitation} from './email.mjs';
 // Platform privileges are granted by an operator-owned user ID, never an editable email.
 export function platformOwner(user){return !!user && user.role==='admin' && !!process.env.ESTATEOS_PLATFORM_OWNER_ID && user.id===process.env.ESTATEOS_PLATFORM_OWNER_ID;}
 export function createSaas({get,all,run,transaction,fail,text,note,id,hash,now,passwordHash,session,json,body,rate,audit,randomBytes}){
@@ -35,7 +36,7 @@ export function createSaas({get,all,run,transaction,fail,text,note,id,hash,now,p
    const company=text(b.company,'Company name',160),address=email(b.email),token=randomBytes(32).toString('hex');
    if(await get('SELECT id FROM users WHERE LOWER(email)=?',address))fail(409,'That email already has an account.');
    await run('INSERT INTO workspace_invites VALUES(?,?,?,?,?,?)',hash(token),company,address,user.id,Date.now()+48*3600000,null);
-   await audit(user,'workspace.invited',company);json(res,201,{invitePath:'/?workspaceInvite='+token});return true;
+   await audit(user,'workspace.invited',company);json(res,201,{invitePath:'/?workspaceInvite='+token,...await sendInvitation({to:address,invitePath:'/?workspaceInvite='+token,company})});return true;
   }
   if(p==='/api/platform/demo'){
    const existing=await get("SELECT id FROM organizations WHERE name='EstateOS Demo Company'");

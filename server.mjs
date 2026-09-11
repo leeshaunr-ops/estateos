@@ -1,3 +1,4 @@
+import {sendInvitation} from './email.mjs';
 import http from 'node:http';
 import {createSaas,platformOwner} from './saas.mjs';
 import {createStaff} from './staff.mjs';
@@ -446,7 +447,7 @@ async function api(req, res, url, user) {
             fail(409, 'That account already exists.');
         (await run('INSERT INTO invitations VALUES(?,?,?,?,?,?,?,?)', hash(token), user.organization_id, email, role, role === 'client' ? b.clientId : null, role === 'vendor' ? b.vendorId : null, Date.now() + 48 * 3600000, null));
         (await audit(user, 'invitation.created', email));
-        result = { invitePath: '/?invite=' + token, expiresInHours: 48 };
+        result = { invitePath: '/?invite=' + token, expiresInHours: 48, ...await sendInvitation({to:email,invitePath:'/?invite='+token}) };
     }
     else if (p === '/api/access' || p === '/api/properties/manager') {
         roles(user, 'admin');
