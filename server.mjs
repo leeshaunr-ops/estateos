@@ -1,3 +1,4 @@
+import {lockFamily, linkAcceptedMember, revokeMemberAccess} from './family-access.mjs';
 import {invitationHistory, cancelInvitation, claimInvitation} from './invitations.mjs';
 import {sendInvitation} from './email.mjs';
 import http from 'node:http';
@@ -233,8 +234,10 @@ async function api(req, res, url, user) {
         await assertWorkspaceActive(invitation.organization_id);
         const pw = passwordHash(b.password), uid = id();
         await transaction(async () => {
+            const family = invitation.role === 'client' ? await lockFamily({get,run}, invitation.organization_id, invitation.client_id) : null;
             if (!await claimInvitation(run, invitation.token_hash, now())) fail(409, 'Invitation expired, cancelled, or already accepted.');
             await run('INSERT INTO users VALUES(?,?,?,?,?,?,?,?,?,?)', uid, invitation.organization_id, text(b.name, 'Name', 160), invitation.email, pw, invitation.role, invitation.client_id, invitation.vendor_id, 1, now());
+            await linkAcceptedMember({run}, invitation, uid, family);
         });
         const u = (await get('SELECT * FROM users WHERE id=?', uid));
         (await session(res, req, u));
@@ -346,21 +349,32 @@ async function api(req, res, url, user) {
             fail(403, 'You do not have permission for this family.');
         const old = JSON.parse(c.profile || '{}');
         if (p.endsWith('/member/delete')) {
-            const members = old.members || [];
-            if (!members.some(member => member.id === b.memberId))
-                fail(404, 'Family member not found.');
-            run('UPDATE clients SET profile=? WHERE id=?', JSON.stringify({ ...old, members: members.filter(member => member.id !== b.memberId) }), c.id);
-            audit(user, 'client.member_removed', c.id);
+            roles(user, 'admin');
+            await transaction(async () => {
+                const family = await lockFamily({get,run}, user.organization_id, c.id);
+                const profile = JSON.parse(family.profile || '{}'), members = profile.members || [];
+                const member = members.find(m => m.id === b.memberId);
+                if (!member) fail(404, 'Family member not found.');
+                await revokeMemberAccess({get,run,all}, user.organization_id, family, member);
+                await run('UPDATE clients SET profile=? WHERE id=?', JSON.stringify({...profile,members:members.filter(m=>m.id!==b.memberId)}), c.id);
+                await audit(user, 'client.member_removed_access_suspended', c.id);
+            });
         }
         else if (p.endsWith('/member')) {
-            const members = old.members || [];
-            members.push({ id: id(), firstName: text(b.firstName, 'First name', 160), lastName: text(b.lastName, 'Last name', 160), relationship: note(b.relationship, 100), email: note(b.email, 254), phone: note(b.phone, 80), preferredContact: contactPreference(b.preferredContact) });
-            (await run('UPDATE clients SET profile=? WHERE id=?', JSON.stringify({ ...old, members }), c.id));
-            (await audit(user, 'client.member_added', c.id));
+            await transaction(async () => {
+                const family=await lockFamily({get,run},user.organization_id,c.id), profile=JSON.parse(family.profile||'{}');
+                const members=profile.members||[];
+                members.push({id:id(),firstName:text(b.firstName,'First name',160),lastName:text(b.lastName,'Last name',160),relationship:note(b.relationship,100),email:note(b.email,254),phone:note(b.phone,80),preferredContact:contactPreference(b.preferredContact)});
+                await run('UPDATE clients SET profile=? WHERE id=?',JSON.stringify({...profile,members}),c.id);
+                await audit(user,'client.member_added',c.id);
+            });
         }
         else {
-            (await run('UPDATE clients SET name=?,email=?,phone=?,profile=? WHERE id=?', text(b.name || b.lastName, 'Family name', 160), note(b.email, 254), note(b.phone, 80), JSON.stringify({ ...clientProfile(b), members: old.members || [] }), c.id));
-            (await audit(user, 'client.updated', c.id));
+            await transaction(async () => {
+                const family=await lockFamily({get,run},user.organization_id,c.id), profile=JSON.parse(family.profile||'{}');
+                await run('UPDATE clients SET name=?,email=?,phone=?,profile=? WHERE id=?',text(b.name||b.lastName,'Family name',160),note(b.email,254),note(b.phone,80),JSON.stringify({...clientProfile(b),members:profile.members||[]}),c.id);
+                await audit(user,'client.updated',c.id);
+            });
         }
         result = { id: c.id };
     }
@@ -433,6 +447,44 @@ async function api(req, res, url, user) {
         (await audit(user, 'vendor.created', key));
         result = { id: key };
     }
+    else if (p === '/api/family/invite' || p === '/api/family/member-email') {
+        roles(user, 'admin');
+        let recipient, token, alreadyPending = false;
+        await transaction(async () => {
+            const family = await lockFamily({get,run}, user.organization_id, text(b.clientId, 'Family', 100));
+            if (!family) fail(404, 'Family not found.');
+            const profile = JSON.parse(family.profile || '{}'), members = profile.members || [];
+            const member = members.find(m => m.id === b.memberId);
+            if (!member) fail(404, 'Family member not found.');
+            if (p.endsWith('/member-email')) {
+                const email = text(b.email, 'Email', 254).toLowerCase();
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(422, 'Enter a valid email.');
+                const linked = await all('SELECT id,email FROM users WHERE organization_id=? AND client_id=? AND role=?', user.organization_id, family.id, 'client');
+                member.accessUserIds = [...new Set([...(member.accessUserIds || []), ...linked.filter(u=>member.email && u.email.toLowerCase()===member.email.toLowerCase()).map(u=>u.id)])];
+                const pending = await all('SELECT token_hash,email FROM invitations WHERE organization_id=? AND client_id=? AND role=? AND used_at IS NULL', user.organization_id, family.id, 'client');
+                for (const invite of pending) if ((member.invitationIds||[]).includes(invite.token_hash) || (member.email && invite.email.toLowerCase()===member.email.toLowerCase())) await run('UPDATE invitations SET expires_at=0 WHERE token_hash=? AND used_at IS NULL', invite.token_hash);
+                member.email=email;
+                await run('UPDATE clients SET profile=? WHERE id=?', JSON.stringify({...profile,members}), family.id);
+                await audit(user, 'client.member_email_updated', family.id);
+                return;
+            }
+            recipient = String(member.email || '').trim().toLowerCase();
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) fail(422, 'Add a valid email to this family member first.');
+            const accounts = await all('SELECT id,email,active FROM users WHERE organization_id=? AND client_id=? AND role=?', user.organization_id, family.id, 'client');
+            if (accounts.some(u=>(member.accessUserIds||[]).includes(u.id)||u.email.toLowerCase()===recipient)) fail(409, 'This person already has a client account. Manage their access in Team & access.');
+            if (await get('SELECT 1 FROM users WHERE LOWER(email)=?', recipient)) fail(409, 'This email already belongs to an account. Choose a different saved email.');
+            const pending = await get('SELECT token_hash FROM invitations WHERE organization_id=? AND client_id=? AND role=? AND LOWER(email)=? AND used_at IS NULL AND expires_at>?', user.organization_id, family.id, 'client', recipient, Date.now());
+            if (pending) { alreadyPending=true; member.invitationIds=[...new Set([...(member.invitationIds||[]),pending.token_hash])]; }
+            else {
+                token=randomBytes(32).toString('hex');
+                await run('INSERT INTO invitations VALUES(?,?,?,?,?,?,?,?)', hash(token), user.organization_id, recipient, 'client', family.id, null, Date.now()+48*3600000, null);
+                member.invitationIds=[...(member.invitationIds||[]),hash(token)];
+                await audit(user, 'invitation.created', recipient);
+            }
+            await run('UPDATE clients SET profile=? WHERE id=?', JSON.stringify({...profile,members}), family.id);
+        });
+        result = token ? {invitePath:'/?invite='+token, email:recipient, ...await sendInvitation({to:recipient,invitePath:'/?invite='+token})} : {saved:true,alreadyPending};
+    }
     else if (p === '/api/invitations/cancel' || p === '/api/invitations/email') {
         roles(user, 'admin');
         const invitationId = text(b.id, 'Invitation', 64);
@@ -451,8 +503,14 @@ async function api(req, res, url, user) {
             if (await get('SELECT 1 FROM users WHERE email=?', email)) fail(409, 'That account already exists.');
             const token = randomBytes(32).toString('hex');
             await transaction(async () => {
+                const family = previous.role === 'client' ? await lockFamily({get,run}, user.organization_id, previous.client_id) : null;
                 if (!await cancelInvitation(run, user, invitationId)) fail(409, 'This invitation is no longer pending.');
                 await run('INSERT INTO invitations VALUES(?,?,?,?,?,?,?,?)', hash(token), user.organization_id, email, previous.role, previous.client_id, previous.vendor_id, Date.now()+48*3600000, null);
+                if (family) {
+                    const profile=JSON.parse(family.profile||'{}');
+                    const members=(profile.members||[]).map(m=>(m.invitationIds||[]).includes(invitationId)||(m.email&&m.email.toLowerCase()===previous.email.toLowerCase())?{...m,email,invitationIds:[...(m.invitationIds||[]),hash(token)]}:m);
+                    await run('UPDATE clients SET profile=? WHERE id=?',JSON.stringify({...profile,members}),family.id);
+                }
                 await audit(user, 'invitation.cancelled', previous.email);
                 await audit(user, 'invitation.created', email);
             });

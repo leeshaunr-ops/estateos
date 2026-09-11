@@ -11,6 +11,7 @@ test('history isolates workspaces, hides tokens and reports lifecycle accurately
  insert.run('secret2','a','expired@example.com','vendor',1000,null);
  insert.run('secret3','a','accepted@example.com','employee',900,'2026-09-11T12:00:00Z');
  insert.run('secret4','b','private@example.com','admin',3000,null);
+ db.exec('ALTER TABLE invitations ADD COLUMN client_id TEXT');
  const all=async(sql,...args)=>db.prepare(sql).all(...args);
  const result=await invitationHistory(all,{role:'admin',organization_id:'a'},1000);
  assert.deepEqual(result.map(i=>i.status),['pending','expired','accepted']);

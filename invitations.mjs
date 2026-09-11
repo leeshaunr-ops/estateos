@@ -1,8 +1,9 @@
 export async function invitationHistory(all, user, timestamp = Date.now()) {
   if (user.role !== 'admin') return [];
-  const rows = await all('SELECT token_hash,email,role,expires_at,used_at FROM invitations WHERE organization_id=? ORDER BY expires_at DESC', user.organization_id);
+  const rows = await all('SELECT token_hash,client_id,email,role,expires_at,used_at FROM invitations WHERE organization_id=? ORDER BY expires_at DESC', user.organization_id);
   return rows.map(row => ({
     id: row.token_hash,
+    clientId: row.client_id,
     email: row.email,
     role: row.role,
     expiresAt: Number(row.expires_at),

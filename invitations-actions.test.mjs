@@ -7,6 +7,7 @@ test('cancellation is scoped and prevents acceptance, while accepted invitations
  db.exec('CREATE TABLE invitations(token_hash TEXT,organization_id TEXT,email TEXT,role TEXT,expires_at INTEGER,used_at TEXT)');
  const add=db.prepare('INSERT INTO invitations VALUES(?,?,?,?,?,?)');
  for(const id of ['cancel','accept','foreign','expired'])add.run(id,id==='foreign'?'b':'a',id+'@example.com','client',id==='expired'?1000:2000,null);
+ db.exec('ALTER TABLE invitations ADD COLUMN client_id TEXT');
  const all=async(sql,...args)=>db.prepare(sql).all(...args);
  const run=async(sql,...args)=>db.prepare(sql).run(...args);
  const admin={role:'admin',organization_id:'a'};
