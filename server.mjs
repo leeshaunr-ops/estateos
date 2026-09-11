@@ -658,8 +658,7 @@ async function api(req, res, url, user) {
         const customDays = frequency === 'Custom' ? Math.max(1, Math.min(3650, Number(b.customDays) || 0)) : ({ '7 days': 7, '30 days': 30, '60 days': 60 }[frequency] || 0);
         const next = customDays ? (() => { const d = new Date(inspectionDate + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + customDays); return d.toISOString().slice(0, 10); })() : '';
         (await run('INSERT INTO inspections(id,property_id,inspector_id,inspection_date,answers,created_at,frequency,next_due) VALUES(?,?,?,?,?,?,?,?)', key, b.propertyId, user.id, inspectionDate, JSON.stringify(template), now(), frequency, next));
-        const previousRecipient=await get("SELECT report_email FROM inspections WHERE property_id=? AND id<>? ORDER BY created_at DESC LIMIT 1",b.propertyId,key);
-        const defaultEmail=previousRecipient?.report_email??(await get('SELECT email FROM clients WHERE id=?',inspectionProperty.client_id))?.email??'';
+        const defaultEmail=inspectionProperty.inspection_report_email||'';
         await run('UPDATE inspections SET report_email=? WHERE id=?',defaultEmail,key);
         (await audit(user, 'inspection.started', key));
         result = { id: key };
@@ -673,6 +672,15 @@ async function api(req, res, url, user) {
         (await run('UPDATE inspections SET frequency=?,next_due=? WHERE id=?', frequency, next, row.id));
         (await audit(user, 'inspection.schedule_updated', row.id)); result = { id: row.id, frequency, next_due: next };
     }
+    else if (p === '/api/inspections/recipient') {
+        roles(user,'admin');
+        const residence=await property(user,b.propertyId,'operate');
+        const email=note(b.email,254).trim().toLowerCase();
+        if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))fail(422,'Enter a valid report email.');
+        await run('UPDATE properties SET inspection_report_email=? WHERE id=?',email,residence.id);
+        await audit(user,'inspection.recipient_updated',residence.id);
+        result={id:residence.id,email};
+    }
     else if (p === '/api/inspections/save') {
         roles(user, 'admin', 'employee');
         const row = (await entity(user, 'inspections', b.id, 'operate'));
@@ -680,9 +688,7 @@ async function api(req, res, url, user) {
         if (row.status !== 'draft')
             fail(409, 'Published reports cannot be edited.');
         const answers = validateAnswers(b.answers);
-        const recipient=note(b.reportEmail===undefined?row.report_email:b.reportEmail,254).trim().toLowerCase();
-        if(recipient&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient))fail(422,'Enter a valid report email.');
-        const changed=await run("UPDATE inspections SET answers=?,summary=?,notes=?,internal_notes=?,report_email=?,version=version+1 WHERE id=? AND status='draft' AND version=?",JSON.stringify(answers),note(b.summary),note(b.notes),note(b.internalNotes),recipient,row.id,row.version);
+        const changed=await run("UPDATE inspections SET answers=?,summary=?,notes=?,internal_notes=?,version=version+1 WHERE id=? AND status='draft' AND version=?",JSON.stringify(answers),note(b.summary),note(b.notes),note(b.internalNotes),row.id,row.version);
         if(changed.changes!==1)fail(409,'This inspection changed. Refresh before saving.');
         (await audit(user, 'inspection.saved', row.id));
         result = { id: row.id, version: row.version + 1 };
@@ -716,7 +722,7 @@ async function api(req, res, url, user) {
         const report = { id: row.id, completedAt, timezone:pRow.timezone||'UTC', company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, property: pRow.name, client: (await get('SELECT name FROM clients WHERE id=?', pRow.client_id)).name, date: row.inspection_date, inspector: (await get('SELECT name FROM users WHERE id=?', row.inspector_id)).name, overall: answers.some(a => a.status === 'attention') ? 'Action needed' : answers.some(a => a.status === 'monitor') ? 'Monitor' : answers.every(a => a.status === 'na') ? 'Not assessed' : 'Passed', answers, summary: row.summary, notes: row.notes, fileIds };
         result = { id: row.id, published: true };
         await transaction(async()=>{
-            const updated=await run("UPDATE inspections SET status='published',published_at=?,report_snapshot=?,version=version+1 WHERE id=? AND status='draft' AND version=?",completedAt,JSON.stringify(report),row.id,row.version);
+            const updated=await run("UPDATE inspections SET status='published',published_at=?,report_snapshot=?,report_email=?,version=version+1 WHERE id=? AND status='draft' AND version=?",completedAt,JSON.stringify(report),pRow.inspection_report_email||'',row.id,row.version);
             if(updated.changes!==1)fail(409,'This report changed or was already published.');
             await notifyProperty(pRow,'Inspection report available: '+pRow.name,row.id,'client');
             await audit(user,'inspection.published',row.id);
