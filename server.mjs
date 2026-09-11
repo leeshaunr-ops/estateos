@@ -1,3 +1,5 @@
+import {validateLogo} from './branding.mjs';
+import {createCommunications} from './communications.mjs';
 import {sendInspectionEmail} from './inspection-email.mjs';
 import {lockFamily, linkAcceptedMember, revokeMemberAccess} from './family-access.mjs';
 import {invitationHistory, cancelInvitation, claimInvitation} from './invitations.mjs';
@@ -152,7 +154,7 @@ async function snapshot(user) {
     const assets = user.role === 'vendor' ? [] : (await scoped('assets'));
     const assetIds = new Set(assets.map(a => a.id));
     const assetInspections = assetIds.size ? (await all('SELECT ai.* FROM asset_inspections ai JOIN assets a ON a.id=ai.asset_id WHERE a.id IN (' + [...assetIds].map(() => '?').join(',') + ')', ...assetIds)).map(i => ({ ...i, answers: JSON.parse(i.answers || '[]') })) : [];
-    return { workspaceSupport:(await get('SELECT support_email FROM workspace_settings WHERE organization_id=?',user.organization_id))?.support_email||'', user: {...safeUser(user), ...profile}, company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, properties: props.map(p => { if (user.role === 'vendor')
+    return { unreadMessages:await communications.unread(user), companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'', primaryAdminId:(await communications.primary(user.organization_id))?.id||'', workspaceSupport:(await get('SELECT support_email FROM workspace_settings WHERE organization_id=?',user.organization_id))?.support_email||'', user: {...safeUser(user), ...profile}, company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, properties: props.map(p => { if (user.role === 'vendor')
             return { id: p.id, name: p.name, address: p.address }; if (user.role === 'client') {
             const { manual, ...safe } = p;
             return safe;
@@ -172,14 +174,16 @@ async function fileAllowed(user, f, inspectionIds, jobIds) {
 async function readFile(user, fileId) { const f = (await get('SELECT * FROM files WHERE id=?', fileId)); if (!f)
     fail(404, 'File not found.'); if(user.role==='employee'&&f.work_order_id){await work(user,f.work_order_id);return f;} (await property(user, f.property_id, user.role === 'vendor' ? 'job' : 'read')); const ins = new Set((await all("SELECT id FROM inspections WHERE property_id=? AND status='published'", f.property_id)).map(x => x.id)); const jobs = new Set((await all('SELECT * FROM work_orders WHERE property_id=?', f.property_id)).filter(x => user.role !== 'vendor' || x.vendor_id === user.vendor_id).map(x => x.id)); if (!(await fileAllowed(user, f, ins, jobs)))
     fail(404, 'File not found.'); return f; }
+const communications=createCommunications({get,all,run,transaction,id,now,fail,text,json,body,rate,audit});
 const saas = createSaas({get,all,run,transaction,fail,text,note,id,hash,now,passwordHash,session,json,body,rate,audit,randomBytes});
-const staff = createStaff({get,all,run,transaction,fail,text,note,id,now,passwordHash,json,body,audit});
+const staff = createStaff({get,all,run,transaction,fail,text,note,id,now,passwordHash,json,body,audit,communications});
 async function assertWorkspaceActive(organizationId){if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',organizationId))?.status==='suspended')fail(403,'This company workspace is suspended. Contact support.');}
 async function api(req, res, url, user) {
     const method = req.method, p = url.pathname;
     if(user)await assertWorkspaceActive(user.organization_id);
     if(await saas(req,res,url,user))return;
     if(await staff.handle(req,res,url,user))return;
+    if(await communications.handle(req,res,url,user))return;
     if (p === '/api/status' && method === 'GET')
         return json(res, 200, { configured: !!(await get('SELECT id FROM users LIMIT 1')), user: safeUser(user) });
     if (p === '/api/geocode/autocomplete' && method === 'GET') {
@@ -207,9 +211,9 @@ async function api(req, res, url, user) {
         const email = text(b.email, 'Email', 254).toLowerCase();
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
             fail(422, 'Enter a valid email.');
-        const org = id(), uid = id();
+        const org = id(), uid = id(), logo=validateLogo(b.logoData||'',fail);
         (await transaction(async () => { if ((await get('SELECT id FROM users LIMIT 1')))
-            fail(409, 'Setup complete.'); (await run('INSERT INTO organizations VALUES(?,?,?)', org, text(b.company, 'Company', 160), now())); (await run('INSERT INTO users VALUES(?,?,?,?,?,?,?,?,?,?)', uid, org, text(b.name, 'Name', 160), email, pw, 'admin', null, null, 1, now())); }));
+            fail(409, 'Setup complete.'); (await run('INSERT INTO organizations VALUES(?,?,?)', org, text(b.company, 'Company', 160), now())); (await run('INSERT INTO users VALUES(?,?,?,?,?,?,?,?,?,?)', uid, org, text(b.name, 'Name', 160), email, pw, 'admin', null, null, 1, now()));await run('INSERT INTO workspace_settings(organization_id,logo_data,primary_admin_id) VALUES(?,?,?)',org,logo,uid); }));
         const u = (await get('SELECT * FROM users WHERE id=?', uid));
         (await session(res, req, u));
         return json(res, 201, { user: safeUser(u) });
@@ -265,7 +269,7 @@ async function api(req, res, url, user) {
         const row = (await entity(user, 'inspections', p.split('/')[3]));
         if (row.status !== 'published')
             fail(409, 'Publish the inspection first.');
-        const report = {...JSON.parse(row.report_snapshot), completedAt:JSON.parse(row.report_snapshot).completedAt||row.published_at};
+        const report = {companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'',...JSON.parse(row.report_snapshot), completedAt:JSON.parse(row.report_snapshot).completedAt||row.published_at};
         const photos = (await mapAsync(report.fileIds, async (fileId) => { const f = (await readFile(user, fileId)); return { name: f.name, bytes: (await readBytes(f.storage_key)) }; }));
         const pdf = inspectionPdf(report, photos);
         res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="EstateAegis-Inspection-${row.id}.pdf"`, 'Cache-Control': 'no-store' });
@@ -276,7 +280,7 @@ async function api(req, res, url, user) {
         if (!row) fail(404, 'Asset inspection not found.');
         await property(user, row.property_id, 'read');
         const prop = await get('SELECT name FROM properties WHERE id=?', row.property_id);
-        const report = { id:row.id, completedAt:row.created_at, timezone:prop.timezone||'UTC', company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, property: prop.name, client: '', date: row.inspection_date, inspector: (await get('SELECT name FROM users WHERE id=?', row.inspector_id)).name, overall: JSON.parse(row.answers || '[]').some(a => a.status === 'attention') ? 'Action needed' : 'Passed', answers: JSON.parse(row.answers || '[]'), summary: `${row.asset_name} inspection`, notes: row.notes || '', fileIds: [] };
+        const report = { id:row.id, completedAt:row.created_at, timezone:prop.timezone||'UTC', company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'', property: prop.name, client: '', date: row.inspection_date, inspector: (await get('SELECT name FROM users WHERE id=?', row.inspector_id)).name, overall: JSON.parse(row.answers || '[]').some(a => a.status === 'attention') ? 'Action needed' : 'Passed', answers: JSON.parse(row.answers || '[]'), summary: `${row.asset_name} inspection`, notes: row.notes || '', fileIds: [] };
         const pdf = inspectionPdf(report, []);
         res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="EstateOS-${row.asset_name.replace(/[^a-zA-Z0-9._ -]/g, '_')}-Inspection.pdf`, 'Cache-Control': 'no-store' });
         return res.end(pdf);
@@ -599,6 +603,7 @@ async function api(req, res, url, user) {
         (await run('INSERT INTO work_orders(id,property_id,asset_id,title,description,priority,due_date,vendor_id,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)', key, b.propertyId, b.assetId || null, text(b.title, 'Work title', 200), note(b.description), ['Normal', 'High', 'Urgent'].includes(b.priority) ? b.priority : 'Normal', b.dueDate ? date(b.dueDate) : '', b.vendorId || null, user.id, now()));
         (await audit(user, 'work.created', key));
         if(b.staffId||b.scheduleId)await staff.assignment(user,key,b);
+        await communications.work(user,key);
         result = { id: key };
         });
     }
@@ -628,7 +633,7 @@ async function api(req, res, url, user) {
         const pRow = (await property(user, b.propertyId));
         const key = id();
         const priority=b.priority||'Normal';if(!['Low','Normal','High','Urgent'].includes(priority))fail(422,'Choose a valid priority.');
-        (await transaction(async () => { (await run('INSERT INTO requests(id,property_id,created_by,title,description,status,work_order_id,created_at,priority) VALUES(?,?,?,?,?,?,?,?,?)', key, pRow.id, user.id, text(b.title, 'Request', 200), note(b.description), 'new', null, now(),priority)); (await notifyProperty(pRow, 'New request: ' + b.title, key)); (await audit(user, 'request.created', key)); }));
+        (await transaction(async () => { (await run('INSERT INTO requests(id,property_id,created_by,title,description,status,work_order_id,created_at,priority) VALUES(?,?,?,?,?,?,?,?,?)', key, pRow.id, user.id, text(b.title, 'Request', 200), note(b.description), 'new', null, now(),priority)); (await notifyProperty(pRow, 'New request: ' + b.title, key)); (await audit(user, 'request.created', key));await communications.request(user,key); }));
         result = { id: key };
     }
     else if (p === '/api/requests/priority') {
@@ -638,7 +643,7 @@ async function api(req, res, url, user) {
     }
     else if (p === '/api/requests/create-work') {
         roles(user,'admin','employee');
-        await transaction(async()=>{const row=await entity(user,'requests',b.id,'operate');if(row.work_order_id||row.status==='completed')fail(409,'This request already has work linked or is completed.');const key=id();await run('INSERT INTO work_orders(id,property_id,title,description,priority,created_by,created_at) VALUES(?,?,?,?,?,?,?)',key,row.property_id,row.title,row.description,row.priority,user.id,now());await run("UPDATE requests SET work_order_id=?,status='in_progress' WHERE id=?",key,row.id);await audit(user,'request.work_created',row.id);result={id:key};});
+        await transaction(async()=>{const row=await entity(user,'requests',b.id,'operate');if(row.work_order_id||row.status==='completed')fail(409,'This request already has work linked or is completed.');const key=id();await run('INSERT INTO work_orders(id,property_id,title,description,priority,created_by,created_at) VALUES(?,?,?,?,?,?,?)',key,row.property_id,row.title,row.description,row.priority,user.id,now());await run("UPDATE requests SET work_order_id=?,status='in_progress' WHERE id=?",key,row.id);await audit(user,'request.work_created',row.id);await communications.work(user,key);result={id:key};});
     }
     else if (p === '/api/requests/assign') {
         roles(user, 'admin', 'employee');
@@ -647,7 +652,7 @@ async function api(req, res, url, user) {
         if (row.property_id !== job.property_id)
             fail(422, 'Choose work at the same residence.');
         (await run("UPDATE requests SET work_order_id=?,status='in_progress' WHERE id=?", job.id, row.id));
-        (await audit(user, 'request.assigned', row.id));
+        (await audit(user, 'request.assigned', row.id));await communications.work(user,job.id,'service-assigned:'+row.id);
         result = { ok: true };
     }
     else if (p === '/api/inspections') {
@@ -719,7 +724,7 @@ async function api(req, res, url, user) {
         const pRow = (await property(user, row.property_id));
         const fileIds = (await all('SELECT id FROM files WHERE inspection_id=? ORDER BY created_at', row.id)).map(f => f.id);
         const completedAt=now();
-        const report = { id: row.id, completedAt, timezone:pRow.timezone||'UTC', company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, property: pRow.name, client: (await get('SELECT name FROM clients WHERE id=?', pRow.client_id)).name, date: row.inspection_date, inspector: (await get('SELECT name FROM users WHERE id=?', row.inspector_id)).name, overall: answers.some(a => a.status === 'attention') ? 'Action needed' : answers.some(a => a.status === 'monitor') ? 'Monitor' : answers.every(a => a.status === 'na') ? 'Not assessed' : 'Passed', answers, summary: row.summary, notes: row.notes, fileIds };
+        const report = { id: row.id, completedAt, timezone:pRow.timezone||'UTC', company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'', property: pRow.name, client: (await get('SELECT name FROM clients WHERE id=?', pRow.client_id)).name, date: row.inspection_date, inspector: (await get('SELECT name FROM users WHERE id=?', row.inspector_id)).name, overall: answers.some(a => a.status === 'attention') ? 'Action needed' : answers.some(a => a.status === 'monitor') ? 'Monitor' : answers.every(a => a.status === 'na') ? 'Not assessed' : 'Passed', answers, summary: row.summary, notes: row.notes, fileIds };
         result = { id: row.id, published: true };
         await transaction(async()=>{
             const updated=await run("UPDATE inspections SET status='published',published_at=?,report_snapshot=?,report_email=?,version=version+1 WHERE id=? AND status='draft' AND version=?",completedAt,JSON.stringify(report),pRow.inspection_report_email||'',row.id,row.version);
@@ -860,7 +865,7 @@ async function api(req, res, url, user) {
         roles(user, 'admin', 'employee');
         const row = (await entity(user, 'maintenance_plans', b.id, 'operate'));
         result = (await transaction(async () => { const existing = (await get('SELECT * FROM maintenance_occurrences WHERE plan_id=? AND due_date=?', row.id, row.next_due)); if (existing)
-            return { id: existing.work_order_id }; const key = id(); (await run('INSERT INTO work_orders(id,property_id,title,due_date,created_by,created_at) VALUES(?,?,?,?,?,?)', key, row.property_id, row.title, row.next_due, user.id, now())); (await run('INSERT INTO maintenance_occurrences VALUES(?,?,?,?)', id(), row.id, row.next_due, key)); (await audit(user, 'maintenance.scheduled', key)); return { id: key }; }));
+            return { id: existing.work_order_id }; const key = id(); (await run('INSERT INTO work_orders(id,property_id,title,due_date,created_by,created_at) VALUES(?,?,?,?,?,?)', key, row.property_id, row.title, row.next_due, user.id, now())); (await run('INSERT INTO maintenance_occurrences VALUES(?,?,?,?)', id(), row.id, row.next_due, key)); (await audit(user, 'maintenance.scheduled', key));await communications.work(user,key); return { id: key }; }));
     }
     else if (p === '/api/maintenance/run-due') {
         roles(user, 'admin', 'employee');
@@ -881,7 +886,7 @@ async function api(req, res, url, user) {
                 workId = id();
                 (await run('INSERT INTO work_orders(id,property_id,title,due_date,created_by,created_at) VALUES(?,?,?,?,?,?)', workId, plan.property_id, plan.title, due, user.id, now()));
                 (await run('INSERT INTO maintenance_occurrences VALUES(?,?,?,?)', id(), plan.id, due, workId));
-                (await audit(user, 'maintenance.scheduled', workId));
+                (await audit(user, 'maintenance.scheduled', workId));await communications.work(user,workId);
                 generated.push(workId);
             }
             const following = nextDue(due, plan.frequency);
@@ -951,7 +956,7 @@ const server = http.createServer(async (req, res) => {
             if (req.method === 'HEAD') return res.end();
             return fs.createReadStream(mediaPath).pipe(res);
         }
-        const names = { '/': 'live.html', '/live.js': 'live.js', '/live.css': 'live.css' };
+        const names = { '/': 'live.html', '/live.js': 'live.js', '/live.css': 'live.css', '/company.css':'company.css' };
         const file = names[url.pathname];
         if (!file)
             fail(404, 'Page not found.');
@@ -986,10 +991,12 @@ async function deliverInspection(user,inspectionId){
  if(!claimed.changes)return {emailStatus:'sending'};
  let result;
  try{
-  const report={...JSON.parse(row.report_snapshot),completedAt:JSON.parse(row.report_snapshot).completedAt||row.published_at};
+  const report={companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'',...JSON.parse(row.report_snapshot),completedAt:JSON.parse(row.report_snapshot).completedAt||row.published_at};
   const photos=await mapAsync(report.fileIds||[],async fileId=>{const f=await readFile(user,fileId);return {name:f.name,bytes:await readBytes(f.storage_key)};});
   result=await sendInspectionEmail({to:row.report_email,report,pdf:inspectionPdf(report,photos)});
  }catch{result={emailStatus:'failed'};}
  await run('UPDATE inspection_email_delivery SET email_status=? WHERE inspection_id=?',result.emailStatus,row.id);
  return result;
 }
+
+setInterval(()=>communications.drain().catch(error=>console.error('Email queue:',error.message)),15000).unref();

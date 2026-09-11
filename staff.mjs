@@ -1,4 +1,4 @@
-export function createStaff({get,all,run,transaction,fail,text,note,id,now,passwordHash,json,body,audit}) {
+export function createStaff({get,all,run,transaction,fail,text,note,id,now,passwordHash,json,body,audit,communications}) {
  async function member(user,uid) {
   const row=await get("SELECT id,name FROM users WHERE id=? AND organization_id=? AND role IN ('employee','admin') AND active=1",uid,user.organization_id);
   if(!row)fail(422,'Choose an active staff member from this company.');return row;
@@ -13,7 +13,7 @@ export function createStaff({get,all,run,transaction,fail,text,note,id,now,passw
   if(b.scheduleId){const s=await get('SELECT * FROM staff_schedules WHERE id=? AND organization_id=?',b.scheduleId,user.organization_id);if(!s||s.user_id!==b.staffId||(s.property_id&&s.property_id!==job.property_id))fail(422,'Choose a schedule for this staff member and residence.');}
   await run('INSERT INTO work_staff(work_id,user_id,schedule_id) VALUES(?,?,?) ON CONFLICT(work_id) DO UPDATE SET user_id=excluded.user_id,schedule_id=excluded.schedule_id',workId,b.staffId||null,b.scheduleId||null);
   await run('UPDATE work_orders SET vendor_id=?,version=version+1 WHERE id=?',b.vendorId||null,workId);
-  await audit(user,'work.assignment_updated',workId);
+  await audit(user,'work.assignment_updated',workId);await communications.work(user,workId);
  }
  async function handle(req,res,url,user){
   if(!url.pathname.startsWith('/api/staff/'))return false;
@@ -52,7 +52,7 @@ export function createStaff({get,all,run,transaction,fail,text,note,id,now,passw
     const linked=await all('SELECT w.property_id FROM work_staff a JOIN work_orders w ON w.id=a.work_id WHERE a.schedule_id=?',sid);if(b.propertyId&&linked.some(w=>w.property_id!==b.propertyId))fail(422,'Linked work belongs to another residence.');
     await run('INSERT INTO staff_schedules(id,organization_id,user_id,property_id,title,starts_at,ends_at,notes) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET user_id=excluded.user_id,property_id=excluded.property_id,title=excluded.title,starts_at=excluded.starts_at,ends_at=excluded.ends_at,notes=excluded.notes',sid,user.organization_id,b.staffId,b.propertyId||null,text(b.title,'Schedule title',200),new Date(start).toISOString(),new Date(end).toISOString(),note(b.notes));
     await run('UPDATE work_staff SET user_id=? WHERE schedule_id=?',b.staffId,sid);
-    if(b.workId)await assignment(user,b.workId,{staffId:b.staffId,scheduleId:sid});await audit(user,'staff.schedule_saved',sid);
+    if(b.workId)await assignment(user,b.workId,{staffId:b.staffId,scheduleId:sid});await audit(user,'staff.schedule_saved',sid);await communications.schedule(user,sid);
    });json(res,200,{id:sid});return true;
   }
   if(url.pathname==='/api/staff/schedule/remove'){
