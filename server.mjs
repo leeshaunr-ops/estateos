@@ -1,4 +1,4 @@
-import {invitationHistory} from './invitations.mjs';
+import {invitationHistory, cancelInvitation, claimInvitation} from './invitations.mjs';
 import {sendInvitation} from './email.mjs';
 import http from 'node:http';
 import {createSaas,platformOwner} from './saas.mjs';
@@ -229,11 +229,13 @@ async function api(req, res, url, user) {
         const b = await body(req);
         const invitation = (await get('SELECT * FROM invitations WHERE token_hash=? AND used_at IS NULL AND expires_at>?', hash(String(b.token)), Date.now()));
         if (!invitation)
-            fail(422, 'Invitation expired or already used.');
+            fail(422, 'Invitation expired, cancelled, or already accepted.');
         await assertWorkspaceActive(invitation.organization_id);
         const pw = passwordHash(b.password), uid = id();
-        (await transaction(async () => { const fresh = (await get('SELECT * FROM invitations WHERE token_hash=? AND used_at IS NULL', hash(String(b.token)))); if (!fresh)
-            fail(409, 'Invitation already used.'); (await run('INSERT INTO users VALUES(?,?,?,?,?,?,?,?,?,?)', uid, invitation.organization_id, text(b.name, 'Name', 160), invitation.email, pw, invitation.role, invitation.client_id, invitation.vendor_id, 1, now())); (await run('UPDATE invitations SET used_at=? WHERE token_hash=?', now(), invitation.token_hash)); }));
+        await transaction(async () => {
+            if (!await claimInvitation(run, invitation.token_hash, now())) fail(409, 'Invitation expired, cancelled, or already accepted.');
+            await run('INSERT INTO users VALUES(?,?,?,?,?,?,?,?,?,?)', uid, invitation.organization_id, text(b.name, 'Name', 160), invitation.email, pw, invitation.role, invitation.client_id, invitation.vendor_id, 1, now());
+        });
         const u = (await get('SELECT * FROM users WHERE id=?', uid));
         (await session(res, req, u));
         return json(res, 201, { user: safeUser(u) });
@@ -430,6 +432,32 @@ async function api(req, res, url, user) {
         (await run('INSERT INTO vendors VALUES(?,?,?,?,?,?,?)', key, user.organization_id, text(b.name, 'Vendor', 160), note(b.trade, 100), note(b.email, 254), note(b.phone, 80), now()));
         (await audit(user, 'vendor.created', key));
         result = { id: key };
+    }
+    else if (p === '/api/invitations/cancel' || p === '/api/invitations/email') {
+        roles(user, 'admin');
+        const invitationId = text(b.id, 'Invitation', 64);
+        const previous = await get('SELECT * FROM invitations WHERE token_hash=? AND organization_id=? AND used_at IS NULL AND expires_at>?', invitationId, user.organization_id, Date.now());
+        if (!previous) fail(409, 'This invitation is no longer pending. Refresh the list.');
+        if (p.endsWith('/cancel')) {
+            await transaction(async () => {
+                if (!await cancelInvitation(run, user, invitationId)) fail(409, 'This invitation is no longer pending.');
+                await audit(user, 'invitation.cancelled', previous.email);
+            });
+            result = {cancelled:true};
+        } else {
+            const email = text(b.email, 'Email', 254).toLowerCase();
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(422, 'Enter a valid email.');
+            if (email === previous.email) fail(422, 'Enter the corrected email address.');
+            if (await get('SELECT 1 FROM users WHERE email=?', email)) fail(409, 'That account already exists.');
+            const token = randomBytes(32).toString('hex');
+            await transaction(async () => {
+                if (!await cancelInvitation(run, user, invitationId)) fail(409, 'This invitation is no longer pending.');
+                await run('INSERT INTO invitations VALUES(?,?,?,?,?,?,?,?)', hash(token), user.organization_id, email, previous.role, previous.client_id, previous.vendor_id, Date.now()+48*3600000, null);
+                await audit(user, 'invitation.cancelled', previous.email);
+                await audit(user, 'invitation.created', email);
+            });
+            result = {invitePath:'/?invite='+token, expiresInHours:48, ...await sendInvitation({to:email,invitePath:'/?invite='+token})};
+        }
     }
     else if (p === '/api/invitations') {
         roles(user, 'admin');
