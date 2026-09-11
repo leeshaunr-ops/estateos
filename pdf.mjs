@@ -26,20 +26,20 @@ export function inspectionPdf(report,photos=[]){
  paragraph('Overall condition: '+(report.overall||'Not recorded'),11,C.ink,520,40);
  heading('Walkthrough checklist');let section='';
  for(const answer of report.answers||[]){
-  const title=lines(answer.label,386,11),notes=answer.note?lines(answer.note,488,10):[];
-  if(answer.section&&answer.section!==section){need(82);y+=10;section=answer.section;text(section,40,y,11,C.brand,true);y+=22;}
-  const h=Math.min(600,Math.max(40,title.length*16+16)+(notes.length?notes.length*15+9:0));need(h+7);
-  const bg=backgrounds[answer.status]||backgrounds.na,fg=C[answer.status]||C.muted;
-  // Split unusually long observations across pages without clipping.
-  const titleHeight=title.length*16+16;rect(40,y,532,Math.min(h,730-y),bg);rect(40,y,4,Math.min(h,730-y),fg);
-  text(statusLabel(answer.status),466,y+12,9,fg,true);
-  y+=10;for(const line of title){need(18);text(line,52,y,11,C.ink,true);y+=16;}
-  if(notes.length){y+=4;for(const line of notes){need(17);text(line,52,y,10,C.muted);y+=15;}}
-  y+=15;
+  const content=[...lines(answer.label,386,11).map(value=>({value,bold:true})),...(answer.note?lines(answer.note,488,10).map(value=>({value,bold:false})):[])];
+  if(answer.section&&answer.section!==section){need(105);y+=10;section=answer.section;text(section,40,y,11,C.brand,true);y+=22;}
+  let offset=0;
+  while(offset<content.length){
+   need(60);const count=Math.max(1,Math.floor((730-y-25)/16));const chunk=content.slice(offset,offset+count),height=22+chunk.length*16;
+   const bg=backgrounds[answer.status]||backgrounds.na,fg=C[answer.status]||C.muted;
+   rect(40,y,532,height,bg);rect(40,y,4,height,fg);text(statusLabel(answer.status),466,y+12,9,fg,true);y+=10;
+   for(const item of chunk){text(item.value,52,y,item.bold?11:10,item.bold?C.ink:C.muted,item.bold);y+=16;}
+   y+=14;offset+=chunk.length;if(offset<content.length)newPage();
+  }
  }
- if(photos.length){heading('Photo evidence');for(const [i,photo] of photos.entries()){
+ if(photos.length){for(const [i,photo] of photos.entries()){
   const d=jpegSize(photo.bytes),scale=Math.min(508/d.width,440/d.height),w=d.width*scale,h=d.height*scale;
-  need(h+66);text('PHOTO '+(i+1),40,y,9,C.brand,true);y+=19;
+  need(h+(i===0?101:66));if(i===0)heading('Photo evidence');text('PHOTO '+(i+1),40,y,9,C.brand,true);y+=19;
   const image=add(Buffer.concat([Buffer.from(`<< /Type /XObject /Subtype /Image /Width ${d.width} /Height ${d.height} /ColorSpace /${d.channels===1?'DeviceGray':'DeviceRGB'} /BitsPerComponent 8 /Filter /DCTDecode /Length ${photo.bytes.length} >>\nstream\n`),photo.bytes,Buffer.from('\nendstream')]));const name='Im'+image;page.images.push([name,image]);page.stream+=`q ${w} 0 0 ${h} ${40+(532-w)/2} ${792-y-h} cm /${name} Do Q\n`;y+=h+9;paragraph(photo.name||'Inspection evidence',9,C.muted,520,40);y+=12;
  }}
  heading('Notes to the client');paragraph(report.notes||'No additional notes.');
