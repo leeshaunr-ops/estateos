@@ -269,7 +269,7 @@ async function api(req, res, url, user) {
         const row = (await entity(user, 'inspections', p.split('/')[3]));
         if (row.status !== 'published')
             fail(409, 'Publish the inspection first.');
-        const report = {companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'',...JSON.parse(row.report_snapshot), completedAt:JSON.parse(row.report_snapshot).completedAt||row.published_at};
+        const report = {...JSON.parse(row.report_snapshot),companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'', completedAt:JSON.parse(row.report_snapshot).completedAt||row.published_at};
         const photos = (await mapAsync(report.fileIds, async (fileId) => { const f = (await readFile(user, fileId)); return { name: f.name, bytes: (await readBytes(f.storage_key)) }; }));
         const pdf = inspectionPdf(report, photos);
         res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="EstateAegis-Inspection-${row.id}.pdf"`, 'Cache-Control': 'no-store' });
@@ -956,7 +956,7 @@ const server = http.createServer(async (req, res) => {
             if (req.method === 'HEAD') return res.end();
             return fs.createReadStream(mediaPath).pipe(res);
         }
-        const names = { '/': 'live.html', '/live.js': 'live.js', '/live.css': 'live.css', '/company.css':'company.css' };
+        const names = { '/': 'live.html', '/live.js': 'live.js', '/live.css': 'live.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js' };
         const file = names[url.pathname];
         if (!file)
             fail(404, 'Page not found.');
@@ -991,7 +991,7 @@ async function deliverInspection(user,inspectionId){
  if(!claimed.changes)return {emailStatus:'sending'};
  let result;
  try{
-  const report={companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'',...JSON.parse(row.report_snapshot),completedAt:JSON.parse(row.report_snapshot).completedAt||row.published_at};
+  const report={...JSON.parse(row.report_snapshot),companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'',completedAt:JSON.parse(row.report_snapshot).completedAt||row.published_at};
   const photos=await mapAsync(report.fileIds||[],async fileId=>{const f=await readFile(user,fileId);return {name:f.name,bytes:await readBytes(f.storage_key)};});
   result=await sendInspectionEmail({to:row.report_email,report,pdf:inspectionPdf(report,photos)});
  }catch{result={emailStatus:'failed'};}
