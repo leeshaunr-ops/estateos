@@ -1,3 +1,4 @@
+import {createBackupWorker} from './backup-worker.mjs';
 import {createOperations,advanceDue} from './operations.mjs';
 import {createSecurity} from './security.mjs';
 import {validateLogo} from './branding.mjs';
@@ -1010,3 +1011,5 @@ async function deliverInspection(user,inspectionId){
 setInterval(()=>communications.drain().catch(error=>console.error('Email queue:',error.message)),15000).unref();
 
 setInterval(()=>operations.tick().catch(e=>console.error("Automation:",e.message)),60000).unref();
+
+const backupWorker=createBackupWorker({get,run,transaction,putBytes,readBytes,deleteBytes});setTimeout(()=>backupWorker.tick(),15000).unref();setInterval(()=>backupWorker.tick(),3600000).unref();
