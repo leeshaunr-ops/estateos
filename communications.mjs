@@ -66,5 +66,5 @@ export function createCommunications({get,all,run,transaction,id,now,fail,text,j
    await run('UPDATE email_outbox SET status=?,next_attempt_at=? WHERE id=?',ok?'sent':row.attempts>=4?'failed':'retry',new Date(Date.now()+Math.min(3600000,60000*2**row.attempts)).toISOString(),row.id);
   }
  }finally{busy=false;}}
- return {handle,unread,work,request,schedule,drain,primary};
+ return {handle,unread,work,request,schedule,drain,primary,enqueue};
 }

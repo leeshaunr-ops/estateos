@@ -1,3 +1,5 @@
+import {createOperations,advanceDue} from './operations.mjs';
+import {createSecurity} from './security.mjs';
 import {validateLogo} from './branding.mjs';
 import {createCommunications} from './communications.mjs';
 import {sendInspectionEmail} from './inspection-email.mjs';
@@ -149,7 +151,7 @@ async function snapshot(user) {
     const inspections = user.role === 'vendor' ? [] : await mapAsync((await scoped('inspections')).filter(i=>user.role!=='client'||i.status==='published'),async i=>{const {internal_notes,report_snapshot,report_email,email_status,email_attempted_at,...visible}=i;return {...visible,inspector_name:(await get('SELECT name FROM users WHERE id=?',i.inspector_id))?.name||'Not recorded',answers:JSON.parse(i.answers),...(['admin','employee'].includes(user.role)?{internal_notes,report_email,email_status:(await get('SELECT email_status FROM inspection_email_delivery WHERE inspection_id=?',i.id))?.email_status||'not_requested'}:{})};});
     const jobIds = new Set(jobs.map(j => j.id));
     const inspectionIds = new Set(inspections.map(i => i.id));
-    const fileCandidates=await all('SELECT f.* FROM files f JOIN properties p ON p.id=f.property_id WHERE p.organization_id=?',user.organization_id);
+    const fileCandidates=await all('SELECT f.*,es.inspection_id source_inspection_id FROM files f JOIN properties p ON p.id=f.property_id LEFT JOIN work_evidence_sources es ON es.file_id=f.id WHERE p.organization_id=?',user.organization_id);
     const files = (await filterAsync(fileCandidates.filter(f=>allowed.has(f.property_id)||(user.role==='employee'&&jobIds.has(f.work_order_id))), async (f) => (await fileAllowed(user, f, inspectionIds, jobIds)))).map(({ storage_key, ...f }) => f);
     const assets = user.role === 'vendor' ? [] : (await scoped('assets'));
     const assetIds = new Set(assets.map(a => a.id));
@@ -175,6 +177,8 @@ async function readFile(user, fileId) { const f = (await get('SELECT * FROM file
     fail(404, 'File not found.'); if(user.role==='employee'&&f.work_order_id){await work(user,f.work_order_id);return f;} (await property(user, f.property_id, user.role === 'vendor' ? 'job' : 'read')); const ins = new Set((await all("SELECT id FROM inspections WHERE property_id=? AND status='published'", f.property_id)).map(x => x.id)); const jobs = new Set((await all('SELECT * FROM work_orders WHERE property_id=?', f.property_id)).filter(x => user.role !== 'vendor' || x.vendor_id === user.vendor_id).map(x => x.id)); if (!(await fileAllowed(user, f, ins, jobs)))
     fail(404, 'File not found.'); return f; }
 const communications=createCommunications({get,all,run,transaction,id,now,fail,text,json,body,rate,audit});
+const security=createSecurity({get,run,transaction,body,json,rate,fail,passwordMatches,audit,now});
+const operations=createOperations({get,all,run,transaction,id,now,fail,text,note,date,roles,property,entity,work,audit,body,json,communications,template,readBytes,putBytes});
 const saas = createSaas({get,all,run,transaction,fail,text,note,id,hash,now,passwordHash,session,json,body,rate,audit,randomBytes});
 const staff = createStaff({get,all,run,transaction,fail,text,note,id,now,passwordHash,json,body,audit,communications});
 async function assertWorkspaceActive(organizationId){if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',organizationId))?.status==='suspended')fail(403,'This company workspace is suspended. Contact support.');}
@@ -184,6 +188,8 @@ async function api(req, res, url, user) {
     if(await saas(req,res,url,user))return;
     if(await staff.handle(req,res,url,user))return;
     if(await communications.handle(req,res,url,user))return;
+    if(await operations.handle(req,res,url,user))return;
+    if(await security.handle(req,res,url,user))return;
     if (p === '/api/status' && method === 'GET')
         return json(res, 200, { configured: !!(await get('SELECT id FROM users LIMIT 1')), user: safeUser(user) });
     if (p === '/api/geocode/autocomplete' && method === 'GET') {
@@ -227,6 +233,7 @@ async function api(req, res, url, user) {
         if (!u || !passwordMatches(b.password, u.password_hash))
             fail(401, 'Email or password is incorrect.');
         await assertWorkspaceActive(u.organization_id);
+        if(!await security.verify(u,b.code))fail(401,'Enter your authenticator code or a recovery code.');
         (await session(res, req, u));
         return json(res, 200, { user: safeUser(u) });
     }
@@ -611,16 +618,17 @@ async function api(req, res, url, user) {
         roles(user, 'admin', 'employee', 'vendor');
         const row = (await work(user, b.id));
         assertVersion(row, b);
+        if(['start','submit','accept'].includes(b.action)&&await operations.blocked(row.id))fail(409,'Client approval is required before this work can proceed.');
         const transitions = { start: ['open', 'scheduled'], submit: ['in_progress', 'open', 'scheduled'], accept: ['submitted'], return: ['submitted'] };
         if (!transitions[b.action]?.includes(row.status))
             fail(409, 'That job is not in the right state.');
         if (['accept', 'return'].includes(b.action) && !['admin', 'employee'].includes(user.role))
             fail(403, 'A staff reviewer must verify completion.');
-        if (b.action === 'submit' && !(await get('SELECT 1 FROM files WHERE work_order_id=?', row.id)))
+        if (b.action === 'submit' && !(await get('SELECT 1 FROM files WHERE work_order_id=? AND id NOT IN (SELECT file_id FROM work_evidence_sources)', row.id)))
             fail(422, 'Add at least one completion photo.');
         const status = { start: 'in_progress', submit: 'submitted', accept: 'completed', return: 'in_progress' }[b.action];
         const pRow = await get('SELECT * FROM properties WHERE id=? AND organization_id=?',row.property_id,user.organization_id);
-        (await transaction(async () => { (await run('UPDATE work_orders SET status=?,service_notes=?,completed_at=?,version=version+1 WHERE id=?', status, b.action === 'submit' ? text(b.notes, 'Completion notes') : row.service_notes, status === 'completed' ? now() : null, row.id)); if (status === 'completed') {
+        (await transaction(async () => { assertVersion(await work(user,b.id),b);if(['start','submit','accept'].includes(b.action)&&await operations.blocked(row.id))fail(409,'Client approval is required before this work can proceed.');(await run('UPDATE work_orders SET status=?,service_notes=?,completed_at=?,version=version+1 WHERE id=?', status, b.action === 'submit' ? text(b.notes, 'Completion notes') : row.service_notes, status === 'completed' ? now() : null, row.id)); if (status === 'completed') {
             (await run("UPDATE requests SET status='completed' WHERE work_order_id=?", row.id));
             (await notifyProperty(pRow, 'Service completed: ' + row.title, row.id, 'client'));
         }
@@ -889,7 +897,7 @@ async function api(req, res, url, user) {
                 (await audit(user, 'maintenance.scheduled', workId));await communications.work(user,workId);
                 generated.push(workId);
             }
-            const following = nextDue(due, plan.frequency);
+            const following = advanceDue(due, plan.frequency);
             (await run('UPDATE maintenance_plans SET next_due=? WHERE id=? AND next_due=?', following, plan.id, due));
         } }));
         result = { until, generatedCount: generated.length, workOrderIds: generated };
@@ -956,7 +964,7 @@ const server = http.createServer(async (req, res) => {
             if (req.method === 'HEAD') return res.end();
             return fs.createReadStream(mediaPath).pipe(res);
         }
-        const names = { '/': 'live.html', '/live.js': 'live.js', '/live.css': 'live.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js' };
+        const names = { '/': 'live.html', '/live.js': 'live.js', '/live.css': 'live.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css' };
         const file = names[url.pathname];
         if (!file)
             fail(404, 'Page not found.');
@@ -1000,3 +1008,5 @@ async function deliverInspection(user,inspectionId){
 }
 
 setInterval(()=>communications.drain().catch(error=>console.error('Email queue:',error.message)),15000).unref();
+
+setInterval(()=>operations.tick().catch(e=>console.error("Automation:",e.message)),60000).unref();

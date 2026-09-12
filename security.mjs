@@ -1,0 +1,21 @@
+import {createHmac,randomBytes,createHash,timingSafeEqual} from 'node:crypto';
+import {seal,unseal} from './vault.mjs';
+const alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+export function base32(bytes){let bits=0,value=0,out='';for(const b of bytes){value=(value<<8)|b;bits+=8;while(bits>=5){out+=alphabet[(value>>>(bits-5))&31];bits-=5;}}if(bits)out+=alphabet[(value<<(5-bits))&31];return out;}
+export function totp(secret,step,digits=6){let bits=0,value=0,bytes=[];for(const c of secret){const n=alphabet.indexOf(c);if(n<0)throw Error('Invalid secret');value=(value<<5)|n;bits+=5;if(bits>=8){bytes.push((value>>>(bits-8))&255);bits-=8;}}const counter=Buffer.alloc(8);counter.writeBigUInt64BE(BigInt(step));const digest=createHmac('sha1',Buffer.from(bytes)).update(counter).digest(),offset=digest[19]&15;return String((digest.readUInt32BE(offset)&0x7fffffff)%10**digits).padStart(digits,'0');}
+const hash=v=>createHash('sha256').update(v).digest('hex');
+export function createSecurity({get,run,transaction,body,json,rate,fail,passwordMatches,audit,now}){
+ async function verify(user,code){return transaction(async()=>{const row=await get('SELECT * FROM user_mfa WHERE user_id=?',user.id);if(!row?.enabled)return true;const candidate=String(code||'').replace(/\s/g,'');const recovery=JSON.parse(row.recovery_hashes);const index=recovery.indexOf(hash(candidate));if(index>=0){recovery.splice(index,1);await run('UPDATE user_mfa SET recovery_hashes=? WHERE user_id=?',JSON.stringify(recovery),user.id);return true;}if(!/^\d{6}$/.test(candidate))return false;const secret=unseal(row.secret,'mfa:'+user.id).secret,step=Math.floor(Date.now()/30000);for(const s of [step,step-1,step+1])if(s>row.last_step&&timingSafeEqual(Buffer.from(totp(secret,s)),Buffer.from(candidate))){await run('UPDATE user_mfa SET last_step=? WHERE user_id=?',s,user.id);return true;}return false;});}
+ async function handle(req,res,url,user){if(!url.pathname.startsWith('/api/security'))return false;if(!user)fail(401,'Please sign in.');const p=url.pathname;
+  if(req.method==='GET'&&p==='/api/security'){const r=await get('SELECT enabled,recovery_hashes FROM user_mfa WHERE user_id=?',user.id);json(res,200,{enabled:!!r?.enabled,recoveryRemaining:JSON.parse(r?.recovery_hashes||'[]').length});return true;}
+  if(req.method!=='POST')fail(404,'Endpoint not found.');rate(req,'mfa:'+user.id,10);const b=await body(req);if(!passwordMatches(b.password,user.password_hash))fail(401,'Enter your current password.');
+  if(p==='/api/security/setup'){
+   const result=await transaction(async()=>{if((await get('SELECT enabled FROM user_mfa WHERE user_id=?',user.id))?.enabled)fail(409,'Two-factor authentication is already enabled.');const secret=base32(randomBytes(20));await run('INSERT INTO user_mfa(user_id,secret,created_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET secret=excluded.secret,created_at=excluded.created_at',user.id,seal({secret},'mfa:'+user.id),now());return {secret};});json(res,200,result);
+  }else if(p==='/api/security/enable'){
+   const result=await transaction(async()=>{const row=await get('SELECT * FROM user_mfa WHERE user_id=?',user.id);if(!row||row.enabled||Date.now()-Date.parse(row.created_at)>600000)fail(409,'Start two-factor setup again.');const code=String(b.code||''),step=Math.floor(Date.now()/30000),secret=unseal(row.secret,'mfa:'+user.id).secret;const matched=[step-1,step,step+1].find(s=>totp(secret,s)===code);if(matched===undefined)fail(422,'The authenticator code is incorrect.');const codes=Array.from({length:8},()=>randomBytes(12).toString('hex'));await run('UPDATE user_mfa SET enabled=1,last_step=?,recovery_hashes=? WHERE user_id=?',matched,JSON.stringify(codes.map(hash)),user.id);await run('DELETE FROM sessions WHERE user_id=?',user.id);await audit(user,'security.mfa_enabled',user.id);return {recoveryCodes:codes};});json(res,200,result);
+  }else if(p==='/api/security/disable'){
+   if(!await verify(user,b.code))fail(401,'Enter a valid authenticator or recovery code.');await transaction(async()=>{await run('DELETE FROM user_mfa WHERE user_id=?',user.id);await run('DELETE FROM sessions WHERE user_id=?',user.id);await audit(user,'security.mfa_disabled',user.id);});json(res,200,{ok:true});
+  }else fail(404,'Endpoint not found.');return true;
+ }
+ return {handle,verify};
+}

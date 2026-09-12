@@ -1,0 +1,23 @@
+# EstateAegis proactive workflows
+
+## Using the features
+
+- Overview: Action needed links to overdue work, unassigned work, submitted completions, service requests, due inspection drafts, unresolved findings, pending estimates and upcoming arrivals. Clients see residence cards and their own decisions and visits. Messages stays in the sidebar with its unread count.
+- Published inspection: Inspection follow-up offers Create work order for each Monitor or Attention finding. Repeated clicks return the same work order. Inspection photos copy across as source evidence; a new completion photo is still required to submit the repair.
+- Work orders: Request client approval records a USD estimate and scope. Active client accounts in the property's family are notified. Their approval or decline is timestamped and attributed. Pending or declined requests block starting, submitting and accepting work. An administrator can cancel a request, or request a new estimate after a decision.
+- Administration → Schedules & automation: add a residence's recurring inspection, assignee, next date and interval. An employee inspector must be that residence's account manager. Enable automation after reviewing plan dates. It runs every minute while the service runs. Existing maintenance plans create work assigned to the residence manager when available. Missed maintenance periods consolidate into one overdue occurrence; the next date advances into the future. Upcoming and overdue reminders are deduplicated, and overdue reminders include the main administrator. Pausing stops future generation/reminders; already queued emails remain queued.
+- Inspection drafts: checklist and notes autosave after a short pause. Unsent changes remain in session storage in the signed-in browser tab during connection loss. Reconnect to sync. Keep the tab open; opening the app from scratch offline, offline photo uploads and offline publication are not supported. Draft recovery lets you download unsent notes or explicitly replace them with the server version. Server versions prevent silent overwrite of another inspector's work.
+- My profile: set up a time-based authenticator by entering its setup key, verify a code, and save the one-use recovery codes. Enabling or disabling MFA revokes existing sessions. Enrollment is optional per account and is not performed on the user's behalf.
+- Administration → Email activity: recent queued email attempts and provider submission states. “Sent” means provider acceptance, not confirmed inbox delivery. Invitation and inspection-specific statuses also remain in their existing screens.
+
+## Recovery tooling
+
+`recovery.mjs` is operator-only and is not exposed to company administrators over HTTP. It archives all instance tables except sessions and migration bookkeeping, plus referenced file bytes. Archives use gzip and AES-256-GCM; the password is supplied only through `ESTATEOS_BACKUP_PASSWORD` (at least 16 characters). Preserve the original `ESTATEOS_VAULT_KEY` separately: it is required to unlock property codes and MFA secrets after recovery and is deliberately not embedded in the archive.
+
+Run `node recovery.mjs backup <private-archive.eab>` in an environment with the instance's database/storage settings. Save the archive to a private durable destination, never inside the public repository or static files. Restore testing uses `node recovery.mjs restore <archive.eab> <new-local-directory>`. The destination must not already exist; the command never restores over a running production database. It checks archive authentication, file hashes and database foreign keys. A failed restore can leave a staging directory; it must not be served. PostgreSQL production recovery and offsite backup scheduling still require an operator-run procedure and verified provider settings.
+
+Supabase database backups do not include the Storage object bytes. Verify and maintain both, and test recovery in isolation. See [Supabase backup documentation](https://supabase.com/docs/guides/platform/backups). Authenticator implementation follows [RFC 6238](https://www.rfc-editor.org/rfc/rfc6238).
+
+## Validation
+
+Tested SQLite workflows: tenant isolation, client approval enforcement and replay, inspection evidence linkage and duplicate prevention, recurrence idempotency, month-end date clamping, MFA code replay and recovery-code consumption. Checked all migrations on PostgreSQL via PGlite. Existing messaging and inspection integration suites pass. Browser checks cover branding, new screens, mobile checklist autosave and network loss/reconnection. Encrypted test backups restore accounts/data/files into a new local database and reject an incorrect password. Live provider backups are not claimed as verified by these local tests.
