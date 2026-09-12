@@ -31,7 +31,9 @@ export function createSaas({get,all,run,transaction,fail,text,note,id,hash,now,p
   if(!user)fail(401,'Please sign in.');
   if(p.startsWith('/api/platform/'))owner(user);
   if(p==='/api/platform/companies'&&req.method==='GET'){
-   json(res,200,{companies:await all("SELECT o.id,o.name,o.created_at,COALESCE(s.status,'active') status,(SELECT COUNT(*) FROM users u WHERE u.organization_id=o.id) users,(SELECT COUNT(*) FROM properties p WHERE p.organization_id=o.id AND p.archived_at IS NULL) residences FROM organizations o LEFT JOIN workspace_settings s ON s.organization_id=o.id ORDER BY o.created_at DESC")});return true;
+   const companies=await all("SELECT o.id,o.name,o.created_at,COALESCE(s.status,'active') status,(SELECT COUNT(*) FROM users u WHERE u.organization_id=o.id) users,(SELECT COUNT(*) FROM properties p WHERE p.organization_id=o.id AND p.archived_at IS NULL) residences FROM organizations o LEFT JOIN workspace_settings s ON s.organization_id=o.id ORDER BY o.created_at DESC");
+   const members=await all('SELECT id,organization_id,name,email,role,active FROM users ORDER BY name,email');
+   json(res,200,{companies:companies.map(c=>({...c,members:members.filter(u=>u.organization_id===c.id).map(({organization_id,...u})=>u)}))});return true;
   }
   if(req.method!=='POST')fail(404,'Endpoint not found.');const b=await body(req);
   if(p==='/api/platform/invite'){
