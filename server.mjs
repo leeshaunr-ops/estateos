@@ -151,6 +151,7 @@ async function snapshot(user) {
         jobs = jobs.map(({ description, ...j }) => ({ ...j, description: '', service_notes: j.status === 'completed' ? j.service_notes : '' }));
     const inspections = user.role === 'vendor' ? [] : await mapAsync((await scoped('inspections')).filter(i=>user.role!=='client'||i.status==='published'),async i=>{const {internal_notes,report_snapshot,report_email,email_status,email_attempted_at,...visible}=i;return {...visible,inspector_name:(await get('SELECT name FROM users WHERE id=?',i.inspector_id))?.name||'Not recorded',answers:JSON.parse(i.answers),...(['admin','employee'].includes(user.role)?{internal_notes,report_email,email_status:(await get('SELECT email_status FROM inspection_email_delivery WHERE inspection_id=?',i.id))?.email_status||'not_requested'}:{})};});
     const jobIds = new Set(jobs.map(j => j.id));
+    for(const job of jobs) job.updates=user.role==='client'?[]:await all('SELECT n.id,n.kind,n.body,n.created_at,u.name author_name FROM work_updates n JOIN users u ON u.id=n.author_id WHERE n.work_order_id=? ORDER BY n.created_at,n.id',job.id);
     const inspectionIds = new Set(inspections.map(i => i.id));
     const fileCandidates=await all('SELECT f.*,es.inspection_id source_inspection_id FROM files f JOIN properties p ON p.id=f.property_id LEFT JOIN work_evidence_sources es ON es.file_id=f.id WHERE p.organization_id=?',user.organization_id);
     const files = (await filterAsync(fileCandidates.filter(f=>allowed.has(f.property_id)||(user.role==='employee'&&jobIds.has(f.work_order_id))), async (f) => (await fileAllowed(user, f, inspectionIds, jobIds)))).map(({ storage_key, ...f }) => f);
@@ -158,7 +159,7 @@ async function snapshot(user) {
     const assetIds = new Set(assets.map(a => a.id));
     const assetInspections = assetIds.size ? (await all('SELECT ai.* FROM asset_inspections ai JOIN assets a ON a.id=ai.asset_id WHERE a.id IN (' + [...assetIds].map(() => '?').join(',') + ')', ...assetIds)).map(i => ({ ...i, answers: JSON.parse(i.answers || '[]') })) : [];
     return { unreadMessages:await communications.unread(user), companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'', primaryAdminId:(await communications.primary(user.organization_id))?.id||'', workspaceSupport:(await get('SELECT support_email FROM workspace_settings WHERE organization_id=?',user.organization_id))?.support_email||'', user: {...safeUser(user), ...profile}, company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, properties: props.map(p => { if (user.role === 'vendor')
-            return { id: p.id, name: p.name, address: p.address }; if (user.role === 'client') {
+            return { id: p.id, name: p.name, address: p.address, account_manager_name:p.account_manager_name }; if (user.role === 'client') {
             const { manual, ...safe } = p;
             return safe;
     } return p; }), archivedProperties, invitations: await invitationHistory(all, user), clients: user.role === 'admin' ? (await all('SELECT * FROM clients WHERE organization_id=?', user.organization_id)) : [], vendors: ['admin', 'employee'].includes(user.role) ? (await all('SELECT * FROM vendors WHERE organization_id=?', user.organization_id)) : [], users: user.role === 'admin' ? (await all('SELECT id,name,email,role,client_id,vendor_id,active FROM users WHERE organization_id=?', user.organization_id)) : [], assets, asset_inspections: assetInspections, work: jobs, requests: user.role === 'vendor' ? [] : (await scoped('requests')), inspections, files, shopping: user.role === 'vendor' ? [] : (await scoped('shopping_items')), arrivals: user.role === 'vendor' ? [] : (await scoped('arrivals')).map(a => ({ ...a, items: JSON.parse(a.items), room_status: JSON.parse(a.room_status || '[]'), guests: JSON.parse(a.guests || '[]') })), maintenance: ['admin', 'employee'].includes(user.role) ? (await scoped('maintenance_plans')) : [], notes: ['admin', 'employee'].includes(user.role) ? (await scoped('notes')) : [], invoices: user.role === 'admin' ? (await all('SELECT invoices.*,clients.name client_name,COALESCE((SELECT SUM(amount_minor) FROM payments WHERE invoice_id=invoices.id),0) paid_minor FROM invoices JOIN clients ON clients.id=invoices.client_id WHERE invoices.organization_id=?', user.organization_id)) : [], audit: user.role === 'admin' ? (await all('SELECT audit.*,users.name actor_name FROM audit JOIN users ON users.id=audit.actor_id WHERE audit.organization_id=? ORDER BY audit.created_at DESC LIMIT 100', user.organization_id)) : [], notifications: (await all('SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 100', user.id)), template };
@@ -615,6 +616,21 @@ async function api(req, res, url, user) {
         result = { id: key };
         });
     }
+    else if (p === '/api/work/update') {
+        roles(user,'admin','employee','vendor');
+        const row=await work(user,b.id), content=text(b.note,'Note',5000), kind=b.kind==='question'?'question':'note', key=id();
+        await transaction(async()=>{
+            await work(user,b.id);
+            await run('INSERT INTO work_updates(id,work_order_id,author_id,kind,body,created_at) VALUES(?,?,?,?,?,?)',key,row.id,user.id,kind,content,now());
+            if(kind==='question'){
+                const manager=await get('SELECT u.id,u.email FROM properties p JOIN users u ON u.id=p.account_manager_id WHERE p.id=? AND u.active=1',row.property_id);
+                const primary=await communications.primary(user.organization_id);
+                await communications.enqueue(user.organization_id,'work-question:'+key,[manager,primary].filter(Boolean),'Information requested on a work order','A work order needs clarification. Sign in to EstateAegis to read and respond to the question.',row.id);
+            }
+            await audit(user,'work.'+kind,row.id);
+        });
+        result={id:key};
+    }
     else if (p === '/api/work/action') {
         roles(user, 'admin', 'employee', 'vendor');
         const row = (await work(user, b.id));
@@ -694,6 +710,23 @@ async function api(req, res, url, user) {
         await run('UPDATE properties SET inspection_report_email=? WHERE id=?',email,residence.id);
         await audit(user,'inspection.recipient_updated',residence.id);
         result={id:residence.id,email};
+    }
+    else if (p === '/api/inspections/delete') {
+        roles(user,'admin','employee');
+        let removed=[];
+        await transaction(async()=>{
+            const row=await entity(user,'inspections',b.id,'operate');
+            if(row.status!=='draft')fail(409,'Only draft inspections can be deleted.');
+            assertVersion(row,b);
+            removed=await all('SELECT storage_key FROM files WHERE inspection_id=?',row.id);
+            await run('DELETE FROM files WHERE inspection_id=?',row.id);
+            await run('DELETE FROM inspection_email_delivery WHERE inspection_id=?',row.id);
+            await run('DELETE FROM inspection_occurrences WHERE inspection_id=?',row.id);
+            await run('DELETE FROM inspections WHERE id=?',row.id);
+            await audit(user,'inspection.draft_deleted',row.id);
+        });
+        for(const file of removed)try{await deleteBytes(file.storage_key);}catch(error){console.error('Draft file cleanup failed',error.message);}
+        result={deleted:true};
     }
     else if (p === '/api/inspections/save') {
         roles(user, 'admin', 'employee');
