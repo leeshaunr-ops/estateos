@@ -20,7 +20,7 @@ export function inspectionPdf(report,photos=[]){
  function need(h){if(y+h>730)newPage();}
  function paragraph(value,size=10,color=C.ink,width=508,x=52){for(const line of lines(value,width,size)){need(size+6);text(line,x,y,size,color);y+=size+6;}}
  function heading(title){need(55);y+=10;text(title,40,y,14,C.brand,true);y+=25;}
- newPage();paragraph(report.company||'Residence care',10,C.muted,520,40);paragraph(report.property||'Residence inspection',24,C.ink,520,40);y+=8;
+ newPage();paragraph(report.property||'Residence inspection',24,C.ink,520,40);y+=8;
  text('INSPECTION REPORT',40,y,10,C.brand,true);y+=22;
  for(const [label,value] of [['Family',report.client||'Not specified'],['Inspected by',report.inspector||'Not recorded'],['Inspection date',report.date||'Not recorded'],['Completed',reportTimestamp(report.completedAt)],['Report reference',report.id||'Not recorded']]){
   const row=lines(value,390,10);need(row.length*15+9);text(label,40,y,10,C.muted,true);for(const line of row){text(line,162,y,10);y+=15;}y+=5;
