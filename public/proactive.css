@@ -11,3 +11,5 @@
 
 .two>.panel+.panel{margin-top:0}
 
+
+.company-users{padding:20px 0}.company-users+.company-users{border-top:1px solid var(--line)}.company-users>summary{display:flex;gap:12px;align-items:center;cursor:pointer;list-style:none}.company-users>summary::-webkit-details-marker{display:none}.company-users>summary::before{content:'▸';color:#987845}.company-users[open]>summary::before{content:'▾'}.company-users>summary strong{font-size:1.1rem}.company-user-meta{display:block;margin-top:4px}.company-users-body{padding:12px 0 0 24px}.company-users-body .muted{overflow-wrap:anywhere}.company-users>summary:focus-visible{outline:2px solid #94252d;outline-offset:4px}
