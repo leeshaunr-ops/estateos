@@ -2,3 +2,5 @@
 
 .action-needed h2{margin:0 0 12px}.action-needed .row{padding:10px 0;gap:16px;min-height:0}.action-needed .row p{margin:3px 0 0}.action-needed details{margin-top:12px}.action-needed summary{cursor:pointer;font-weight:600}
 .client-residences>.panel{margin:0}.action-needed .empty{padding:12px 0;text-align:left}
+
+.work-card{margin:16px 0;padding:24px;border:1px solid #e5ddd0;border-left:4px solid #a78550;border-radius:14px;background:linear-gradient(120deg,#fff,#faf7f1);align-items:flex-start}.work-card>div:first-child{flex:1;min-width:0}.work-card>div>strong{font-size:1.2rem}.work-manager{padding:12px 16px;background:#f1ece2;border-radius:8px}.work-updates{margin-top:20px;border-top:1px solid #e5ddd0;padding-top:16px}.work-updates summary{font-weight:700;cursor:pointer}.work-update{padding:14px 16px;background:white;border-left:3px solid #a78550;margin:10px 0;border-radius:6px}.work-update.question{border-left-color:#94252d;background:#fff6ed}.work-update p{margin-bottom:0}@media(max-width:600px){.work-card{padding:16px;flex-wrap:wrap}}
