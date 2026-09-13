@@ -1,3 +1,4 @@
+import {createSubscriptions} from './subscriptions.mjs';
 import {createBackupWorker} from './backup-worker.mjs';
 import {createOperations,advanceDue} from './operations.mjs';
 import {createSecurity} from './security.mjs';
@@ -180,13 +181,15 @@ async function readFile(user, fileId) { const f = (await get('SELECT * FROM file
     fail(404, 'File not found.'); return f; }
 const communications=createCommunications({get,all,run,transaction,id,now,fail,text,json,body,rate,audit});
 const security=createSecurity({get,run,transaction,body,json,rate,fail,passwordMatches,audit,now});
-const operations=createOperations({get,all,run,transaction,id,now,fail,text,note,date,roles,property,entity,work,audit,body,json,communications,template,readBytes,putBytes});
+const subscriptions=createSubscriptions({get,all,run,transaction,id,now,fail,json,body,audit,platformOwner,communications});
+const operations=createOperations({get,all,run,transaction,id,now,fail,text,note,date,roles,property,entity,work,audit,body,json,communications,template,readBytes,putBytes,ensureSpace:subscriptions.ensureSpace});
 const saas = createSaas({get,all,run,transaction,fail,text,note,id,hash,now,passwordHash,session,json,body,rate,audit,randomBytes});
 const staff = createStaff({get,all,run,transaction,fail,text,note,id,now,passwordHash,json,body,audit,communications});
 async function assertWorkspaceActive(organizationId){if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',organizationId))?.status==='suspended')fail(403,'This company workspace is suspended. Contact support.');}
 async function api(req, res, url, user) {
     const method = req.method, p = url.pathname;
     if(user)await assertWorkspaceActive(user.organization_id);
+    if(await subscriptions.handle(req,res,url,user))return;
     if(await saas(req,res,url,user))return;
     if(await staff.handle(req,res,url,user))return;
     if(await communications.handle(req,res,url,user))return;
@@ -806,15 +809,16 @@ async function api(req, res, url, user) {
         else if (bytes.subarray(0, 5).toString() !== '%PDF-' || b.inspectionId || b.workId)
             fail(422, 'Use JPEG photos or PDF documents.');
         const key = id(), storageKey = id();
-        (await putBytes(storageKey, bytes, isJpeg ? 'image/jpeg' : 'application/pdf'));
+        let stored=false;
         try {
-            (await run('INSERT INTO files VALUES(?,?,?,?,?,?,?,?,?,?,?)', key, pRow.id, b.inspectionId || null, b.workId || null, text(b.name, 'Filename', 200), isJpeg ? 'image/jpeg' : 'application/pdf', bytes.length, storageKey, b.visibility === 'client' ? 'client' : 'internal', user.id, now()));
-            (await audit(user, 'file.uploaded', key));
-        }
-        catch (e) {
-            (await deleteBytes(storageKey));
-            throw e;
-        }
+            await transaction(async()=>{
+                await subscriptions.ensureSpace(user.organization_id,bytes.length);
+                await putBytes(storageKey,bytes,isJpeg?'image/jpeg':'application/pdf');stored=true;
+                await run('INSERT INTO files VALUES(?,?,?,?,?,?,?,?,?,?,?)',key,pRow.id,b.inspectionId||null,b.workId||null,text(b.name,'Filename',200),isJpeg?'image/jpeg':'application/pdf',bytes.length,storageKey,b.visibility==='client'?'client':'internal',user.id,now());
+                await audit(user,'file.uploaded',key);
+            });
+        } catch(e){if(stored)await deleteBytes(storageKey);throw e;}
+        await subscriptions.monitor(user.organization_id).catch(e=>console.error('Storage monitoring:',e.message));
         result = { id: key };
     }
     else if (p === '/api/shopping/update' || p === '/api/shopping/delete') {
@@ -1070,3 +1074,6 @@ setInterval(()=>communications.drain().catch(error=>console.error('Email queue:'
 setInterval(()=>operations.tick().catch(e=>console.error("Automation:",e.message)),60000).unref();
 
 const backupWorker=createBackupWorker({get,run,transaction,putBytes,readBytes,deleteBytes});setTimeout(()=>backupWorker.tick(),15000).unref();setInterval(()=>backupWorker.tick(),3600000).unref();
+
+setTimeout(()=>subscriptions.tick().catch(e=>console.error("Storage monitoring:",e.message)),20000).unref();
+setInterval(()=>subscriptions.tick().catch(e=>console.error("Storage monitoring:",e.message)),3600000).unref();
