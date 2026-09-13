@@ -993,14 +993,14 @@ const server = http.createServer(async (req, res) => {
             return await api(req, res, url, (await actor(req)));
         if (url.pathname === '/robots.txt' || url.pathname === '/sitemap.xml') {
             const sitemap = url.pathname === '/sitemap.xml';
-            const content = sitemap ? '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://estateaegis.com/</loc></url><url><loc>https://estateaegis.com/home-watch-software</loc></url><url><loc>https://estateaegis.com/private-residence-management</loc></url><url><loc>https://estateaegis.com/inspection-report-software</loc></url></urlset>' : 'User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /login\nSitemap: https://estateaegis.com/sitemap.xml\n';
+            const content = sitemap ? '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://estateaegis.com/</loc></url><url><loc>https://estateaegis.com/home-watch-software</loc></url><url><loc>https://estateaegis.com/private-residence-management</loc></url><url><loc>https://estateaegis.com/inspection-report-software</loc></url><url><loc>https://estateaegis.com/about</loc></url><url><loc>https://estateaegis.com/home-watch-checklist</loc></url><url><loc>https://estateaegis.com/arrival-preparation-checklist</loc></url><url><loc>https://estateaegis.com/example-workflow</loc></url><url><loc>https://estateaegis.com/resources</loc></url></urlset>' : 'User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /login\nSitemap: https://estateaegis.com/sitemap.xml\n';
             res.writeHead(200, {'Content-Type': sitemap ? 'application/xml; charset=utf-8' : 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600'});
             return res.end(req.method === 'HEAD' ? undefined : content);
         }
-        if (['/waterfront.mp4', '/waterfront.jpg', '/tutorial.mp4', '/product.png', '/report.png', '/overview.pdf', '/tutorial.vtt'].includes(url.pathname)) {
+        if (['/waterfront.mp4', '/waterfront.jpg', '/tutorial.mp4', '/product.png', '/report.png', '/overview.pdf', '/tutorial.vtt','/home-watch-checklist.txt','/arrival-preparation-checklist.txt','/sample-inspection-report.pdf'].includes(url.pathname)) {
             const mediaPath = path.join(root, 'public', url.pathname.slice(1));
             const size = fs.statSync(mediaPath).size;
-            const type = {'.mp4':'video/mp4','.jpg':'image/jpeg','.png':'image/png','.pdf':'application/pdf','.vtt':'text/vtt; charset=utf-8'}[path.extname(mediaPath)];
+            const type = {'.mp4':'video/mp4','.jpg':'image/jpeg','.png':'image/png','.pdf':'application/pdf','.vtt':'text/vtt; charset=utf-8','.txt':'text/plain; charset=utf-8','.txt':'text/plain; charset=utf-8'}[path.extname(mediaPath)];
             const headers = {'Content-Type': type, 'Accept-Ranges':'bytes', 'Cache-Control': 'public, max-age=86400'};
             const range = req.headers.range;
             if (range && req.method === 'GET') {
@@ -1019,7 +1019,7 @@ const server = http.createServer(async (req, res) => {
             return fs.createReadStream(mediaPath).pipe(res);
         }
         const appHome = url.pathname === '/' && (url.searchParams.has('invite') || url.searchParams.has('workspaceInvite') || await actor(req));
-        const names = { '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'marketing.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css' };
+        const names = { '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css' };
         const file = names[url.pathname];
         if (!file)
             fail(404, 'Page not found.');
