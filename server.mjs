@@ -997,7 +997,7 @@ const server = http.createServer(async (req, res) => {
             res.writeHead(200, {'Content-Type': sitemap ? 'application/xml; charset=utf-8' : 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600'});
             return res.end(req.method === 'HEAD' ? undefined : content);
         }
-        if (['/share-preview.jpg', '/waterfront.mp4', '/waterfront.jpg', '/tutorial.mp4', '/product.png', '/report.png', '/overview.pdf', '/tutorial.vtt','/home-watch-checklist.txt','/arrival-preparation-checklist.txt','/sample-inspection-report.pdf'].includes(url.pathname)) {
+        if (['/apple-touch-icon.png', '/share-preview.jpg', '/waterfront.mp4', '/waterfront.jpg', '/tutorial.mp4', '/product.png', '/report.png', '/overview.pdf', '/tutorial.vtt','/home-watch-checklist.txt','/arrival-preparation-checklist.txt','/sample-inspection-report.pdf'].includes(url.pathname)) {
             const mediaPath = path.join(root, 'public', url.pathname.slice(1));
             const size = fs.statSync(mediaPath).size;
             const type = {'.mp4':'video/mp4','.jpg':'image/jpeg','.png':'image/png','.pdf':'application/pdf','.vtt':'text/vtt; charset=utf-8','.txt':'text/plain; charset=utf-8','.txt':'text/plain; charset=utf-8'}[path.extname(mediaPath)];
