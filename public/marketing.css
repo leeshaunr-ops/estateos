@@ -3,11 +3,11 @@
 .resource-links{display:flex;flex-wrap:wrap;gap:16px;padding-top:12px;padding-bottom:12px}.resource-content>h2{margin-top:28px}.resource-content>p{max-width:920px}
 
 /* Keep native media and painted overflow within the page's content height. */
-body{display:flow-root;overflow:clip}
+body{overflow:visible}
 .video-shell{position:relative;aspect-ratio:16/9}
 .video-shell video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 @media(max-width:720px){
-  html{scroll-behavior:auto;overscroll-behavior-y:none}
+  html{scroll-behavior:auto}
   .site-footer{display:block;height:auto;min-height:0;margin-block:0;padding-top:20px;padding-bottom:20px}
   .site-footer address{margin:18px 0}
   .site-footer>a{display:inline-block}
