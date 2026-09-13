@@ -1,3 +1,13 @@
+function residenceSummary(p){
+ const reports=data.inspections.filter(i=>i.property_id===p.id&&i.status==='published').sort((a,b)=>(b.inspection_date||'').localeCompare(a.inspection_date||'')||(b.published_at||'').localeCompare(a.published_at||''));
+ const last=reports[0],due=last?.next_due;
+ const overdue=!!due&&due<new Date().toLocaleDateString('en-CA',{timeZone:p.timezone||'America/New_York'});
+ const photo=data.files.filter(f=>f.property_id===p.id&&!f.inspection_id&&!f.work_order_id&&f.name==='residence-cover.jpg'&&f.visibility==='client'&&f.mime==='image/jpeg').sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''))[0];
+ const date=v=>v?new Date(v.slice(0,10)+'T12:00:00Z').toLocaleDateString('en-US',{timeZone:'UTC',month:'short',day:'numeric',year:'numeric'}):'';
+ const initials=(p.account_manager_name||'').split(/\s+/).filter(Boolean).slice(0,2).map(n=>n[0]).join('');
+ return `<article class="residence-summary"><div class="residence-photo">${photo?`<img src="/api/files/${encodeURIComponent(photo.id)}" alt="${esc(p.name)}" loading="lazy">`:`<div class="residence-photo-placeholder"><svg viewBox="0 0 80 80" aria-hidden="true"><path d="M12 37 40 14 68 37M20 31v35h40V31M33 66V45h14v21"/></svg><span>Residence photo</span></div>`}</div><div class="residence-information"><div class="eyebrow">${esc(p.client_name||'Assigned residence')}</div><h2>${esc(p.name)}</h2><p class="residence-address">${esc(p.address||'Address not entered')}</p><div class="residence-card-actions">${btn('View residence','property',p.id,true)}${data.user.role==='admin'?btn('Edit residence','edit-property',p.id):''}${isStaff()?btn(photo?'Change photo':'Add residence photo','residence-photo',p.id):''}${data.user.role==='client'?btn('Plan arrival','new-arrival',p.id)+btn('Request service','new-request',p.id):''}</div></div><dl class="residence-facts"><div><dt>Last inspection</dt><dd>${last?esc(date(last.inspection_date)):'Not yet inspected'}</dd></div><div class="${overdue?'residence-overdue':''}"><dt>${overdue?'Inspection overdue':'Next inspection'}</dt><dd>${due?esc(date(due)):'Not scheduled'}</dd></div><div class="residence-manager"><span class="manager-initials" aria-hidden="true">${esc(initials||'—')}</span><div><dt>Residence manager</dt><dd>${esc(p.account_manager_name||'Not assigned')}</dd></div></div></dl></article>`;
+}
+
 let activeClient=null;
 let data=null,page='dashboard',propertyId=null,tab='overview',activeInspection=null,activeAssetInspection=null,assetInspectionReadOnly=false,activeArrival=null,arrivalFilter='pending',search='',inspectionUpcomingOnly=false;
 const $=id=>document.getElementById(id),esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
