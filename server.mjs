@@ -993,7 +993,7 @@ const server = http.createServer(async (req, res) => {
             return await api(req, res, url, (await actor(req)));
         if (url.pathname === '/robots.txt' || url.pathname === '/sitemap.xml') {
             const sitemap = url.pathname === '/sitemap.xml';
-            const content = sitemap ? '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://estateaegis.com/</loc></url></urlset>' : 'User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /login\nSitemap: https://estateaegis.com/sitemap.xml\n';
+            const content = sitemap ? '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://estateaegis.com/</loc></url><url><loc>https://estateaegis.com/home-watch-software</loc></url><url><loc>https://estateaegis.com/private-residence-management</loc></url><url><loc>https://estateaegis.com/inspection-report-software</loc></url></urlset>' : 'User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /login\nSitemap: https://estateaegis.com/sitemap.xml\n';
             res.writeHead(200, {'Content-Type': sitemap ? 'application/xml; charset=utf-8' : 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600'});
             return res.end(req.method === 'HEAD' ? undefined : content);
         }
@@ -1019,7 +1019,7 @@ const server = http.createServer(async (req, res) => {
             return fs.createReadStream(mediaPath).pipe(res);
         }
         const appHome = url.pathname === '/' && (url.searchParams.has('invite') || url.searchParams.has('workspaceInvite') || await actor(req));
-        const names = { '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'marketing.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css' };
+        const names = { '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'marketing.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css' };
         const file = names[url.pathname];
         if (!file)
             fail(404, 'Page not found.');
