@@ -991,19 +991,43 @@ const server = http.createServer(async (req, res) => {
         }
         if (url.pathname.startsWith('/api/'))
             return await api(req, res, url, (await actor(req)));
-        if (['/waterfront.mp4', '/waterfront.jpg'].includes(url.pathname)) {
+        if (url.pathname === '/robots.txt' || url.pathname === '/sitemap.xml') {
+            const sitemap = url.pathname === '/sitemap.xml';
+            const content = sitemap ? '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://estateaegis.com/</loc></url></urlset>' : 'User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /login\nSitemap: https://estateaegis.com/sitemap.xml\n';
+            res.writeHead(200, {'Content-Type': sitemap ? 'application/xml; charset=utf-8' : 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600'});
+            return res.end(req.method === 'HEAD' ? undefined : content);
+        }
+        if (['/waterfront.mp4', '/waterfront.jpg', '/tutorial.mp4', '/product.png', '/report.png', '/overview.pdf', '/tutorial.vtt'].includes(url.pathname)) {
             const mediaPath = path.join(root, 'public', url.pathname.slice(1));
             const size = fs.statSync(mediaPath).size;
-            res.writeHead(200, {'Content-Type': url.pathname.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg', 'Content-Length': size, 'Cache-Control': 'public, max-age=86400'});
+            const type = {'.mp4':'video/mp4','.jpg':'image/jpeg','.png':'image/png','.pdf':'application/pdf','.vtt':'text/vtt; charset=utf-8'}[path.extname(mediaPath)];
+            const headers = {'Content-Type': type, 'Accept-Ranges':'bytes', 'Cache-Control': 'public, max-age=86400'};
+            const range = req.headers.range;
+            if (range && req.method === 'GET') {
+                const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+                let start = match?.[1] ? Number(match[1]) : match?.[2] ? Math.max(0,size-Number(match[2])) : NaN;
+                let end = match?.[1] && match?.[2] ? Math.min(Number(match[2]),size-1) : size-1;
+                if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start >= size || end < start) {
+                    res.writeHead(416, {...headers, 'Content-Range':`bytes */${size}`});
+                    return res.end();
+                }
+                res.writeHead(206, {...headers, 'Content-Length':end-start+1, 'Content-Range':`bytes ${start}-${end}/${size}`});
+                return fs.createReadStream(mediaPath,{start,end}).pipe(res);
+            }
+            res.writeHead(200, {...headers, 'Content-Length': size});
             if (req.method === 'HEAD') return res.end();
             return fs.createReadStream(mediaPath).pipe(res);
         }
-        const names = { '/': 'live.html', '/live.js': 'live.js', '/live.css': 'live.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css' };
+        const appHome = url.pathname === '/' && (url.searchParams.has('invite') || url.searchParams.has('workspaceInvite') || await actor(req));
+        const names = { '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'marketing.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css' };
         const file = names[url.pathname];
         if (!file)
             fail(404, 'Page not found.');
+        if (file === 'live.html') res.setHeader('X-Robots-Tag','noindex, nofollow');
+        if (url.pathname === '/') res.setHeader('Vary','Cookie');
         res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://nominatim.openstreetmap.org https://photon.komoot.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");
         res.writeHead(200, { 'Content-Type': file.endsWith('.html') ? 'text/html; charset=utf-8' : file.endsWith('.css') ? 'text/css' : 'text/javascript', 'Cache-Control': 'no-store' });
+        if (req.method === 'HEAD') return res.end();
         fs.createReadStream(path.join(root, 'public', file)).pipe(res);
     }
     catch (error) {
