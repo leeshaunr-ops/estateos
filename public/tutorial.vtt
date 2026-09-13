@@ -1,0 +1,1290 @@
+WEBVTT
+
+1
+00:00:00.300 --> 00:00:02.535
+Welcome to the Estate Aegis tutorial.
+
+2
+00:00:02.535 --> 00:00:05.253
+The smarter way to manage private residences.
+
+3
+00:00:05.253 --> 00:00:12.863
+We will follow a family from its first record through residence setup,
+inspections, arrival preparation, and daily operations.
+
+4
+00:00:12.863 --> 00:00:15.399
+The login screen has three portal choices.
+
+5
+00:00:15.399 --> 00:00:21.922
+Admin is for managing the workspace, Client is for the family's experience,
+and Vendor is for assigned jobs.
+
+6
+00:00:21.922 --> 00:00:24.580
+Use the portal associated with your account.
+
+7
+00:00:24.580 --> 00:00:29.411
+Here we enter our demonstration administrator's email and password, then log
+in.
+
+8
+00:00:29.411 --> 00:00:35.270
+If you have enabled two-factor authentication, enter your authenticator or
+recovery code as well.
+
+9
+00:00:36.470 --> 00:00:38.618
+After signing in, begin on Overview.
+
+10
+00:00:38.618 --> 00:00:44.586
+Your company's name appears on the left, with its logo beside Powered by
+Estate Aegis in the header.
+
+11
+00:00:44.586 --> 00:00:50.733
+Open Action needed to see outstanding items, and scroll through the page to
+review the dashboard tiles.
+
+12
+00:00:50.733 --> 00:00:53.120
+The tiles lead to the connected records.
+
+13
+00:00:53.120 --> 00:00:58.252
+Work needing attention and Completed inspection reports can each expand
+independently.
+
+14
+00:00:58.252 --> 00:01:02.311
+Individual work cards also expand, so you can keep the page compact.
+
+15
+00:01:02.311 --> 00:01:07.622
+Counts remain visible when sections are closed, and overdue items are
+highlighted in red.
+
+16
+00:01:07.622 --> 00:01:11.680
+This is your starting point for deciding what needs attention today.
+
+17
+00:01:12.880 --> 00:01:16.659
+Before adding clients, open Company settings from Administration.
+
+18
+00:01:16.659 --> 00:01:24.217
+In the settings form, check the company name, enter your support email, and
+select the main administrator for email notifications.
+
+19
+00:01:24.217 --> 00:01:29.798
+Upload your company logo and use the available plain-background removal
+option when appropriate.
+
+20
+00:01:29.798 --> 00:01:31.252
+Preview it before saving.
+
+21
+00:01:31.252 --> 00:01:39.857
+These settings give the workspace your identity: your company name on the
+sidebar, your logo in the header, and your branding on inspection reports.
+
+22
+00:01:39.857 --> 00:01:42.764
+The report footer carries Powered by Estate Aegis.
+
+23
+00:01:42.764 --> 00:01:46.659
+You can return here whenever your branding or main contact changes.
+
+24
+00:01:46.659 --> 00:01:48.810
+Save settings when you are satisfied.
+
+25
+00:01:50.010 --> 00:01:53.303
+To start using the software, create the family first.
+
+26
+00:01:53.303 --> 00:01:57.962
+Open Residences and Clients, choose Client families, and select Add family.
+
+27
+00:01:57.962 --> 00:02:01.130
+Here we enter Jordan Morgan as the primary contact.
+
+28
+00:02:01.130 --> 00:02:04.858
+Check the family name, then enter an email and phone number.
+
+29
+00:02:04.858 --> 00:02:09.766
+Scroll down to enter the street address, city, state, postal code, and
+country.
+
+30
+00:02:09.766 --> 00:02:14.550
+The family is the household record; it can connect to one or more
+residences.
+
+31
+00:02:14.550 --> 00:02:16.662
+Review the fields and select Save.
+
+32
+00:02:16.662 --> 00:02:25.670
+We now have the Morgan family profile, which brings the contact details and
+address together and gives us a starting point for adding their home.
+
+33
+00:02:26.870 --> 00:02:30.810
+From the family profile, choose Add this address as a residence.
+
+34
+00:02:30.810 --> 00:02:34.443
+Give the home a clear name, such as Morgan Beach Residence.
+
+35
+00:02:34.443 --> 00:02:39.676
+The family and address carry into the form, so check those details before
+continuing.
+
+36
+00:02:39.676 --> 00:02:42.262
+Scroll down to Residence rooms and spaces.
+
+37
+00:02:42.262 --> 00:02:46.633
+Select Add room or space for each area you want your team to recognize.
+
+38
+00:02:46.633 --> 00:02:54.514
+For this example, we add a primary suite, record its floor, and enter
+preparation notes about fresh linens and cooling the room.
+
+39
+00:02:54.514 --> 00:02:59.070
+Then we add the main kitchen with its own floor and stocking instructions.
+
+40
+00:02:59.070 --> 00:03:02.949
+Each space has a type, a name, an assignment option, and notes.
+
+41
+00:03:02.949 --> 00:03:08.798
+These named areas provide useful context for inspecting the home and
+preparing it for arrivals.
+
+42
+00:03:08.798 --> 00:03:12.061
+Keep the room list accurate as the household changes.
+
+43
+00:03:12.061 --> 00:03:14.770
+Scroll to the bottom and save the residence.
+
+44
+00:03:15.970 --> 00:03:20.521
+Now open Residences and select View residence for Morgan Beach Residence.
+
+45
+00:03:20.521 --> 00:03:22.579
+This is the home's own dashboard.
+
+46
+00:03:22.579 --> 00:03:26.632
+The header identifies the family, address, and residence manager.
+
+47
+00:03:26.632 --> 00:03:29.562
+Below it, the tabs organize the home's records.
+
+48
+00:03:29.562 --> 00:03:33.054
+On Overview, expand a work card to review upcoming work.
+
+49
+00:03:33.054 --> 00:03:36.171
+The neighboring area shows the latest inspections.
+
+50
+00:03:36.171 --> 00:03:39.101
+Scroll down to reach Family members and guests.
+
+51
+00:03:39.101 --> 00:03:46.770
+This puts the home's work, recent inspection, and household together,
+without making you search through company-wide lists.
+
+52
+00:03:46.770 --> 00:03:52.070
+You can return to this page whenever you need the context for a particular
+residence.
+
+53
+00:03:53.270 --> 00:03:56.703
+In Family members and guests, choose Add member or guest.
+
+54
+00:03:56.703 --> 00:04:00.437
+We add Casey Morgan and save an email address with the record.
+
+55
+00:04:00.437 --> 00:04:05.135
+An email on file lets an administrator send an invitation tied to this
+family.
+
+56
+00:04:05.135 --> 00:04:12.061
+Review the person's details and invitation status here, and use the
+available invitation controls to manage access.
+
+57
+00:04:12.061 --> 00:04:19.227
+Adding a family record alone does not mean that the person has signed in;
+they still need their own account invitation.
+
+58
+00:04:19.227 --> 00:04:23.684
+Removing a linked family member also suspends that person's linked access.
+
+59
+00:04:23.684 --> 00:04:27.900
+Keep this list current whenever someone joins or leaves the household.
+
+60
+00:04:29.100 --> 00:04:31.646
+Next, open the residence's Inspections tab.
+
+61
+00:04:31.646 --> 00:04:37.330
+Save the report recipient here once, so you do not have to enter the email
+for every inspection.
+
+62
+00:04:37.330 --> 00:04:43.014
+Review the next inspection due date and use Edit schedule when a saved
+schedule needs to change.
+
+63
+00:04:43.014 --> 00:04:46.922
+The frequency and next due date help your team plan repeat visits.
+
+64
+00:04:46.922 --> 00:04:51.777
+Select Start inspection, check the residence and date, and save to open the
+draft.
+
+65
+00:04:51.777 --> 00:04:53.731
+A draft is the working checklist.
+
+66
+00:04:53.731 --> 00:04:58.290
+It is separate from the completed, published report that the client
+receives.
+
+67
+00:04:58.290 --> 00:05:01.310
+We will walk through the results before publishing.
+
+68
+00:05:02.510 --> 00:05:06.871
+Work through the walkthrough checklist and select a result for each item.
+
+69
+00:05:06.871 --> 00:05:09.081
+Pass records an acceptable condition.
+
+70
+00:05:09.081 --> 00:05:11.949
+Monitor highlights something to watch in yellow.
+
+71
+00:05:11.949 --> 00:05:14.219
+Attention highlights a problem in red.
+
+72
+00:05:14.219 --> 00:05:20.134
+Not applicable is available when an item does not apply; add an explanation
+so the result is clear.
+
+73
+00:05:20.134 --> 00:05:24.674
+Here we record a filter to monitor and a minor leak that requires attention.
+
+74
+00:05:24.674 --> 00:05:29.214
+Add a concise observation beside the item, then continue down the checklist.
+
+75
+00:05:29.214 --> 00:05:34.292
+Use the residence's rooms and preparation details as context while checking
+the home.
+
+76
+00:05:34.292 --> 00:05:39.370
+Clear findings make the report easier for both the family and the team to
+understand.
+
+77
+00:05:40.570 --> 00:05:45.164
+At the bottom of the inspection, enter Notes to the client in plain
+language.
+
+78
+00:05:45.164 --> 00:05:48.863
+Internal notes are separate and stay out of the client report.
+
+79
+00:05:48.863 --> 00:05:53.756
+Use the inspection summary to bring the overall condition and next steps
+together.
+
+80
+00:05:53.756 --> 00:05:59.185
+Photo evidence belongs below the summary, and Add photos lets you attach
+supporting images.
+
+81
+00:05:59.185 --> 00:06:04.018
+Checklist changes and notes save automatically, and Save draft is also
+available.
+
+82
+00:06:04.018 --> 00:06:09.687
+If your connection drops, keep the current tab open so its changes can sync
+when you reconnect.
+
+83
+00:06:09.687 --> 00:06:13.207
+Uploading photos and publishing still require a connection.
+
+84
+00:06:13.207 --> 00:06:16.190
+Review the entire inspection before completing it.
+
+85
+00:06:17.390 --> 00:06:22.407
+When the checklist is complete, an administrator can select Complete and
+publish.
+
+86
+00:06:22.407 --> 00:06:27.734
+Publishing locks the inspection and starts report delivery to the saved
+email address.
+
+87
+00:06:27.734 --> 00:06:30.336
+Check the report's email status afterward.
+
+88
+00:06:30.336 --> 00:06:40.061
+The PDF uses your company name and logo and includes the residence,
+inspector, completion date and time in Eastern Time, findings, client notes,
+and summary.
+
+89
+00:06:40.061 --> 00:06:43.096
+Monitor remains yellow and Attention remains red.
+
+90
+00:06:43.096 --> 00:06:46.565
+Download PDF report gives you a copy to review or share.
+
+91
+00:06:46.565 --> 00:06:51.830
+Published reports preserve the completed inspection; they are not edited
+like drafts.
+
+92
+00:06:53.030 --> 00:06:56.007
+Here is the inspection PDF from our demonstration.
+
+93
+00:06:56.007 --> 00:07:00.949
+Your company leads the header, while Powered by Estate Aegis appears at the
+bottom.
+
+94
+00:07:00.949 --> 00:07:05.713
+The inspector and completion details identify who carried out the work and
+when.
+
+95
+00:07:05.713 --> 00:07:10.298
+Colored findings draw the reader to the items that need monitoring or
+action.
+
+96
+00:07:10.298 --> 00:07:14.585
+The report finishes with the client-facing notes and inspection summary.
+
+97
+00:07:14.585 --> 00:07:16.252
+Internal notes are excluded.
+
+98
+00:07:16.252 --> 00:07:24.350
+Before relying on automatic delivery, confirm that the residence's recipient
+address is correct and check the sending status in the app.
+
+99
+00:07:25.550 --> 00:07:29.827
+Published items marked Monitor or Attention appear in Inspection follow-up.
+
+100
+00:07:29.827 --> 00:07:34.275
+Choose Create work order beside a finding to create its linked follow-up
+work.
+
+101
+00:07:34.275 --> 00:07:39.236
+Then use View work to open the job and manage its assignment, scheduling,
+and progress.
+
+102
+00:07:39.236 --> 00:07:43.228
+The link keeps the original observation connected to the action taken.
+
+103
+00:07:43.228 --> 00:07:48.702
+When work already exists for a finding, open that linked record instead of
+creating a duplicate.
+
+104
+00:07:48.702 --> 00:07:53.150
+This gives your team a clear path from inspection to follow-up and
+completion.
+
+105
+00:07:54.350 --> 00:07:59.287
+If you started an inspection by mistake, open the draft and choose Delete
+draft.
+
+106
+00:07:59.287 --> 00:08:01.756
+Read the confirmation before proceeding.
+
+107
+00:08:01.756 --> 00:08:05.891
+Deleting removes the unfinished inspection and its uploaded photos.
+
+108
+00:08:05.891 --> 00:08:10.889
+In this demonstration we cancel the confirmation, so the draft remains
+available.
+
+109
+00:08:10.889 --> 00:08:14.592
+This option is for drafts; published reports stay protected.
+
+110
+00:08:14.592 --> 00:08:22.430
+Use Save draft when you intend to return to the inspection, and Delete draft
+only when the unfinished record should be removed.
+
+111
+00:08:23.630 --> 00:08:26.295
+Continue to Shopping in the residence card.
+
+112
+00:08:26.295 --> 00:08:31.004
+This is the home's reusable list of preferred groceries and household items.
+
+113
+00:08:31.004 --> 00:08:35.156
+Select Add item, choose a category, then select the item and brand.
+
+114
+00:08:35.156 --> 00:08:39.928
+Use Other to enter a custom item or brand when the preset choices do not
+fit.
+
+115
+00:08:39.928 --> 00:08:47.674
+We are adding a welcome fruit basket from a local market, with a quantity
+and instructions to place it on the kitchen island.
+
+116
+00:08:47.674 --> 00:08:49.223
+Save it to the residence.
+
+117
+00:08:49.223 --> 00:08:55.234
+You can edit or remove items later, and Import CSV or TXT provides another
+way to build the list.
+
+118
+00:08:55.234 --> 00:08:59.200
+Saved preferences can then be selected for a particular arrival.
+
+119
+00:09:00.400 --> 00:09:02.804
+Move to Arrivals and select Plan arrival.
+
+120
+00:09:02.804 --> 00:09:08.784
+Confirm the residence, enter the arrival date and time, and describe any
+additional preparation needs.
+
+121
+00:09:08.784 --> 00:09:15.351
+Review the available family or guest selections, then choose the preferred
+shopping items needed for this visit.
+
+122
+00:09:15.351 --> 00:09:21.625
+Here we request the welcome basket and note that the primary suite should be
+cool, with fresh linens ready.
+
+123
+00:09:21.625 --> 00:09:24.967
+Submit arrival creates a preparation record for the team.
+
+124
+00:09:24.967 --> 00:09:31.358
+Keep visit-specific instructions here, while keeping reusable room and
+shopping preferences on the residence.
+
+125
+00:09:31.358 --> 00:09:34.700
+That separation makes the next arrival easier to prepare.
+
+126
+00:09:35.900 --> 00:09:39.548
+Open the arrival from Arrival preparation to manage the visit.
+
+127
+00:09:39.548 --> 00:09:45.668
+A submitted arrival creates in-app notifications for administrators and
+staff assigned to the residence.
+
+128
+00:09:45.668 --> 00:09:50.023
+Review the notes, then work through the selected shopping items and rooms.
+
+129
+00:09:50.023 --> 00:09:54.259
+Mark every selected item purchased, and record a substitution if needed.
+
+130
+00:09:54.259 --> 00:09:57.496
+Mark every room Ready after completing its preparation.
+
+131
+00:09:57.496 --> 00:10:00.732
+The room names and notes come from the residence setup.
+
+132
+00:10:00.732 --> 00:10:05.970
+Choose Confirm preparation is ready, then confirm that all additional tasks
+are complete.
+
+133
+00:10:05.970 --> 00:10:10.912
+The system checks these requirements before allowing the arrival to be
+marked ready.
+
+134
+00:10:10.912 --> 00:10:15.620
+Keep the statuses accurate so the family and team can check progress in the
+app.
+
+135
+00:10:16.820 --> 00:10:19.900
+Continue along the residence's top bar to Services.
+
+136
+00:10:19.900 --> 00:10:22.436
+This view limits work to the current home.
+
+137
+00:10:22.436 --> 00:10:27.025
+Expand a job to see the assignment, status, due date, and available actions.
+
+138
+00:10:27.025 --> 00:10:30.890
+Use it when you already know which residence you are working on.
+
+139
+00:10:30.890 --> 00:10:37.351
+Administrators can create a new work order here, while clients use their
+permitted service-request options.
+
+140
+00:10:37.351 --> 00:10:43.390
+We will cover notes, scheduling, and approvals in the company-wide Daily
+Operations section shortly.
+
+141
+00:10:44.590 --> 00:10:47.167
+Documents keeps files attached to this home.
+
+142
+00:10:47.167 --> 00:10:52.262
+Select Upload document, choose the file, and review the document details
+before saving.
+
+143
+00:10:52.262 --> 00:10:56.361
+Use descriptive names so your team can recognize the right file later.
+
+144
+00:10:56.361 --> 00:11:02.334
+The residence view helps you find home-specific information without browsing
+every property's records.
+
+145
+00:11:02.334 --> 00:11:11.880
+The separate company-wide Documents page brings permitted residence
+documents together; we will point out that shortcut later without repeating
+the upload process.
+
+146
+00:11:13.080 --> 00:11:16.626
+Assets organizes the home's equipment and other tracked assets.
+
+147
+00:11:16.626 --> 00:11:20.227
+Choose Add asset to see the fields for its identity and details.
+
+148
+00:11:20.227 --> 00:11:27.206
+Record the information useful for servicing it, such as model information
+and warranty details where the form provides them.
+
+149
+00:11:27.206 --> 00:11:33.453
+Asset records can hold service history and inspections, giving your team a
+reference when planning maintenance.
+
+150
+00:11:33.453 --> 00:11:39.700
+Create a clear record for each item rather than relying on a general note
+that will be difficult to find later.
+
+151
+00:11:40.900 --> 00:11:46.095
+The Residence Manager tab lets an administrator choose the person
+responsible for this home.
+
+152
+00:11:46.095 --> 00:11:50.725
+Select Residence Manager, choose the appropriate account, and save the
+assignment.
+
+153
+00:11:50.725 --> 00:11:57.614
+The manager's name then appears with the residence and in relevant work
+context, including the vendor's assigned-job view.
+
+154
+00:11:57.614 --> 00:12:02.640
+Keep this assignment current so questions and coordination have a clear
+point of contact.
+
+155
+00:12:03.840 --> 00:12:08.698
+Access and codes is the dedicated place for gate, door, alarm, and lockbox
+details.
+
+156
+00:12:08.698 --> 00:12:16.835
+The page explains that access is available to administrators and the
+assigned residence manager, and that viewing and changes are recorded.
+
+157
+00:12:16.835 --> 00:12:20.757
+Use View access details when you are authorized to open the record.
+
+158
+00:12:20.757 --> 00:12:27.430
+Keep credentials in this section instead of putting them into the house
+manual, general notes, or a client report.
+
+159
+00:12:28.630 --> 00:12:32.468
+The Manual tab holds operating procedures for authorized staff.
+
+160
+00:12:32.468 --> 00:12:39.108
+Open Edit manual to record useful instructions, such as how to prepare a
+room or operate household equipment.
+
+161
+00:12:39.108 --> 00:12:43.007
+Organize the text so someone arriving at the home can follow it.
+
+162
+00:12:43.007 --> 00:12:48.185
+This is for procedures; gate, door, and alarm credentials belong in Access
+and codes.
+
+163
+00:12:48.185 --> 00:12:52.510
+Save the manual and keep it current as the household's routines change.
+
+164
+00:12:53.710 --> 00:12:56.302
+Notes is the residence's internal note area.
+
+165
+00:12:56.302 --> 00:13:00.191
+Add a note for operational context that should stay with the home.
+
+166
+00:13:00.191 --> 00:13:06.613
+Use clear, specific wording so another team member can understand what
+happened or what needs to happen next.
+
+167
+00:13:06.613 --> 00:13:13.978
+Keep inspection findings in the inspection and job progress in the work
+order, where those workflows track their own history.
+
+168
+00:13:13.978 --> 00:13:17.160
+This tab completes our tour across the residence card.
+
+169
+00:13:18.360 --> 00:13:23.718
+Back on the sidebar, Residences and Clients organizes the household side of
+the workspace.
+
+170
+00:13:23.718 --> 00:13:30.446
+Residences opens the home cards, and Client families opens the contacts and
+linked homes we created at the start.
+
+171
+00:13:30.446 --> 00:13:35.805
+Arrival preparation brings submitted visits together across the residences
+you can access.
+
+172
+00:13:35.805 --> 00:13:44.021
+The client portal also offers a Shopping list shortcut, while administrators
+can manage preferred shopping directly inside each residence.
+
+173
+00:13:44.021 --> 00:13:50.570
+These are connected views of the same records, so you do not need to enter
+the family, home, or arrival twice.
+
+174
+00:13:51.770 --> 00:13:54.994
+Now open Daily Operations and start with Work orders.
+
+175
+00:13:54.994 --> 00:13:57.914
+This company-wide view brings the jobs together.
+
+176
+00:13:57.914 --> 00:14:02.659
+Expand a card to review its residence, priority, due date, vendor, and
+status.
+
+177
+00:14:02.659 --> 00:14:07.344
+Add note records progress with the job, such as a confirmed technician
+visit.
+
+178
+00:14:07.344 --> 00:14:14.096
+Request more information keeps a question with the work and notifies the
+appropriate manager and administrator.
+
+179
+00:14:14.096 --> 00:14:20.606
+Other actions let you assign or schedule work, request client approval, add
+a photo, and submit completion.
+
+180
+00:14:20.606 --> 00:14:26.081
+Assignment and schedule emails help notify the people involved and the main
+administrator.
+
+181
+00:14:26.081 --> 00:14:31.130
+Keep detailed updates in the work record so the next person can follow the
+history.
+
+182
+00:14:32.330 --> 00:14:35.975
+Service requests captures what a client or team member needs.
+
+183
+00:14:35.975 --> 00:14:43.206
+Choose Request service, select the residence, give the request a clear
+title, describe the problem, and set its priority.
+
+184
+00:14:43.206 --> 00:14:49.779
+Administrators can review requests, adjust priority, and create or link the
+work order that will address them.
+
+185
+00:14:49.779 --> 00:14:54.919
+A request states the need; the linked work record carries the assignment and
+progress.
+
+186
+00:14:54.919 --> 00:14:59.520
+Review existing linked work before creating another job for the same
+request.
+
+187
+00:15:00.720 --> 00:15:04.819
+Inspection reports is the company-wide list of inspections you can access.
+
+188
+00:15:04.819 --> 00:15:11.411
+Use it to find drafts and published reports across homes, or start an
+inspection after selecting the correct residence.
+
+189
+00:15:11.411 --> 00:15:16.119
+The inspection process is the same one we demonstrated inside Morgan Beach
+Residence.
+
+190
+00:15:16.119 --> 00:15:25.370
+This view is useful when you are reviewing the day's inspection activity
+across several properties, while the residence tab is useful when you are
+focused on one home.
+
+191
+00:15:26.570 --> 00:15:31.379
+Calendar brings dated work, inspections, and arrivals into one ordered view.
+
+192
+00:15:31.379 --> 00:15:37.265
+Review the residence, date, and status beside each entry to understand the
+upcoming workload.
+
+193
+00:15:37.265 --> 00:15:40.366
+Overdue entries are highlighted where applicable.
+
+194
+00:15:40.366 --> 00:15:45.238
+Use the underlying work, inspection, or arrival record to manage its
+details.
+
+195
+00:15:45.238 --> 00:15:51.630
+The calendar helps you see the timing across those workflows without keeping
+a separate list by hand.
+
+196
+00:15:52.830 --> 00:15:54.580
+Daily route helps plan visits.
+
+197
+00:15:54.580 --> 00:15:59.829
+Enter a starting address, or use Locate me when you want to provide your
+current location.
+
+198
+00:15:59.829 --> 00:16:07.995
+Choose whether to include inspections due in the next three days and open
+work orders, then review the individual residences selected below.
+
+199
+00:16:07.995 --> 00:16:09.745
+Add or remove stops as needed.
+
+200
+00:16:09.745 --> 00:16:12.136
+Each residence appears once in the route.
+
+201
+00:16:12.136 --> 00:16:15.519
+Check the addresses before opening Google Maps directions.
+
+202
+00:16:15.519 --> 00:16:21.410
+This connects your planned stops to navigation while keeping the operational
+records in Estate Aegis.
+
+203
+00:16:22.610 --> 00:16:25.594
+Client approvals brings spending decisions together.
+
+204
+00:16:25.594 --> 00:16:31.562
+Start an approval request from the relevant work order, enter the amount,
+and explain the proposed work.
+
+205
+00:16:31.562 --> 00:16:37.300
+The client can approve or decline in the system, and the decision remains
+recorded with the request.
+
+206
+00:16:37.300 --> 00:16:41.375
+Review the decision before proceeding with work that requires approval.
+
+207
+00:16:41.375 --> 00:16:46.080
+This is a record of the client's authorization, rather than a card-payment
+screen.
+
+208
+00:16:47.280 --> 00:16:49.113
+Next, open Staff and Vendors.
+
+209
+00:16:49.113 --> 00:16:54.043
+The Staff page is for employment details that company administrators can
+view.
+
+210
+00:16:54.043 --> 00:17:01.880
+Create a staff member or edit an existing person's details, including the
+contact and job information supported by the form.
+
+211
+00:17:01.880 --> 00:17:07.316
+Keep those details current so the right person can be assigned to residences
+and work.
+
+212
+00:17:07.316 --> 00:17:13.510
+Staff profiles, schedules, and account access have separate purposes; we
+will review each in turn.
+
+213
+00:17:14.710 --> 00:17:19.718
+Staff schedules plans a person's time and connects it to a residence or
+assignment.
+
+214
+00:17:19.718 --> 00:17:25.329
+Create a schedule, select the staff member, set the start and end time, and
+add instructions.
+
+215
+00:17:25.329 --> 00:17:27.622
+Times use the device's local timezone.
+
+216
+00:17:27.622 --> 00:17:32.147
+Use Assign work to attach work or the supported task types to the schedule.
+
+217
+00:17:32.147 --> 00:17:38.422
+The person scheduled and the main administrator receive the relevant email
+notification when configured.
+
+218
+00:17:38.422 --> 00:17:42.042
+You can return to edit or remove a schedule as plans change.
+
+219
+00:17:42.042 --> 00:17:47.110
+Staff members use their permitted view to review their own shifts and
+assigned work.
+
+220
+00:17:48.310 --> 00:17:51.397
+Vendors stores the businesses you use for service work.
+
+221
+00:17:51.397 --> 00:17:57.515
+Add the vendor's name, trade, and contact information so you can select the
+correct business on a work order.
+
+222
+00:17:57.515 --> 00:18:01.444
+A vendor contact record is not the same as a signed-in vendor account.
+
+223
+00:18:01.444 --> 00:18:06.945
+Use Team and access to invite a person and connect their account to the
+appropriate vendor record.
+
+224
+00:18:06.945 --> 00:18:11.660
+That connection allows the vendor portal to show the work assigned to that
+business.
+
+225
+00:18:12.860 --> 00:18:16.312
+Team and access manages individual accounts and invitations.
+
+226
+00:18:16.312 --> 00:18:22.757
+Choose the appropriate role and connect a client to the correct family or a
+vendor to the correct vendor record.
+
+227
+00:18:22.757 --> 00:18:29.719
+Review invitation status, correct an invitation email when needed, or cancel
+an invitation that should no longer be used.
+
+228
+00:18:29.719 --> 00:18:31.790
+You can also suspend account access.
+
+229
+00:18:31.790 --> 00:18:37.544
+Each person should use their own account so their actions and permissions
+stay associated with them.
+
+230
+00:18:37.544 --> 00:18:43.240
+Family-linked invitation controls are also available from the household
+records we covered earlier.
+
+231
+00:18:44.440 --> 00:18:48.371
+Property Records brings reference information together across homes.
+
+232
+00:18:48.371 --> 00:18:52.765
+Assets and equipment is the company-wide version of the residence asset tab.
+
+233
+00:18:52.765 --> 00:19:00.338
+Use it to find an asset and review identity, warranty information, service
+history, and inspections without first opening its home.
+
+234
+00:19:00.338 --> 00:19:08.490
+We already covered adding an asset inside a residence, so the main
+distinction here is the broader view across the properties you can access.
+
+235
+00:19:09.690 --> 00:19:12.833
+Preventive maintenance stores repeat service schedules.
+
+236
+00:19:12.833 --> 00:19:18.890
+Add a schedule, select the residence, and enter the maintenance description,
+frequency, and next due date.
+
+237
+00:19:18.890 --> 00:19:24.719
+Review due schedules and use Create due work or Run due schedules to
+generate the work that is needed.
+
+238
+00:19:24.719 --> 00:19:28.890
+The system is designed to generate each due visit once from its schedule.
+
+239
+00:19:28.890 --> 00:19:34.890
+Keep the next due dates accurate, and manage the resulting assignment and
+completion through Work orders.
+
+240
+00:19:36.090 --> 00:19:40.055
+Documents collects permitted residence files in a company-wide view.
+
+241
+00:19:40.055 --> 00:19:46.468
+It is another route to the files attached to each home, rather than a second
+place to upload duplicate copies.
+
+242
+00:19:46.468 --> 00:19:51.016
+Use clear filenames and check the residence association when adding
+documents.
+
+243
+00:19:51.016 --> 00:19:56.730
+Inspection and work evidence stay with their own records, which keeps this
+reference list focused.
+
+244
+00:19:57.930 --> 00:20:00.414
+Messages has its own place on the sidebar.
+
+245
+00:20:00.414 --> 00:20:02.957
+The number beside it shows unread messages.
+
+246
+00:20:02.957 --> 00:20:08.576
+Open a conversation to read and reply, or start a message to an active
+account in your company.
+
+247
+00:20:08.576 --> 00:20:12.657
+Use the company-wide option when the update is intended for everyone.
+
+248
+00:20:12.657 --> 00:20:19.518
+Recipients receive an email notification that a message is waiting, and sign
+in to read the content in Estate Aegis.
+
+249
+00:20:19.518 --> 00:20:24.190
+Keep replies in the conversation so its participants can follow the
+discussion.
+
+250
+00:20:24.190 --> 00:20:27.739
+Use Refresh to check for new replies while the page is open.
+
+251
+00:20:27.739 --> 00:20:31.820
+Company-wide replies are visible to that conversation's participants.
+
+252
+00:20:33.020 --> 00:20:38.773
+Administrators can review Email activity to check recent queued
+notifications and sending status.
+
+253
+00:20:38.773 --> 00:20:43.755
+Use it when you need to investigate an invitation, report, or workflow
+notification.
+
+254
+00:20:43.755 --> 00:20:51.525
+A Sent status means the email provider accepted the message; it does not
+prove that someone read it or that it reached their inbox.
+
+255
+00:20:51.525 --> 00:20:57.930
+Confirm the recipient details when troubleshooting, and keep the related
+account or residence email current.
+
+256
+00:20:59.130 --> 00:21:05.892
+Schedules and automation provides controls for recurring work and inspection
+plans, along with automation status.
+
+257
+00:21:05.892 --> 00:21:11.038
+Review the assigned person, repeat interval, and next due date before
+enabling a plan.
+
+258
+00:21:11.038 --> 00:21:14.809
+Automation must be enabled for its scheduled processing to run.
+
+259
+00:21:14.809 --> 00:21:18.279
+Keep an eye on status and due records after configuration.
+
+260
+00:21:18.279 --> 00:21:25.580
+This complements staff schedules and preventive maintenance; it does not
+replace reviewing assignments and completed work.
+
+261
+00:21:26.780 --> 00:21:31.138
+My profile lets each person manage their own details and sign-in security.
+
+262
+00:21:31.138 --> 00:21:36.614
+Review your contact information and use the available password or email
+controls when needed.
+
+263
+00:21:36.614 --> 00:21:44.623
+Two-factor authentication can be set up with an authenticator app by
+following the on-screen steps and saving the recovery codes safely.
+
+264
+00:21:44.623 --> 00:21:47.273
+It is configured separately for each account.
+
+265
+00:21:47.273 --> 00:21:52.750
+Notifications is another account shortcut for reviewing in-app updates and
+marking them read.
+
+266
+00:21:53.950 --> 00:21:55.963
+Now we switch to the client portal.
+
+267
+00:21:55.963 --> 00:22:03.613
+A client sees the residences assigned to their family, with a focused
+overview rather than the company's internal management screens.
+
+268
+00:22:03.613 --> 00:22:11.436
+They can open a residence, review published inspection reports, plan an
+arrival, select saved shopping preferences, and request service.
+
+269
+00:22:11.436 --> 00:22:15.289
+They can also use Messages and respond to client approval requests.
+
+270
+00:22:15.289 --> 00:22:19.603
+This is where the family checks information and communicates with the team.
+
+271
+00:22:19.603 --> 00:22:25.700
+The family and residence connections created during setup determine which
+homes belong in this experience.
+
+272
+00:22:26.900 --> 00:22:30.776
+Finally, the vendor portal gives a vendor access to assigned jobs.
+
+273
+00:22:30.776 --> 00:22:34.946
+Expand a job to review its residence, manager, description, and status.
+
+274
+00:22:34.946 --> 00:22:41.524
+The vendor can add a progress note, request more information, upload
+evidence, and submit completion for review.
+
+275
+00:22:41.524 --> 00:22:45.812
+Questions stay connected to the job so the team can respond with context.
+
+276
+00:22:45.812 --> 00:22:48.807
+Vendors also have their permitted messaging access.
+
+277
+00:22:48.807 --> 00:22:52.860
+They do not receive the administrator's company-wide management view.
+
+278
+00:22:52.860 --> 00:22:56.560
+This keeps their workflow focused on the work assigned to them.
+
+279
+00:22:57.760 --> 00:23:00.182
+That completes the Estate Aegis tutorial.
+
+280
+00:23:00.182 --> 00:23:08.509
+Start with company settings, add the family, create its residence and rooms,
+then build the inspections, arrivals, and work around that home.
+
+281
+00:23:08.509 --> 00:23:14.947
+Use the chapter menu and the accompanying timestamp guide to return to any
+section when you need a refresher.
+
+282
+00:23:14.947 --> 00:23:21.384
+A demonstration company is available to explore; contact sales at estate
+aegis dot com for login information.
+
+283
+00:23:21.384 --> 00:23:22.152
+Estate Aegis.
+
+284
+00:23:22.152 --> 00:23:24.810
+The smarter way to manage private residences.
+
