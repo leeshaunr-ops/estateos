@@ -1,0 +1,4 @@
+CREATE TABLE company_plans(organization_id TEXT PRIMARY KEY REFERENCES organizations(id),storage_packs INTEGER NOT NULL DEFAULT 0 CHECK(storage_packs>=0),updated_at TEXT NOT NULL);
+CREATE TABLE storage_requests(id TEXT PRIMARY KEY,organization_id TEXT NOT NULL REFERENCES organizations(id),requested_by TEXT NOT NULL REFERENCES users(id),status TEXT NOT NULL DEFAULT 'pending',created_at TEXT NOT NULL,decided_at TEXT);
+CREATE TABLE storage_history(organization_id TEXT NOT NULL REFERENCES organizations(id),day TEXT NOT NULL,bytes BIGINT NOT NULL,PRIMARY KEY(organization_id,day));
+CREATE TABLE platform_invoices(id TEXT PRIMARY KEY,organization_id TEXT NOT NULL REFERENCES organizations(id),period TEXT NOT NULL,seats INTEGER NOT NULL,storage_packs INTEGER NOT NULL,total_minor INTEGER NOT NULL,status TEXT NOT NULL DEFAULT 'unpaid',created_at TEXT NOT NULL,paid_at TEXT,UNIQUE(organization_id,period));
