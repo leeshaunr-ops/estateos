@@ -1,0 +1,13 @@
+/* EstateAegis visual refresh: lighter surfaces, clearer hierarchy and restrained accents. */
+:root{--refresh-ink:#1f2933;--refresh-muted:#5f6b76;--refresh-line:#e2e7eb;--refresh-wine:#8b242b}
+body{background:#f7f8fa;color:var(--refresh-ink)}
+.site-header{background:#fff;border-bottom-color:var(--refresh-line);box-shadow:0 1px 8px rgba(24,39,56,.04)}
+.hero{padding-top:56px;padding-bottom:56px}.hero-visual{border-color:#e1e6ea;box-shadow:0 18px 45px rgba(24,39,56,.1);transform:none}
+.value-strip{background:#fff;border-color:var(--refresh-line)}.feature-grid{border-color:var(--refresh-line)}.feature-grid article{background:#fff;padding:26px 24px}
+.report-section{background:#eef1f4;border-color:#e1e6ea}.records-note{background:#fff;border-left-color:#b89960}.tutorial-section{background:#182631}.site-footer{background:#fff}
+.price-card{border-color:#e1e6ea;border-radius:14px;box-shadow:0 8px 24px rgba(24,39,56,.06)}.price-card.featured{border-color:var(--refresh-wine);background:#fff7f7;box-shadow:0 10px 28px rgba(139,36,43,.12)}.price-card .plan-price{color:var(--refresh-wine)}
+.signup-form,.signup-status{border-color:#e1e6ea;border-radius:14px;box-shadow:0 8px 24px rgba(24,39,56,.05)}.signup-total{background:#f1f4f6;color:var(--refresh-wine)}
+.shell aside{background:#fff;border-right-color:var(--refresh-line)}.topbar{background:#fff;border-bottom-color:var(--refresh-line)}.content{padding-top:26px}
+.panel,.card,.stat,.residence{border-color:var(--refresh-line);border-radius:10px;box-shadow:0 3px 12px rgba(24,39,56,.06)}.hero{background:#fff;border-color:var(--refresh-line);border-radius:10px}.residence-top{background:#f1f4f6;border-bottom-color:var(--refresh-line)}
+button,.button{border-color:#d8e0e6;color:#344654;background:#fff}.button.primary,.tabs button.active,.shell button.primary,.shell .button.primary,.shell .tabs button.active{background:var(--refresh-wine);border-color:var(--refresh-wine);color:#fff}.badge{background:#edf2f5;color:#49606e}.badge.amber{background:#fff4dc;color:#85631f}.badge.red{background:#ffeded;color:#b4232c}.notice{background:#f0f5f7;border-color:#dbe5ea;color:#4d606d}.demo-banner{background:#fff4dc;border-bottom:1px solid #ead9b7}
+@media(max-width:720px){.hero{padding-top:34px;padding-bottom:36px}.section{padding-top:36px;padding-bottom:36px}.feature-grid article{padding:22px}.content{padding:18px 14px calc(24px + env(safe-area-inset-bottom))}}
