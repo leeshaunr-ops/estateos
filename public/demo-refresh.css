@@ -1,0 +1,10 @@
+/* Compact demo landing page rhythm. */
+body{background:#f5f7f9;color:#1f2933}
+header{padding:18px 24px}
+main{margin:10px auto 22px;gap:28px}
+h1{font-size:38px;line-height:1.08;margin:10px 0 14px;max-width:640px}
+p,li{line-height:1.42}li{margin:8px 0}
+.eyebrow{margin-bottom:8px}
+.card{padding:22px;border-color:#e2e7eb}
+footer{padding:16px}
+@media(max-width:700px){main{gap:16px;margin-top:4px}h1{font-size:31px;margin-bottom:12px}.card{padding:18px}}
