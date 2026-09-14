@@ -1,7 +1,7 @@
 export const PLANS = Object.freeze({
-  essentials: {name:'Essentials', monthlyMinor:7900, residences:50, seats:2, storageGB:10, product:'prod_VFtm9ebEAmXkPc'},
-  growth: {name:'Growth', monthlyMinor:12900, residences:150, seats:5, storageGB:30, product:'prod_VFtn294ZmM6pd4'},
-  professional: {name:'Professional', monthlyMinor:19900, residences:300, seats:10, storageGB:50, product:'prod_VFtoQSXsffoRnV'}
+  essentials: {name:'Essentials', monthlyMinor:5900, residences:50, seats:2, storageGB:10, product:'prod_VFtm9ebEAmXkPc'},
+  growth: {name:'Growth', monthlyMinor:10900, residences:150, seats:5, storageGB:30, product:'prod_VFtn294ZmM6pd4'},
+  professional: {name:'Professional', monthlyMinor:17900, residences:300, seats:10, storageGB:50, product:'prod_VFtoQSXsffoRnV'}
 });
 export const ADDONS = Object.freeze({
   seats:{monthlyMinor:1500,product:'prod_VFtqdzKdnd2dGe'},

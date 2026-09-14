@@ -1,6 +1,6 @@
 import {subscriptionQuote} from './stripe-plans.mjs';
 export const GB=1000000000;
-export function planPrice(seats,packs=0){return 7900+Math.max(0,seats-2)*1500+packs*500;}
+export function planPrice(seats,packs=0){return 5900+Math.max(0,seats-2)*1500+packs*500;}
 export function createSubscriptions({get,all,run,transaction,id,now,fail,json,body,audit,platformOwner,communications}){
  async function summary(org){
   const stripe=await get('SELECT * FROM stripe_billing WHERE organization_id=?',org);
