@@ -73,14 +73,14 @@ export function createPaidSignup({get,all,run,transaction,id,now,hash,randomByte
   const b=await body(req),email=String(b.email||'').trim().toLowerCase(),company=String(b.company||'').trim();
   if(!company||company.length>160||email.length>254||!/^\S+@[^\s@]+\.[^\s@]+$/.test(email)||email.split('@').length!==2||email!==String(b.confirmEmail||'').trim().toLowerCase())fail(422,'Enter your company name and matching email addresses.');
   let q;try{q=subscriptionQuote(b.plan,b.extraSeats,b.storagePacks);}catch{fail(422,'Choose a valid plan and whole-number add-ons.');}
-  if(b.acceptMonthlyMinor!==q.monthlyMinor)fail(422,'Confirm your monthly total.');
+  if(b.acceptMonthlyMinor!==q.monthlyMinor)fail(422,'Confirm your monthly total.');if(b.acceptTerms!=='on'||b.acceptBilling!=='on'||b.acceptedLegalVersion!=='2026-09-14')fail(422,'Accept the Terms, Privacy Policy, and recurring billing authorization to continue.');
   let row;
   await transaction(async()=>{
    if(await get('SELECT id FROM users WHERE LOWER(email)=?',email))fail(409,'This email already has an account. Log in and subscribe in Company settings.');
    row=await get('SELECT * FROM paid_signups WHERE email=?',email);
    if(row&&row.status==='expired'){await run('DELETE FROM paid_signups WHERE id=?',row.id);row=null;}
    if(row&&(row.company!==company||row.selection!==JSON.stringify(q)||row.status!=='pending'))fail(409,'A signup already exists for this email. Check your invitation or contact help@estateaegis.com before starting another payment.');
-   if(!row){const signupId=id(),secrets={statusToken:token(),inviteToken:token()};row={id:signupId,email,company,organization_id:id(),selection:JSON.stringify(q),access_hash:hash(secrets.statusToken),secrets:encrypt(secrets,'signup:'+signupId),created_at:now()};await run('INSERT INTO paid_signups(id,email,company,organization_id,selection,access_hash,secrets,created_at) VALUES(?,?,?,?,?,?,?,?)',row.id,email,company,row.organization_id,row.selection,row.access_hash,row.secrets,row.created_at);}
+   if(!row){const signupId=id(),secrets={statusToken:token(),inviteToken:token(),legal:{version:'2026-09-14',acceptedAt:now(),terms:true,privacy:true,recurringBilling:true}};row={id:signupId,email,company,organization_id:id(),selection:JSON.stringify(q),access_hash:hash(secrets.statusToken),secrets:encrypt(secrets,'signup:'+signupId),created_at:now()};await run('INSERT INTO paid_signups(id,email,company,organization_id,selection,access_hash,secrets,created_at) VALUES(?,?,?,?,?,?,?,?)',row.id,email,company,row.organization_id,row.selection,row.access_hash,row.secrets,row.created_at);}
   });
   if(!row.checkout_url){const secrets=decrypt(row.secrets,'signup:'+row.id),path='/signup?status='+secrets.statusToken;const s=await client.checkout({organizationId:row.organization_id,email,...q,attemptId:'signup-'+row.id,successPath:path,cancelPath:path+'&canceled=1'});await run('UPDATE paid_signups SET session_id=?,checkout_url=? WHERE id=?',s.id,s.url,row.id);row.checkout_url=s.url;}
   json(res,200,{url:row.checkout_url});return true;
