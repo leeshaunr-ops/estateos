@@ -1,3 +1,5 @@
+import {createPlatformGoogle} from './platform-google.mjs';
+import {createPlatformDashboard} from './platform-dashboard.mjs';
 import {createStripeBilling} from './stripe-billing.mjs';
 import {createPaidSignup} from './paid-signup.mjs';
 import {createStripeSandbox} from './stripe-sandbox.mjs';
@@ -162,7 +164,7 @@ async function snapshot(user) {
     const assets = user.role === 'vendor' ? [] : (await scoped('assets'));
     const assetIds = new Set(assets.map(a => a.id));
     const assetInspections = assetIds.size ? (await all('SELECT ai.* FROM asset_inspections ai JOIN assets a ON a.id=ai.asset_id WHERE a.id IN (' + [...assetIds].map(() => '?').join(',') + ')', ...assetIds)).map(i => ({ ...i, answers: JSON.parse(i.answers || '[]') })) : [];
-    return { unreadMessages:await communications.unread(user), companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'', primaryAdminId:(await communications.primary(user.organization_id))?.id||'', workspaceSupport:(await get('SELECT support_email FROM workspace_settings WHERE organization_id=?',user.organization_id))?.support_email||'', user: {...safeUser(user), ...profile}, company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, properties: props.map(p => { if (user.role === 'vendor')
+    return { unreadMessages:await communications.unread(user), companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'', primaryAdminId:(await communications.primary(user.organization_id))?.id||'', workspaceSupport:(await get('SELECT support_email FROM workspace_settings WHERE organization_id=?',user.organization_id))?.support_email||'', user: {...safeUser(user), platformAccess:(await master.permissions(user)).length>0, ...profile}, company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, properties: props.map(p => { if (user.role === 'vendor')
             return { id: p.id, name: p.name, address: p.address, account_manager_name:p.account_manager_name }; if (user.role === 'client') {
             const { manual, ...safe } = p;
             return safe;
@@ -188,6 +190,8 @@ const billing=createStripeBilling({get,all,run,transaction,id,now,fail,json,body
 const paidSignup=createPaidSignup({get,all,run,transaction,id,now,hash,randomBytes,body,json,fail,rate,parseSubscription:billing.parseSubscription});
 const stripeSandbox=createStripeSandbox({get,run,transaction,id,now,fail,json,body,platformOwner});
 const subscriptions=createSubscriptions({get,all,run,transaction,id,now,fail,json,body,audit,platformOwner,communications});
+const master=createPlatformDashboard({get,all,run,transaction,body,json,fail,id,now,audit,platformOwner,subscriptions});
+const platformGoogle=createPlatformGoogle({get,run,transaction,body,json,fail,audit,platformOwner,permissions:master.permissions});
 const operations=createOperations({get,all,run,transaction,id,now,fail,text,note,date,roles,property,entity,work,audit,body,json,communications,template,readBytes,putBytes,ensureSpace:subscriptions.ensureSpace});
 const saas = createSaas({get,all,run,transaction,fail,text,note,id,hash,now,passwordHash,session,json,body,rate,audit,randomBytes});
 const staff = createStaff({get,all,run,transaction,fail,text,note,id,now,passwordHash,json,body,audit,communications,assertCapacity:billing.assertCapacity});
@@ -198,6 +202,8 @@ async function api(req, res, url, user) {
     if(user)await assertWorkspaceActive(user.organization_id);
     if(await stripeSandbox.handle(req,res,url,user))return;
     if(await billing.handle(req,res,url,user))return;
+    if(await platformGoogle.handle(req,res,url,user))return;
+    if(await master.handle(req,res,url,user))return;
     if(await subscriptions.handle(req,res,url,user))return;
     if(await saas(req,res,url,user))return;
     if(await staff.handle(req,res,url,user))return;
@@ -1033,7 +1039,7 @@ const server = http.createServer(async (req, res) => {
             return fs.createReadStream(mediaPath).pipe(res);
         }
         const appHome = url.pathname === '/' && (url.searchParams.has('invite') || url.searchParams.has('workspaceInvite') || await actor(req));
-        const names = { '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css' };
+        const names = { '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css' };
         const file = names[url.pathname];
         if (!file)
             fail(404, 'Page not found.');
