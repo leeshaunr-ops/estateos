@@ -2,7 +2,7 @@ import {validateLogo} from './branding.mjs';
 import {sendInvitation} from './email.mjs';
 // Platform privileges are granted by an operator-owned user ID, never an editable email.
 export function platformOwner(user){return !!user && user.role==='admin' && !!process.env.ESTATEOS_PLATFORM_OWNER_ID && user.id===process.env.ESTATEOS_PLATFORM_OWNER_ID;}
-export function createSaas({get,all,run,transaction,fail,text,note,id,hash,now,passwordHash,session,json,body,rate,audit,randomBytes,demos}){
+export function createSaas({get,all,run,transaction,fail,text,note,id,hash,now,passwordHash,session,json,body,rate,audit,randomBytes,demos,demoSignup}){
  const owner=user=>{if(!platformOwner(user))fail(403,'Platform owner access required.');};
  const email=value=>{const e=text(value,'Email',254).toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))fail(422,'Enter a valid email.');return e;};
  return async function handle(req,res,url,user){
@@ -32,6 +32,7 @@ export function createSaas({get,all,run,transaction,fail,text,note,id,hash,now,p
     await run('UPDATE workspace_settings SET primary_admin_id=? WHERE organization_id=?',uid,org);
     if(await get('SELECT token_hash FROM demo_invites WHERE token_hash=?',row.token_hash))await demos.activate(org,uid);
     await run('UPDATE workspace_invites SET used_at=? WHERE token_hash=?',now(),row.token_hash);
+    if(demoSignup)await demoSignup.accepted(row.token_hash);
     await audit({id:uid,organization_id:org},'workspace.created',org);
    });
    await session(res,req,{id:uid});json(res,201,{created:true});return true;

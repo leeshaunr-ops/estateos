@@ -16,6 +16,7 @@ import {sendInvitation} from './email.mjs';
 import http from 'node:http';
 import {createSaas,platformOwner} from './saas.mjs';
 import {createDemos} from './demos.mjs';
+import {createDemoSignup} from './demo-signup.mjs';
 import {createStaff} from './staff.mjs';
 import {seal,unseal} from './vault.mjs';
 import { openDatabase } from './database.mjs';
@@ -194,12 +195,14 @@ const subscriptions=createSubscriptions({get,all,run,transaction,id,now,fail,jso
 const master=createPlatformDashboard({get,all,run,transaction,body,json,fail,id,now,audit,platformOwner,subscriptions});
 const platformGoogle=createPlatformGoogle({get,run,transaction,body,json,fail,audit,platformOwner,permissions:master.permissions});
 const operations=createOperations({get,all,run,transaction,id,now,fail,text,note,date,roles,property,entity,work,audit,body,json,communications,template,readBytes,putBytes,ensureSpace:subscriptions.ensureSpace});
+const demoSignup=createDemoSignup({get,run,transaction,body,json,fail,rate,id,now,hash,randomBytes});
 const demos=createDemos({get,all,run,transaction,id,now,hash,randomBytes,body,json,fail,audit,platformOwner,deleteBytes});
-const saas = createSaas({get,all,run,transaction,fail,text,note,id,hash,now,passwordHash,session,json,body,rate,audit,randomBytes,demos});
+const saas = createSaas({get,all,run,transaction,fail,text,note,id,hash,now,passwordHash,session,json,body,rate,audit,randomBytes,demos,demoSignup});
 const staff = createStaff({get,all,run,transaction,fail,text,note,id,now,passwordHash,json,body,audit,communications,assertCapacity:billing.assertCapacity});
 async function assertWorkspaceActive(organizationId){if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',organizationId))?.status==='suspended')fail(403,'This company workspace is suspended. Contact support.');const d=await demos.lookup(organizationId);if(d&&Number(d.expires_at)<=Date.now())fail(403,'Your seven-day demo has ended. Contact sales@estateaegis.com for more time.');}
 async function api(req, res, url, user) {
     const method = req.method, p = url.pathname;
+    if(await demoSignup.handle(req,res,url))return;
     if(await paidSignup.handle(req,res,url))return;
     if(user&&!['/api/login','/api/logout','/api/status'].includes(p))await assertWorkspaceActive(user.organization_id);
     if(await demos.handle(req,res,url,user))return;
@@ -1043,7 +1046,7 @@ const server = http.createServer(async (req, res) => {
             return fs.createReadStream(mediaPath).pipe(res);
         }
         const appHome = url.pathname === '/' && (url.searchParams.has('invite') || url.searchParams.has('workspaceInvite') || await actor(req));
-        const names = { '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css' };
+        const names = { '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css' };
         const file = names[url.pathname];
         if (!file)
             fail(404, 'Page not found.');
