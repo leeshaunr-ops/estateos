@@ -1,0 +1,46 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import {randomUUID,randomBytes,createHash} from 'node:crypto';
+import {openDatabase} from './database.mjs';
+import {createPaidSignup} from './paid-signup.mjs';
+import {createStripeBilling} from './stripe-billing.mjs';
+import {createSaas} from './saas.mjs';
+import {PLANS,ADDONS} from './stripe-plans.mjs';
+for(const engine of ['sqlite','postgres'])test('paid signup, email retry and plan-bound invitation acceptance: '+engine,async()=>{
+ const root=path.resolve('outputs/EstateAegis-Proactive'),dir=path.join(root,'billing-test-'+randomUUID());
+ const db=await openDatabase(root,engine==='postgres'?{NODE_ENV:'test',ESTATEOS_TEST_POSTGRES_DIR:dir}:{ESTATEOS_DATA_DIR:dir});
+ const now=()=>new Date().toISOString(),hash=s=>createHash('sha256').update(s).digest('hex'),fail=(status,message)=>{throw Object.assign(Error(message),{status});};
+ const deps={...db,id:randomUUID,now,hash,randomBytes,body:async req=>req.body,json:(res,code,data)=>res.data=data,fail,rate:()=>{},audit:async()=>{}};
+ try{
+  await db.run('INSERT INTO organizations VALUES(?,?,?)','platform','Platform',now());
+  await db.run('INSERT INTO users VALUES(?,?,?,?,?,?,?,?,?,?)','owner','platform','Owner','owner@example.invalid','hash','admin',null,null,1,now());
+  let paid=false,live=true,foreign=false,wrongPrice=false,creates=0,mailFails=true,sent=[],session;
+  const price=(item,quantity)=>({quantity,price:{product:item.product,currency:'usd',unit_amount:item.monthlyMinor,recurring:{interval:'month',interval_count:1}}});
+  const client={checkout:async b=>{creates++;session={id:'cs_signup',mode:'subscription',client_reference_id:b.organizationId,metadata:{attempt_id:b.attemptId},subscription:'sub_signup',customer:'cus_signup'};assert.match(b.successPath,/^\/signup\?status=[a-f0-9]{64}$/);return {id:'cs_signup',url:'https://checkout.stripe.com/c/pay/cs_signup'};},request:async route=>route.startsWith('checkout/')?{...session,livemode:live,client_reference_id:foreign?'wrong':session.client_reference_id,status:paid?'complete':'open',payment_status:paid?'paid':'unpaid'}:{livemode:live,id:'sub_signup',customer:'cus_signup',metadata:{organization_id:session.client_reference_id},status:'active',latest_invoice:{status:'paid'},items:{data:[price(wrongPrice?PLANS.essentials:PLANS.growth,1),price(ADDONS.seats,1),price(ADDONS.storage,1)]}}};
+  const billing=createStripeBilling({...deps,client,enabled:()=>true});
+  const signup=createPaidSignup({...deps,client,parseSubscription:billing.parseSubscription,ownerId:()=> 'owner',enabled:()=>true,encrypt:JSON.stringify,decrypt:JSON.parse,send:async message=>{sent.push(message);return {emailStatus:mailFails?'failed':'sent'};}});
+  const body={company:'New Care Company',email:'new@example.invalid',confirmEmail:'new@example.invalid',plan:'growth',extraSeats:1,storagePacks:1,acceptMonthlyMinor:14900};
+  const start=async b=>{const res={};await signup.handle({method:'POST',body:b},res,new URL('https://test/api/signup/start'));return res.data;};
+  await assert.rejects(start({...body,acceptMonthlyMinor:1}),e=>e.status===422);
+  await start(body);await start(body);assert.equal(creates,1);
+  let row=await db.get('SELECT * FROM paid_signups WHERE email=?',body.email);
+  await signup.reconcile(row.id);assert.equal(Number((await db.get('SELECT COUNT(*) n FROM organizations')).n),1);assert.equal(sent.length,0);
+  paid=true;live=false;await assert.rejects(signup.reconcile(row.id));live=true;foreign=true;await assert.rejects(signup.reconcile(row.id));foreign=false;wrongPrice=true;await assert.rejects(signup.reconcile(row.id));wrongPrice=false;
+  await signup.reconcile(row.id);assert.equal(Number((await db.get('SELECT COUNT(*) n FROM organizations')).n),2);assert.equal((await billing.state(row.organization_id)).quote.storageGB,50);assert.equal((await billing.state(row.organization_id)).quote.seats,6);
+  row=await db.get('SELECT * FROM paid_signups WHERE id=?',row.id);assert.equal(row.status,'invited');assert.equal(row.email_status,'pending');
+  mailFails=false;await db.run('UPDATE paid_signups SET next_email_at=0 WHERE id=?',row.id);await signup.reconcile(row.id);await signup.reconcile(row.id);assert.equal(sent.length,2);assert.equal(Number((await db.get('SELECT COUNT(*) n FROM workspace_invites')).n),1);
+  assert.match(sent.at(-1).planDescription,/Growth.*149.00.*150 active residences.*6 admin\/staff users.*50 GB/);
+  const oldToken=sent.at(-1).invitePath.split('=')[1],statusToken=JSON.parse(row.secrets).statusToken;
+  const publicStatus={};await signup.handle({method:'GET'},publicStatus,new URL('https://test/api/signup/status?token='+statusToken));assert.equal(publicStatus.data.status,'invited');assert.equal(JSON.stringify(publicStatus.data).includes(oldToken),false);
+  await signup.handle({method:'POST',body:{token:statusToken}},{},new URL('https://test/api/signup/resend'));
+  const inviteToken=sent.at(-1).invitePath.split('=')[1];assert.notEqual(inviteToken,oldToken);assert.equal(Number((await db.get('SELECT COUNT(*) n FROM workspace_invites')).n),1);let loggedIn;
+  const saas=createSaas({...deps,text:(v)=>String(v||''),note:String,passwordHash:()=> 'hashed',session:async(res,req,user)=>{loggedIn=user;}});
+  const accept=async token=>{const res={};await saas({method:'POST',body:{token,name:'New Admin',password:'test-only-password'}},res,new URL('https://test/api/workspace-register'),null);return res.data;};
+  await assert.rejects(accept('forged'),e=>e.status===422);
+  await assert.rejects(accept(oldToken),e=>e.status===422);
+  await accept(inviteToken);assert.equal((await db.get('SELECT organization_id FROM users WHERE id=?',loggedIn.id)).organization_id,row.organization_id);
+  assert.equal((await billing.state(row.organization_id)).quote.monthlyMinor,14900);assert.equal(Number((await db.get('SELECT COUNT(*) n FROM organizations')).n),2);
+  await assert.rejects(accept(inviteToken),e=>e.status===422);await assert.rejects(start(body),e=>e.status===409);
+ }finally{await db.close();}
+});

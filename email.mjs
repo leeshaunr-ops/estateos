@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 const escapeHtml = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-export async function sendInvitation({to, invitePath, company = 'your workspace'}, {env = process.env, fetcher = fetch} = {}) {
+export async function sendInvitation({to, invitePath, company = 'your workspace',planDescription=''}, {env = process.env, fetcher = fetch} = {}) {
   if (!env.RESEND_API_KEY) return {emailStatus:'not_configured'};
   let link;
   try {
@@ -11,7 +11,7 @@ export async function sendInvitation({to, invitePath, company = 'your workspace'
     link = new URL(invitePath, base.origin);
     if (link.origin !== base.origin || link.pathname !== '/' || !/^\/\?((workspaceInvite)|(invite))=[a-f0-9]{64}$/.test(invitePath)) throw Error('Invalid invitation');
   } catch { return {emailStatus:'failed'}; }
-  const intro = `You have been invited to ${company} on EstateAegis.`;
+  const intro = `You have been invited to ${company} on EstateAegis.${planDescription?' Your paid subscription: '+planDescription+'.':''}`;
   const payload = {
     from: env.EMAIL_FROM || 'EstateAegis <notifications@estateaegis.com>',
     to: [to],

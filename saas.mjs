@@ -13,13 +13,21 @@ export function createSaas({get,all,run,transaction,fail,text,note,id,hash,now,p
    if(!row)fail(404,'Company invitation expired or already used.');json(res,200,row);return true;
   }
   if(p==='/api/workspace-register'&&req.method==='POST'){
-   rate(req,'workspace-register');const b=await body(req),name=text(b.name,'Your name',160),pw=passwordHash(b.password),uid=id(),org=id(),logo=validateLogo(b.logoData||'',fail);
+   rate(req,'workspace-register');const b=await body(req),name=text(b.name,'Your name',160),pw=passwordHash(b.password),uid=id(),logo=validateLogo(b.logoData||'',fail);let org=id();
    await transaction(async()=>{
     const row=await get('SELECT * FROM workspace_invites WHERE token_hash=? AND used_at IS NULL AND expires_at>?',hash(String(b.token||'')),Date.now());
     if(!row)fail(422,'Company invitation expired or already used.');
     if(await get('SELECT id FROM users WHERE LOWER(email)=?',row.email))fail(409,'This email already has an account. Use a different email for this company.');
-    await run('INSERT INTO organizations(id,name,created_at) VALUES(?,?,?)',org,row.company,now());
-    await run('INSERT INTO workspace_settings(organization_id,logo_data,primary_admin_id) VALUES(?,?,?)',org,logo,null);
+    const paidSignup=await get('SELECT * FROM paid_signups WHERE invite_hash=?',row.token_hash);
+    if(paidSignup){
+     const paid=await get('SELECT status,plan FROM stripe_billing WHERE organization_id=?',paidSignup.organization_id);
+     if(paidSignup.status!=='invited'||paidSignup.email!==row.email||paid?.status!=='active'||!paid.plan)fail(409,'This paid invitation needs review. Contact help@estateaegis.com.');
+     org=paidSignup.organization_id;await run('UPDATE workspace_settings SET logo_data=? WHERE organization_id=?',logo,org);
+     await run("UPDATE paid_signups SET status='accepted',accepted_at=? WHERE id=?",now(),paidSignup.id);
+    }else{
+     await run('INSERT INTO organizations(id,name,created_at) VALUES(?,?,?)',org,row.company,now());
+     await run('INSERT INTO workspace_settings(organization_id,logo_data,primary_admin_id) VALUES(?,?,?)',org,logo,null);
+    }
     await run('INSERT INTO users(id,organization_id,name,email,password_hash,role,client_id,vendor_id,active,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)',uid,org,name,row.email,pw,'admin',null,null,1,now());
     await run('UPDATE workspace_settings SET primary_admin_id=? WHERE organization_id=?',uid,org);
     await run('UPDATE workspace_invites SET used_at=? WHERE token_hash=?',now(),row.token_hash);
@@ -39,6 +47,7 @@ export function createSaas({get,all,run,transaction,fail,text,note,id,hash,now,p
   if(p==='/api/platform/invite'){
    const company=text(b.company,'Company name',160),address=email(b.email),token=randomBytes(32).toString('hex');
    if(await get('SELECT id FROM users WHERE LOWER(email)=?',address))fail(409,'That email already has an account.');
+   if(await get("SELECT id FROM paid_signups WHERE email=? AND status IN ('pending','invited')",address))fail(409,'This email has a paid signup in progress. Use its payment confirmation page to resend the invitation instead of creating another company.');
    await run('INSERT INTO workspace_invites VALUES(?,?,?,?,?,?)',hash(token),company,address,user.id,Date.now()+48*3600000,null);
    await audit(user,'workspace.invited',company);json(res,201,{invitePath:'/?workspaceInvite='+token,...await sendInvitation({to:address,invitePath:'/?workspaceInvite='+token,company})});return true;
   }

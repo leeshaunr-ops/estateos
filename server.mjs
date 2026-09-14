@@ -1,4 +1,5 @@
 import {createStripeBilling} from './stripe-billing.mjs';
+import {createPaidSignup} from './paid-signup.mjs';
 import {createStripeSandbox} from './stripe-sandbox.mjs';
 import {createSubscriptions} from './subscriptions.mjs';
 import {createBackupWorker} from './backup-worker.mjs';
@@ -184,6 +185,7 @@ async function readFile(user, fileId) { const f = (await get('SELECT * FROM file
 const communications=createCommunications({get,all,run,transaction,id,now,fail,text,json,body,rate,audit});
 const security=createSecurity({get,run,transaction,body,json,rate,fail,passwordMatches,audit,now});
 const billing=createStripeBilling({get,all,run,transaction,id,now,fail,json,body,audit});
+const paidSignup=createPaidSignup({get,all,run,transaction,id,now,hash,randomBytes,body,json,fail,rate,parseSubscription:billing.parseSubscription});
 const stripeSandbox=createStripeSandbox({get,run,transaction,id,now,fail,json,body,platformOwner});
 const subscriptions=createSubscriptions({get,all,run,transaction,id,now,fail,json,body,audit,platformOwner,communications});
 const operations=createOperations({get,all,run,transaction,id,now,fail,text,note,date,roles,property,entity,work,audit,body,json,communications,template,readBytes,putBytes,ensureSpace:subscriptions.ensureSpace});
@@ -192,6 +194,7 @@ const staff = createStaff({get,all,run,transaction,fail,text,note,id,now,passwor
 async function assertWorkspaceActive(organizationId){if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',organizationId))?.status==='suspended')fail(403,'This company workspace is suspended. Contact support.');}
 async function api(req, res, url, user) {
     const method = req.method, p = url.pathname;
+    if(await paidSignup.handle(req,res,url))return;
     if(user)await assertWorkspaceActive(user.organization_id);
     if(await stripeSandbox.handle(req,res,url,user))return;
     if(await billing.handle(req,res,url,user))return;
@@ -1030,7 +1033,7 @@ const server = http.createServer(async (req, res) => {
             return fs.createReadStream(mediaPath).pipe(res);
         }
         const appHome = url.pathname === '/' && (url.searchParams.has('invite') || url.searchParams.has('workspaceInvite') || await actor(req));
-        const names = { '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css' };
+        const names = { '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css' };
         const file = names[url.pathname];
         if (!file)
             fail(404, 'Page not found.');
@@ -1086,3 +1089,5 @@ setTimeout(()=>subscriptions.tick().catch(e=>console.error("Storage monitoring:"
 setInterval(()=>subscriptions.tick().catch(e=>console.error("Storage monitoring:",e.message)),3600000).unref();
 setTimeout(()=>billing.tick().catch(()=>console.error('Billing sync needs retry.')),30000).unref();
 setInterval(()=>billing.tick().catch(()=>console.error('Billing sync needs retry.')),300000).unref();
+setTimeout(()=>paidSignup.tick().catch(()=>console.error('Signup sync needs retry.')),30000).unref();
+setInterval(()=>paidSignup.tick().catch(()=>console.error('Signup sync needs retry.')),60000).unref();
