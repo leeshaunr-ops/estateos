@@ -31,7 +31,7 @@ export function createStripeSandbox({get,run,transaction,id,now,fail,json,body,p
    }
    json(res,200,{url:a.checkout_url});return true;
   }
-  if(route==='refresh'){
+  if(route==='refresh'||route==='portal'){
    const a=await latest(user);if(!a?.session_id)fail(409,'Start a test checkout first.');
    const s=testObject(await api.request('checkout/sessions/'+encodeURIComponent(a.session_id)+'?expand%5B%5D=subscription&expand%5B%5D=subscription.latest_invoice'));
    if(s.client_reference_id!==user.organization_id||s.metadata?.attempt_id!=='sandbox-'+a.id||s.mode!=='subscription')throw Error('Test checkout ownership mismatch.');
@@ -40,7 +40,9 @@ export function createStripeSandbox({get,run,transaction,id,now,fail,json,body,p
     const sub=testObject(s.subscription);
     if(s.amount_total!==7900||s.currency!=='usd'||sub.status!=='active'||sub.metadata?.organization_id!==user.organization_id||sub.latest_invoice?.status!=='paid')throw Error('Test payment needs review.');
     status='paid';
+    if(sub.cancel_at_period_end)status='cancellation_scheduled';
    }
+   if(route==='portal'){if(!['paid','cancellation_scheduled'].includes(status))fail(409,'Complete the test payment first.');json(res,200,await api.portal(typeof s.customer==='string'?s.customer:s.customer.id));return true;}
    await run('UPDATE stripe_sandbox_attempts SET status=?,verified_at=? WHERE id=?',status,now(),a.id);
    json(res,200,{status});return true;
   }

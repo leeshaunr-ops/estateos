@@ -3,7 +3,7 @@ import {createStripeClient} from './stripe-client.mjs';
 
 // Stripe is the source of payment truth. Redirect query parameters never grant access.
 // Polling reconciles pending checkouts and current subscriptions even if a browser closes.
-export function createStripeBilling({get,all,run,transaction,id,now,fail,json,body,audit,client=createStripeClient({origin:process.env.ESTATEOS_PUBLIC_URL||'https://estateaegis.com'}),enabled=()=>process.env.STRIPE_BILLING_ENABLED==='1'&&!!process.env.STRIPE_SECRET_KEY}) {
+export function createStripeBilling({get,all,run,transaction,id,now,fail,json,body,audit,client=createStripeClient({origin:process.env.ESTATEOS_PUBLIC_URL||'https://estateaegis.com'}),enabled=()=>process.env.STRIPE_BILLING_ENABLED==='1'&&String(process.env.STRIPE_SECRET_KEY||'').startsWith('sk_live_')}) {
  const busy=new Map();
  async function usage(org){return {residences:Number((await get('SELECT COUNT(*) n FROM properties WHERE organization_id=? AND archived_at IS NULL',org)).n),seats:Number((await get("SELECT COUNT(*) n FROM users WHERE organization_id=? AND active=1 AND role IN ('admin','employee')",org)).n),bytes:Number((await get('SELECT COALESCE(SUM(bytes),0) n FROM (SELECT f.storage_key,MAX(f.bytes) bytes FROM files f JOIN properties p ON p.id=f.property_id WHERE p.organization_id=? GROUP BY f.storage_key) q',org)).n)};}
  function parseSubscription(sub){
@@ -23,6 +23,7 @@ export function createStripeBilling({get,all,run,transaction,id,now,fail,json,bo
     const attempt=await get("SELECT * FROM stripe_checkout_attempts WHERE organization_id=? AND session_id IS NOT NULL AND status IN ('open','creating') ORDER BY created_at DESC LIMIT 1",org);
     if(!attempt)return;
     const session=await client.request('checkout/sessions/'+encodeURIComponent(attempt.session_id));
+    if(session.livemode!==true)throw Error('Live billing cannot accept a test checkout.');
     if(session.client_reference_id!==org || session.metadata?.attempt_id!==attempt.id || session.mode!=='subscription')throw Error('Checkout ownership mismatch.');
     if(session.status==='expired'){await run("UPDATE stripe_checkout_attempts SET status='expired' WHERE id=?",attempt.id);return;}
     if(session.status!=='complete' || session.payment_status!=='paid')return;
@@ -32,6 +33,7 @@ export function createStripeBilling({get,all,run,transaction,id,now,fail,json,bo
     record=await get('SELECT * FROM stripe_billing WHERE organization_id=?',org);
    }
    const sub=await client.request('subscriptions/'+encodeURIComponent(record.subscription_id)+'?expand%5B%5D=latest_invoice');
+   if(sub.livemode!==true)throw Error('Live billing cannot accept a test subscription.');
    if(sub.metadata?.organization_id!==org || (typeof sub.customer==='string'?sub.customer:sub.customer?.id)!==record.customer_id)throw Error('Subscription ownership mismatch.');
    const q=parseSubscription(sub),paid=sub.latest_invoice?.status==='paid';
    await transaction(async()=>{
@@ -48,6 +50,7 @@ export function createStripeBilling({get,all,run,transaction,id,now,fail,json,bo
   if(req.method==='GET'&&url.pathname==='/api/billing/status'){json(res,200,await state(org));return true;}
   if(req.method!=='POST')fail(405,'Use POST.');if(!enabled())fail(503,'Online subscriptions are being configured. Contact sales@estateaegis.com.');const b=await body(req);
   if(url.pathname==='/api/billing/refresh'){await reconcile(org);json(res,200,await state(org));return true;}
+  if(url.pathname==='/api/billing/portal'){await reconcile(org);const row=await get('SELECT customer_id,subscription_id FROM stripe_billing WHERE organization_id=?',org);if(!row?.customer_id||!row.subscription_id)fail(409,'Subscribe before opening billing management.');json(res,200,await client.portal(row.customer_id));return true;}
   if(url.pathname!=='/api/billing/checkout')fail(404,'Billing action not found.');
   await reconcile(org);
   let q;try{q=subscriptionQuote(b.plan,b.extraSeats,b.storagePacks);}catch{fail(422,'Select a valid plan and add-ons.');}

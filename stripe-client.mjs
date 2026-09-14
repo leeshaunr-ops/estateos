@@ -16,6 +16,7 @@ export function verifyStripeEvent(raw, header, secret, nowSeconds=Math.floor(Dat
 }
 
 export function createStripeClient({secret=process.env.STRIPE_SECRET_KEY, origin=process.env.ESTATEOS_PUBLIC_URL, fetcher=fetch, plans=PLANS, addons=ADDONS}={}) {
+  let portalConfiguration;
   async function request(path, params, idempotencyKey) {
     if(!secret) throw new Error('Stripe is not configured.');
     const headers={Authorization:'Bearer '+secret};
@@ -44,5 +45,27 @@ export function createStripeClient({secret=process.env.STRIPE_SECRET_KEY, origin
     if(!result.id || !result.url?.startsWith('https://checkout.stripe.com/'))throw new Error('Unexpected checkout response.');
     return {id:result.id,url:result.url,quote};
   }
-  return {request,price,checkout};
+  async function portal(customer){
+    const site=new URL(origin),live=String(secret).startsWith('sk_live_');
+    if(site.protocol!=='https:'||!customer)throw Error('Billing portal identity required.');
+    if(!portalConfiguration){
+      const config=await request('billing_portal/configurations',{
+        name:'EstateAegis billing management',
+        'features[invoice_history][enabled]':'true',
+        'features[payment_method_update][enabled]':'true',
+        'features[subscription_cancel][enabled]':'true',
+        'features[subscription_cancel][mode]':'at_period_end',
+        'features[subscription_cancel][proration_behavior]':'none',
+        'features[subscription_update][enabled]':'false',
+        'features[customer_update][enabled]':'false',
+        default_return_url:site.origin+'/login'
+      },'estate-portal-config-v1');
+      if(config.livemode!==live)throw Error('Billing portal mode mismatch.');
+      portalConfiguration=config.id;
+    }
+    const session=await request('billing_portal/sessions',{customer,configuration:portalConfiguration,return_url:site.origin+'/login'});
+    if(session.livemode!==live||session.customer!==customer||!session.url?.startsWith('https://billing.stripe.com/'))throw Error('Unexpected billing portal response.');
+    return {url:session.url};
+  }
+  return {request,price,checkout,portal};
 }

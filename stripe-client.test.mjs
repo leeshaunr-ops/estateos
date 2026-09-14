@@ -26,3 +26,13 @@ test('checkout validates catalog prices and sends only approved quantities',asyn
  assert.equal(form.get('line_items[1][quantity]'),'2');assert.equal(form.get('client_reference_id'),'org');assert.equal(form.get('mode'),'subscription');
  assert.equal(calls.at(-1).options.headers['Idempotency-Key'],'estate-checkout-attempt');
 });
+test('billing portal isolates customer and permits cancellation without plan switching',async()=>{
+ const calls=[];let wrong=false;
+ const fetcher=async(url,options)=>{const b=options.body;calls.push({url,b});return {ok:true,json:async()=>url.endsWith('configurations')?{id:'bpc_test',livemode:false}:{customer:wrong?'cus_wrong':b.get('customer'),livemode:false,url:'https://billing.stripe.com/p/session/test'}};};
+ const client=createStripeClient({secret:'sk_test_fixture',origin:'https://estateaegis.com',fetcher});
+ await client.portal('cus_test');await client.portal('cus_test');
+ assert.equal(calls.filter(c=>c.url.endsWith('configurations')).length,1);
+ assert.equal(calls[0].b.get('features[subscription_cancel][mode]'),'at_period_end');
+ assert.equal(calls[0].b.get('features[subscription_update][enabled]'),'false');
+ wrong=true;await assert.rejects(client.portal('cus_test'),/Unexpected/);
+});
