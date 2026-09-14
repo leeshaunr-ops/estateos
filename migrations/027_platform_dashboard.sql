@@ -1,0 +1,3 @@
+CREATE TABLE platform_access(user_id TEXT PRIMARY KEY REFERENCES users(id),permissions TEXT NOT NULL,granted_by TEXT NOT NULL REFERENCES users(id),updated_at TEXT NOT NULL);
+CREATE TABLE platform_leads(id TEXT PRIMARY KEY,company TEXT NOT NULL,email TEXT NOT NULL DEFAULT '',phone TEXT NOT NULL DEFAULT '',stage TEXT NOT NULL DEFAULT 'new',notes TEXT NOT NULL DEFAULT '',follow_up TEXT NOT NULL DEFAULT '',updated_at TEXT NOT NULL);
+CREATE TABLE platform_posts(id TEXT PRIMARY KEY,channel TEXT NOT NULL,content TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'draft',scheduled_at TEXT NOT NULL DEFAULT '',updated_by TEXT NOT NULL REFERENCES users(id),updated_at TEXT NOT NULL);
