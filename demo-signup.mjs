@@ -26,7 +26,7 @@ export function createDemoSignup({get,run,transaction,body,json,fail,rate,id,now
    await run('INSERT INTO demo_requests(email,name,company,phone,residences,token_hash,requested_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET name=excluded.name,company=excluded.company,phone=excluded.phone,residences=excluded.residences,token_hash=excluded.token_hash,requested_at=excluded.requested_at',email,name,company,phone,residences,tokenHash,Date.now());
    eligible=true;
   });
-  if(eligible){const result=await send({to:email,invitePath:'/?workspaceInvite='+token,company:company+' — your free seven-day private demo'},{env});if(result.emailStatus!=='sent'){await run('UPDATE demo_requests SET requested_at=0 WHERE email=? AND token_hash=?',email,tokenHash);fail(503,'Your invitation could not be delivered. Please try again or contact sales@estateaegis.com.');}}
+  if(eligible){const result=await send({demoGuide:true,to:email,invitePath:'/?workspaceInvite='+token,company:company+' — your free seven-day private demo'},{env});if(result.emailStatus!=='sent'){await run('UPDATE demo_requests SET requested_at=0 WHERE email=? AND token_hash=?',email,tokenHash);fail(503,'Your invitation could not be delivered. Please try again or contact sales@estateaegis.com.');}}
   json(res,200,{message});return true;
  }
  // Called in the registration transaction: only a verified, accepted invitation becomes a lead.
