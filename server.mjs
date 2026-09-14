@@ -1,4 +1,5 @@
 import {createStripeBilling} from './stripe-billing.mjs';
+import {createStripeSandbox} from './stripe-sandbox.mjs';
 import {createSubscriptions} from './subscriptions.mjs';
 import {createBackupWorker} from './backup-worker.mjs';
 import {createOperations,advanceDue} from './operations.mjs';
@@ -183,6 +184,7 @@ async function readFile(user, fileId) { const f = (await get('SELECT * FROM file
 const communications=createCommunications({get,all,run,transaction,id,now,fail,text,json,body,rate,audit});
 const security=createSecurity({get,run,transaction,body,json,rate,fail,passwordMatches,audit,now});
 const billing=createStripeBilling({get,all,run,transaction,id,now,fail,json,body,audit});
+const stripeSandbox=createStripeSandbox({get,run,transaction,id,now,fail,json,body,platformOwner});
 const subscriptions=createSubscriptions({get,all,run,transaction,id,now,fail,json,body,audit,platformOwner,communications});
 const operations=createOperations({get,all,run,transaction,id,now,fail,text,note,date,roles,property,entity,work,audit,body,json,communications,template,readBytes,putBytes,ensureSpace:subscriptions.ensureSpace});
 const saas = createSaas({get,all,run,transaction,fail,text,note,id,hash,now,passwordHash,session,json,body,rate,audit,randomBytes});
@@ -191,6 +193,7 @@ async function assertWorkspaceActive(organizationId){if((await get('SELECT statu
 async function api(req, res, url, user) {
     const method = req.method, p = url.pathname;
     if(user)await assertWorkspaceActive(user.organization_id);
+    if(await stripeSandbox.handle(req,res,url,user))return;
     if(await billing.handle(req,res,url,user))return;
     if(await subscriptions.handle(req,res,url,user))return;
     if(await saas(req,res,url,user))return;

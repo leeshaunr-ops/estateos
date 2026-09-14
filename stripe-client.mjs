@@ -15,7 +15,7 @@ export function verifyStripeEvent(raw, header, secret, nowSeconds=Math.floor(Dat
   return event;
 }
 
-export function createStripeClient({secret=process.env.STRIPE_SECRET_KEY, origin=process.env.ESTATEOS_PUBLIC_URL, fetcher=fetch}={}) {
+export function createStripeClient({secret=process.env.STRIPE_SECRET_KEY, origin=process.env.ESTATEOS_PUBLIC_URL, fetcher=fetch, plans=PLANS, addons=ADDONS}={}) {
   async function request(path, params, idempotencyKey) {
     if(!secret) throw new Error('Stripe is not configured.');
     const headers={Authorization:'Bearer '+secret};
@@ -38,7 +38,7 @@ export function createStripeClient({secret=process.env.STRIPE_SECRET_KEY, origin
     if(!organizationId || !attemptId) throw new Error('Checkout identity required.');
     const fields={mode:'subscription',success_url:site.origin+'/login?billing=success',cancel_url:site.origin+'/login?billing=canceled',client_reference_id:organizationId,'subscription_data[metadata][organization_id]':organizationId,'metadata[organization_id]':organizationId,'metadata[attempt_id]':attemptId,'payment_method_types[0]':'card',billing_address_collection:'required'};
     if(customer)fields.customer=customer;else fields.customer_email=email;
-    const items=[[PLANS[plan],1],...(extraSeats?[[ADDONS.seats,extraSeats]]:[]),...(storagePacks?[[ADDONS.storage,storagePacks]]:[])];
+    const items=[[plans[plan],1],...(extraSeats?[[addons.seats,extraSeats]]:[]),...(storagePacks?[[addons.storage,storagePacks]]:[])];
     for(let i=0;i<items.length;i++){fields[`line_items[${i}][price]`]=await price(items[i][0]);fields[`line_items[${i}][quantity]`]=String(items[i][1]);}
     const result=await request('checkout/sessions',fields,'estate-checkout-'+attemptId);
     if(!result.id || !result.url?.startsWith('https://checkout.stripe.com/'))throw new Error('Unexpected checkout response.');
