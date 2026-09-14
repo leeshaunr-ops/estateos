@@ -21,7 +21,7 @@ export async function sendInvitation({to, invitePath, company = 'your workspace'
     to: [to],
     subject: demoGuide?'Your EstateAegis demo — activate and get started':'Your EstateAegis invitation',
     text: `${intro}\n\nCreate your account: ${link.href}\n\nThis invitation expires in 48 hours and can be used once.${guideText}\n\nEstateAegis\nThe smarter way to manage private residences.`,
-    html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:28px;color:#303438;background:#faf8f2"><h1>EstateAegis</h1><p>${escapeHtml(intro)}</p><p><a href="${escapeHtml(link.href)}" style="display:inline-block;background:#92232e;color:white;padding:14px 22px;text-decoration:none;border-radius:6px">${demoGuide?'Activate your demo':'Create your account'}</a></p><p>This invitation expires in 48 hours and can be used once.</p><p>If the button does not work, copy this link:<br>${escapeHtml(link.href)}</p>${guideHtml}<p>The smarter way to manage private residences.</p></div>`
+    html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:28px;color:#1f2933;background:#f7f8fa"><h1 style="color:#8b242b">EstateAegis</h1><p>${escapeHtml(intro)}</p><p><a href="${escapeHtml(link.href)}" style="display:inline-block;background:#8b242b;color:white;padding:14px 22px;text-decoration:none;border-radius:8px">${demoGuide?'Activate your demo':'Create your account'}</a></p><p>This invitation expires in 48 hours and can be used once.</p><p>If the button does not work, copy this link:<br>${escapeHtml(link.href)}</p>${guideHtml}<p>The smarter way to manage private residences.</p></div>`
   };
   try {
     const response = await fetcher('https://api.resend.com/emails', {

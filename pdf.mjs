@@ -1,7 +1,7 @@
 import {decodeLogoPng} from './png-logo.mjs';
 import {deflateSync} from 'node:zlib';
 export function jpegSize(bytes){if(bytes[0]!==255||bytes[1]!==216)throw Error('JPEG required');let pos=2;while(pos<bytes.length){if(bytes[pos++]!==255)continue;let marker=bytes[pos++];while(marker===255)marker=bytes[pos++];if(marker===217||marker===218)break;const length=bytes.readUInt16BE(pos);if([192,193,194].includes(marker)){const height=bytes.readUInt16BE(pos+3),width=bytes.readUInt16BE(pos+5),channels=bytes[pos+7];if(!width||!height||width*height>40000000||![1,3].includes(channels))throw Error('Unsupported JPEG');return {height,width,channels};}if(length<2)break;pos+=length;}throw Error('Invalid JPEG');}
-const C={ink:[.15,.19,.20],muted:[.40,.43,.44],brand:[.48,.10,.15],gold:[.73,.59,.35],line:[.87,.87,.84],white:[1,1,1],pass:[.12,.38,.29],monitor:[.57,.36,.02],attention:[.66,.12,.15]};
+const C={ink:[.122,.161,.2],muted:[.373,.42,.463],brand:[.545,.141,.169],gold:[.722,.6,.376],line:[.886,.906,.922],white:[1,1,1],pass:[.12,.38,.29],monitor:[.57,.36,.02],attention:[.66,.12,.15]};
 const backgrounds={pass:[.92,.96,.93],monitor:[1,.95,.72],attention:[1,.88,.88],na:[.95,.95,.94],unchecked:[.95,.95,.94]};
 const statusLabel=s=>({pass:'PASS',monitor:'MONITOR',attention:'ATTENTION',na:'N/A',unchecked:'NOT ASSESSED'}[s]||String(s||'').toUpperCase());
 function clean(s){return String(s??'').replace(/[–—]/g,'-').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/…/g,'...').replace(/[^\x20-\xff\n]/g,'?');}
