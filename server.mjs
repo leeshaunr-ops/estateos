@@ -1,3 +1,4 @@
+import {createStripeBilling} from './stripe-billing.mjs';
 import {createSubscriptions} from './subscriptions.mjs';
 import {createBackupWorker} from './backup-worker.mjs';
 import {createOperations,advanceDue} from './operations.mjs';
@@ -181,14 +182,16 @@ async function readFile(user, fileId) { const f = (await get('SELECT * FROM file
     fail(404, 'File not found.'); return f; }
 const communications=createCommunications({get,all,run,transaction,id,now,fail,text,json,body,rate,audit});
 const security=createSecurity({get,run,transaction,body,json,rate,fail,passwordMatches,audit,now});
+const billing=createStripeBilling({get,all,run,transaction,id,now,fail,json,body,audit});
 const subscriptions=createSubscriptions({get,all,run,transaction,id,now,fail,json,body,audit,platformOwner,communications});
 const operations=createOperations({get,all,run,transaction,id,now,fail,text,note,date,roles,property,entity,work,audit,body,json,communications,template,readBytes,putBytes,ensureSpace:subscriptions.ensureSpace});
 const saas = createSaas({get,all,run,transaction,fail,text,note,id,hash,now,passwordHash,session,json,body,rate,audit,randomBytes});
-const staff = createStaff({get,all,run,transaction,fail,text,note,id,now,passwordHash,json,body,audit,communications});
+const staff = createStaff({get,all,run,transaction,fail,text,note,id,now,passwordHash,json,body,audit,communications,assertCapacity:billing.assertCapacity});
 async function assertWorkspaceActive(organizationId){if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',organizationId))?.status==='suspended')fail(403,'This company workspace is suspended. Contact support.');}
 async function api(req, res, url, user) {
     const method = req.method, p = url.pathname;
     if(user)await assertWorkspaceActive(user.organization_id);
+    if(await billing.handle(req,res,url,user))return;
     if(await subscriptions.handle(req,res,url,user))return;
     if(await saas(req,res,url,user))return;
     if(await staff.handle(req,res,url,user))return;
@@ -253,6 +256,7 @@ async function api(req, res, url, user) {
         await transaction(async () => {
             const family = invitation.role === 'client' ? await lockFamily({get,run}, invitation.organization_id, invitation.client_id) : null;
             if (!await claimInvitation(run, invitation.token_hash, now())) fail(409, 'Invitation expired, cancelled, or already accepted.');
+            if(['admin','employee'].includes(invitation.role))await billing.assertCapacity(invitation.organization_id,'seats');
             await run('INSERT INTO users VALUES(?,?,?,?,?,?,?,?,?,?)', uid, invitation.organization_id, text(b.name, 'Name', 160), invitation.email, pw, invitation.role, invitation.client_id, invitation.vendor_id, 1, now());
             await linkAcceptedMember({run}, invitation, uid, family);
         });
@@ -400,7 +404,7 @@ async function api(req, res, url, user) {
         if (!(await get('SELECT id FROM clients WHERE id=? AND organization_id=?', b.clientId, user.organization_id)))
             fail(422, 'Select a client family.');
         const a = addressFields(b), key = id();
-        (await run('INSERT INTO properties(id,organization_id,client_id,name,address,timezone,manual,created_at,street_address,address_line2,city,state,postal_code,country,room_profile) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', key, user.organization_id, b.clientId, text(b.name, 'Residence', 160), a.full, note(b.timezone, 80) || 'America/New_York', '', now(), a.street, a.line2, a.city, a.state, a.postal, a.country, JSON.stringify(roomProfile(b.roomProfile))));
+        await transaction(async()=>{await billing.assertCapacity(user.organization_id,'residences');(await run('INSERT INTO properties(id,organization_id,client_id,name,address,timezone,manual,created_at,street_address,address_line2,city,state,postal_code,country,room_profile) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', key, user.organization_id, b.clientId, text(b.name, 'Residence', 160), a.full, note(b.timezone, 80) || 'America/New_York', '', now(), a.street, a.line2, a.city, a.state, a.postal, a.country, JSON.stringify(roomProfile(b.roomProfile))));});
         (await audit(user, 'property.created', key));
         result = { id: key };
     }
@@ -425,7 +429,7 @@ async function api(req, res, url, user) {
         const row = (await get('SELECT * FROM properties WHERE id=? AND organization_id=?', b.id, user.organization_id));
         if (!row)
             fail(404, 'Residence not found.');
-        (await run('UPDATE properties SET archived_at=NULL WHERE id=?', row.id));
+        await transaction(async()=>{if(row.archived_at)await billing.assertCapacity(user.organization_id,'residences');await run('UPDATE properties SET archived_at=NULL WHERE id=?',row.id);});
         (await audit(user, 'property.restored', row.id));
         result = { id: row.id, archived: false };
     }
@@ -1077,3 +1081,5 @@ const backupWorker=createBackupWorker({get,run,transaction,putBytes,readBytes,de
 
 setTimeout(()=>subscriptions.tick().catch(e=>console.error("Storage monitoring:",e.message)),20000).unref();
 setInterval(()=>subscriptions.tick().catch(e=>console.error("Storage monitoring:",e.message)),3600000).unref();
+setTimeout(()=>billing.tick().catch(()=>console.error('Billing sync needs retry.')),30000).unref();
+setInterval(()=>billing.tick().catch(()=>console.error('Billing sync needs retry.')),300000).unref();

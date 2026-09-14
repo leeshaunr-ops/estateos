@@ -1,4 +1,4 @@
-export function createStaff({get,all,run,transaction,fail,text,note,id,now,passwordHash,json,body,audit,communications}) {
+export function createStaff({get,all,run,transaction,fail,text,note,id,now,passwordHash,json,body,audit,communications,assertCapacity=async()=>{}}) {
  async function member(user,uid) {
   const row=await get("SELECT id,name FROM users WHERE id=? AND organization_id=? AND role IN ('employee','admin') AND active=1",uid,user.organization_id);
   if(!row)fail(422,'Choose an active staff member from this company.');return row;
@@ -39,7 +39,7 @@ export function createStaff({get,all,run,transaction,fail,text,note,id,now,passw
    let uid=b.userId;
    await transaction(async()=>{
     if(uid){await member(user,uid);if(await get('SELECT id FROM users WHERE LOWER(email)=? AND id<>?',email,uid))fail(409,'Email already in use.');await run('UPDATE users SET name=?,email=? WHERE id=?',name,email,uid);}
-    else {if(await get('SELECT id FROM users WHERE LOWER(email)=?',email))fail(409,'Email already in use.');const pw=passwordHash(b.password);uid=id();await run('INSERT INTO users(id,organization_id,name,email,password_hash,role,active,created_at) VALUES(?,?,?,?,?,?,?,?)',uid,user.organization_id,name,email,pw,'employee',1,now());}
+    else {await assertCapacity(user.organization_id,'seats');if(await get('SELECT id FROM users WHERE LOWER(email)=?',email))fail(409,'Email already in use.');const pw=passwordHash(b.password);uid=id();await run('INSERT INTO users(id,organization_id,name,email,password_hash,role,active,created_at) VALUES(?,?,?,?,?,?,?,?)',uid,user.organization_id,name,email,pw,'employee',1,now());}
     await run('INSERT INTO staff_profiles(user_id,details) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET details=excluded.details',uid,JSON.stringify(details));await audit(user,'staff.profile_updated',uid);
    });json(res,200,{id:uid});return true;
   }
