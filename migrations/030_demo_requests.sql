@@ -1,0 +1,1 @@
+CREATE TABLE demo_requests(email TEXT PRIMARY KEY,name TEXT NOT NULL,company TEXT NOT NULL,phone TEXT NOT NULL DEFAULT '',residences TEXT NOT NULL DEFAULT '',token_hash TEXT NOT NULL UNIQUE REFERENCES workspace_invites(token_hash),requested_at BIGINT NOT NULL,lead_id TEXT,verified_at TEXT);
