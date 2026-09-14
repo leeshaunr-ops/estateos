@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let me,tab,rows=[];
 async function api(p,b){const r=await fetch('/api/master/'+p,{method:b?'POST':'GET',headers:b?{'Content-Type':'application/json'}:{},...(b?{body:JSON.stringify(b)}:{})});const d=await r.json();if(!r.ok)throw Error(d.error||'Request failed');return d;}
-const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n/100),gb=n=>(n/1e9).toFixed(2)+' GB';
+const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n/100),gb=n=>n===0?'0 B':Math.abs(n)<1e6?(n/1e3).toFixed(1)+' KB':Math.abs(n)<1e9?(n/1e6).toFixed(2)+' MB':(n/1e9).toFixed(2)+' GB';
 const table=(headers,body)=>`<div class="scroll"><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${body||'<tr><td>No records yet.</td></tr>'}</tbody></table></div>`;
 const metric=(label,value)=>`<div class="card"><span class="muted">${label}</span><div class="metric">${esc(value)}</div></div>`;
 async function googlePanel(){
