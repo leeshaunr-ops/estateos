@@ -15,6 +15,7 @@ import {invitationHistory, cancelInvitation, claimInvitation} from './invitation
 import {sendInvitation} from './email.mjs';
 import http from 'node:http';
 import {createSaas,platformOwner} from './saas.mjs';
+import {createDemos} from './demos.mjs';
 import {createStaff} from './staff.mjs';
 import {seal,unseal} from './vault.mjs';
 import { openDatabase } from './database.mjs';
@@ -164,7 +165,7 @@ async function snapshot(user) {
     const assets = user.role === 'vendor' ? [] : (await scoped('assets'));
     const assetIds = new Set(assets.map(a => a.id));
     const assetInspections = assetIds.size ? (await all('SELECT ai.* FROM asset_inspections ai JOIN assets a ON a.id=ai.asset_id WHERE a.id IN (' + [...assetIds].map(() => '?').join(',') + ')', ...assetIds)).map(i => ({ ...i, answers: JSON.parse(i.answers || '[]') })) : [];
-    return { unreadMessages:await communications.unread(user), companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'', primaryAdminId:(await communications.primary(user.organization_id))?.id||'', workspaceSupport:(await get('SELECT support_email FROM workspace_settings WHERE organization_id=?',user.organization_id))?.support_email||'', user: {...safeUser(user), platformAccess:(await master.permissions(user)).length>0, ...profile}, company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, properties: props.map(p => { if (user.role === 'vendor')
+    return { unreadMessages:await communications.unread(user), companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'', primaryAdminId:(await communications.primary(user.organization_id))?.id||'', workspaceSupport:(await get('SELECT support_email FROM workspace_settings WHERE organization_id=?',user.organization_id))?.support_email||'', demo:await demos.lookup(user.organization_id), user: {...safeUser(user), platformAccess:(await master.permissions(user)).length>0, ...profile}, company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, properties: props.map(p => { if (user.role === 'vendor')
             return { id: p.id, name: p.name, address: p.address, account_manager_name:p.account_manager_name }; if (user.role === 'client') {
             const { manual, ...safe } = p;
             return safe;
@@ -193,13 +194,16 @@ const subscriptions=createSubscriptions({get,all,run,transaction,id,now,fail,jso
 const master=createPlatformDashboard({get,all,run,transaction,body,json,fail,id,now,audit,platformOwner,subscriptions});
 const platformGoogle=createPlatformGoogle({get,run,transaction,body,json,fail,audit,platformOwner,permissions:master.permissions});
 const operations=createOperations({get,all,run,transaction,id,now,fail,text,note,date,roles,property,entity,work,audit,body,json,communications,template,readBytes,putBytes,ensureSpace:subscriptions.ensureSpace});
-const saas = createSaas({get,all,run,transaction,fail,text,note,id,hash,now,passwordHash,session,json,body,rate,audit,randomBytes});
+const demos=createDemos({get,all,run,transaction,id,now,hash,randomBytes,body,json,fail,audit,platformOwner,deleteBytes});
+const saas = createSaas({get,all,run,transaction,fail,text,note,id,hash,now,passwordHash,session,json,body,rate,audit,randomBytes,demos});
 const staff = createStaff({get,all,run,transaction,fail,text,note,id,now,passwordHash,json,body,audit,communications,assertCapacity:billing.assertCapacity});
-async function assertWorkspaceActive(organizationId){if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',organizationId))?.status==='suspended')fail(403,'This company workspace is suspended. Contact support.');}
+async function assertWorkspaceActive(organizationId){if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',organizationId))?.status==='suspended')fail(403,'This company workspace is suspended. Contact support.');const d=await demos.lookup(organizationId);if(d&&Number(d.expires_at)<=Date.now())fail(403,'Your seven-day demo has ended. Contact sales@estateaegis.com for more time.');}
 async function api(req, res, url, user) {
     const method = req.method, p = url.pathname;
     if(await paidSignup.handle(req,res,url))return;
-    if(user)await assertWorkspaceActive(user.organization_id);
+    if(user&&!['/api/login','/api/logout','/api/status'].includes(p))await assertWorkspaceActive(user.organization_id);
+    if(await demos.handle(req,res,url,user))return;
+    if(user&&await demos.lookup(user.organization_id)&&method!=='GET'&&(p.startsWith('/api/billing/')||p==='/api/subscription/request'))fail(403,'Billing is disabled in private demos. Contact sales@estateaegis.com to subscribe.');
     if(await stripeSandbox.handle(req,res,url,user))return;
     if(await billing.handle(req,res,url,user))return;
     if(await platformGoogle.handle(req,res,url,user))return;
@@ -516,7 +520,7 @@ async function api(req, res, url, user) {
             }
             await run('UPDATE clients SET profile=? WHERE id=?', JSON.stringify({...profile,members}), family.id);
         });
-        result = token ? {invitePath:'/?invite='+token, email:recipient, ...await sendInvitation({to:recipient,invitePath:'/?invite='+token})} : {saved:true,alreadyPending};
+        result = token ? {invitePath:'/?invite='+token, email:recipient, ...await sendWorkspaceInvitation(user,{to:recipient,invitePath:'/?invite='+token})} : {saved:true,alreadyPending};
     }
     else if (p === '/api/invitations/cancel' || p === '/api/invitations/email') {
         roles(user, 'admin');
@@ -547,7 +551,7 @@ async function api(req, res, url, user) {
                 await audit(user, 'invitation.cancelled', previous.email);
                 await audit(user, 'invitation.created', email);
             });
-            result = {invitePath:'/?invite='+token, expiresInHours:48, ...await sendInvitation({to:email,invitePath:'/?invite='+token})};
+            result = {invitePath:'/?invite='+token, expiresInHours:48, ...await sendWorkspaceInvitation(user,{to:email,invitePath:'/?invite='+token})};
         }
     }
     else if (p === '/api/invitations') {
@@ -567,7 +571,7 @@ async function api(req, res, url, user) {
             fail(409, 'That account already exists.');
         (await run('INSERT INTO invitations VALUES(?,?,?,?,?,?,?,?)', hash(token), user.organization_id, email, role, role === 'client' ? b.clientId : null, role === 'vendor' ? b.vendorId : null, Date.now() + 48 * 3600000, null));
         (await audit(user, 'invitation.created', email));
-        result = { invitePath: '/?invite=' + token, expiresInHours: 48, ...await sendInvitation({to:email,invitePath:'/?invite='+token}) };
+        result = { invitePath: '/?invite=' + token, expiresInHours: 48, ...await sendWorkspaceInvitation(user,{to:email,invitePath:'/?invite='+token}) };
     }
     else if (p === '/api/access' || p === '/api/properties/manager') {
         roles(user, 'admin');
@@ -1068,6 +1072,7 @@ server.listen(port, host, () => console.log(`EstateOS running at http://${host}:
 process.on('SIGTERM', () => server.close(async () => { await db.close(); process.exit(0); }));
 
 async function deliverInspection(user,inspectionId){
+ if(await demos.lookup(user.organization_id))return {emailStatus:'demo_disabled'};
  const row=await entity(user,'inspections',inspectionId,'operate');
  if(!row.report_email)return {emailStatus:'not_requested'};
  await run("INSERT INTO inspection_email_delivery(inspection_id,email_status) VALUES(?,'not_requested') ON CONFLICT(inspection_id) DO NOTHING",row.id);
@@ -1097,3 +1102,6 @@ setTimeout(()=>billing.tick().catch(()=>console.error('Billing sync needs retry.
 setInterval(()=>billing.tick().catch(()=>console.error('Billing sync needs retry.')),300000).unref();
 setTimeout(()=>paidSignup.tick().catch(()=>console.error('Signup sync needs retry.')),30000).unref();
 setInterval(()=>paidSignup.tick().catch(()=>console.error('Signup sync needs retry.')),60000).unref();
+
+async function sendWorkspaceInvitation(user,args){if(await demos.lookup(user.organization_id))return {emailStatus:'demo_disabled'};return sendInvitation(args);}
+setInterval(()=>demos.cleanup().catch(e=>console.error('Demo cleanup:',e.message)),60000).unref();

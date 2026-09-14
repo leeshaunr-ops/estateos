@@ -32,6 +32,7 @@ export function createOperations({get,all,run,transaction,id,now,fail,text,note,
  async function tick(orgOnly,manual=false){if(busy)return;busy=true;try{
   const orgs=orgOnly?[{organization_id:orgOnly}]:await all('SELECT organization_id FROM automation_settings WHERE enabled=1');
   for(const o of orgs){const org=o.organization_id;try{
+   const demo=await get('SELECT expires_at FROM demo_workspaces WHERE organization_id=?',org);if(demo&&Number(demo.expires_at)<=Date.now())continue;
    if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',org))?.status==='suspended')continue;const primary=await communications.primary(org);if(!primary)continue;const admin=await get('SELECT * FROM users WHERE id=?',primary.id);const day=now().slice(0,10),soon=new Date(Date.parse(day+'T12:00Z')+3*86400000).toISOString().slice(0,10);
    await transaction(async()=>{
     const plans=await all('SELECT m.* FROM maintenance_plans m JOIN properties p ON p.id=m.property_id WHERE p.organization_id=? AND p.archived_at IS NULL AND m.active=1 AND m.next_due<=?',org,day);

@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 export function createCommunications({get,all,run,transaction,id,now,fail,text,json,body,rate,audit}, {env=process.env,fetcher=fetch}={}){
  async function primary(org){const setting=await get('SELECT primary_admin_id FROM workspace_settings WHERE organization_id=?',org);return await get("SELECT id,name,email FROM users WHERE organization_id=? AND role='admin' AND active=1 ORDER BY CASE WHEN id=? THEN 0 ELSE 1 END,created_at,id LIMIT 1",org,setting?.primary_admin_id||'');}
  async function enqueue(org,event,recipients,subject,content,entity){
+  if(await get('SELECT organization_id FROM demo_workspaces WHERE organization_id=?',org))return;
   const unique=new Map(recipients.filter(Boolean).filter(u=>u.email).map(u=>[u.email.toLowerCase(),u]));
   for(const u of unique.values()){
    const key=createHash('sha256').update(org+':'+event+':'+u.email.toLowerCase()).digest('hex');
@@ -60,7 +61,7 @@ export function createCommunications({get,all,run,transaction,id,now,fail,text,j
  async function drain(){if(busy||!env.RESEND_API_KEY)return;busy=true;try{
   const rows=await all("SELECT * FROM email_outbox WHERE status IN ('pending','retry','sending') AND next_attempt_at<=? AND attempts<5 ORDER BY created_at LIMIT 10",now());
   for(const row of rows){
-   if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',row.organization_id))?.status==='suspended'||row.user_id&&!await get('SELECT id FROM users WHERE id=? AND organization_id=? AND active=1 AND LOWER(email)=?',row.user_id,row.organization_id,row.email.toLowerCase())){await run("UPDATE email_outbox SET status='cancelled' WHERE id=?",row.id);continue;}
+   if(await get('SELECT organization_id FROM demo_workspaces WHERE organization_id=?',row.organization_id)||(await get('SELECT status FROM workspace_settings WHERE organization_id=?',row.organization_id))?.status==='suspended'||row.user_id&&!await get('SELECT id FROM users WHERE id=? AND organization_id=? AND active=1 AND LOWER(email)=?',row.user_id,row.organization_id,row.email.toLowerCase())){await run("UPDATE email_outbox SET status='cancelled' WHERE id=?",row.id);continue;}
    const claim=await run("UPDATE email_outbox SET status='sending',attempts=attempts+1,next_attempt_at=? WHERE id=? AND attempts=? AND next_attempt_at<=?",new Date(Date.now()+120000).toISOString(),row.id,row.attempts,now());if(!claim.changes)continue;
    let ok=false;try{const base=new URL(env.APP_URL||'https://estateaegis.com');if(base.protocol!=='https:')throw Error();const company=(await get('SELECT name FROM organizations WHERE id=?',row.organization_id))?.name||'Your company';const r=await fetcher('https://api.resend.com/emails',{method:'POST',signal:AbortSignal.timeout(15000),headers:{Authorization:'Bearer '+env.RESEND_API_KEY,'Content-Type':'application/json','Idempotency-Key':row.id},body:JSON.stringify({from:env.EMAIL_FROM||'EstateAegis <notifications@estateaegis.com>',to:[row.email],subject:row.subject,text:company+'\n\n'+row.body+'\n\n'+base.origin+'/\n\nPowered by EstateAegis'})});ok=r.ok&&!!(await r.json()).id;}catch{}
    await run('UPDATE email_outbox SET status=?,next_attempt_at=? WHERE id=?',ok?'sent':row.attempts>=4?'failed':'retry',new Date(Date.now()+Math.min(3600000,60000*2**row.attempts)).toISOString(),row.id);

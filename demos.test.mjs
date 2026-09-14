@@ -1,0 +1,45 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {randomUUID,randomBytes,createHash} from 'node:crypto';
+import {openDatabase} from './database.mjs';
+import {createDemos} from './demos.mjs';
+import {createSaas} from './saas.mjs';
+import {createCommunications} from './communications.mjs';
+for(const engine of ['sqlite','postgres'])test('private demo invitation, isolation, reset, expiry and email suppression: '+engine,async()=>{
+ const root=path.dirname(fileURLToPath(import.meta.url)),dir=path.join(root,'demo-test-'+randomUUID());
+ const db=await openDatabase(root,engine==='postgres'?{NODE_ENV:'test',ESTATEOS_TEST_POSTGRES_DIR:dir}:{ESTATEOS_DATA_DIR:dir});
+ try{
+  const now=()=>new Date().toISOString(),hash=s=>createHash('sha256').update(s).digest('hex'),owner={id:'owner',organization_id:'real',role:'admin'},removed=[];
+  const deps={...db,id:randomUUID,now,hash,randomBytes,body:async r=>r.body,json:(r,s,d)=>r.data=d,fail:(status,msg)=>{throw Object.assign(Error(msg),{status});},audit:async()=>{},platformOwner:u=>u.id==='owner',deleteBytes:async k=>removed.push(k),text:v=>v,passwordHash:v=>v,session:async()=>{},rate:()=>{}};
+  const demos=createDemos(deps),saas=createSaas({...deps,demos});
+  await db.run('INSERT INTO organizations VALUES(?,?,?)','real','Real customer',now());
+  await db.run('INSERT INTO users VALUES(?,?,?,?,?,?,?,?,?,?)','owner','real','Owner','owner@test.invalid','hash','admin',null,null,1,now());
+  const call=async(user,p,b)=>{const res={};await demos.handle({method:b?'POST':'GET',body:b},res,new URL('https://test'+p),user);return res.data;};
+  await assert.rejects(call({...owner,id:'other'},'/api/master/demos'),e=>e.status===403);
+  const invitation=await call(owner,'/api/master/demos/invite',{company:'Prospect',email:'prospect@test.invalid'});
+  const token=invitation.invitePath.split('=')[1];
+  await saas({method:'POST',body:{token,name:'Prospect',password:'temporary-test-password'}},{},new URL('https://test/api/workspace-register'),null);
+  const prospect=await db.get('SELECT * FROM users WHERE email=?','prospect@test.invalid'),org=prospect.organization_id;
+  assert.notEqual(org,'real');assert.ok(await demos.lookup(org));
+  assert.equal((await db.get('SELECT COUNT(*) n FROM properties WHERE organization_id=?',org)).n,1);
+  await assert.rejects(saas({method:'POST',body:{token,name:'Again',password:'temporary-test-password'}},{},new URL('https://test/api/workspace-register'),null));
+  await assert.rejects(demos.reset('real',owner),e=>e.status===404);
+  await assert.rejects(demos.reset(org,{...prospect,id:'stranger'}),e=>e.status===403);
+  const property=await db.get('SELECT id FROM properties WHERE organization_id=?',org);
+  await db.run('INSERT INTO files(id,property_id,name,mime,bytes,storage_key,created_by,created_at) VALUES(?,?,?,?,?,?,?,?)','file',property.id,'demo.txt','text/plain',10,'demo-file',prospect.id,now());
+  await db.run('INSERT INTO notes VALUES(?,?,?,?,?)','note',property.id,'Junk',prospect.id,now());
+  const comm=createCommunications(deps,{env:{RESEND_API_KEY:'test'},fetcher:async()=>{throw Error('Must not send');}});
+  await db.run('INSERT INTO email_outbox(id,organization_id,email,subject,body,next_attempt_at,created_at) VALUES(?,?,?,?,?,?,?)','queued',org,'outside@test.invalid','Test','Test',now(),now());
+  await comm.drain();assert.equal((await db.get('SELECT status FROM email_outbox WHERE id=?','queued')).status,'cancelled');
+  await demos.reset(org,prospect);await demos.cleanup();
+  assert.deepEqual(removed,['demo-file']);assert.equal(await db.get('SELECT id FROM notes WHERE id=?','note'),undefined);
+  assert.equal((await db.get('SELECT name FROM organizations WHERE id=?','real')).name,'Real customer');
+  assert.equal((await db.get('SELECT COUNT(*) n FROM properties WHERE organization_id=?',org)).n,1);
+  await db.run('UPDATE demo_workspaces SET expires_at=0 WHERE organization_id=?',org);
+  await assert.rejects(demos.reset(org,prospect),e=>e.status===403);
+  await call(owner,'/api/master/demos/extend',{organizationId:org});assert.ok(Number((await demos.lookup(org)).expires_at)>Date.now());
+  await demos.reset(org,prospect);
+ }finally{await db.close();}
+});
