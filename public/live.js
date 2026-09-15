@@ -21,6 +21,18 @@ const empty=(message)=>`<div class="empty">${esc(message)}</div>`;
 const propertyName=id=>data.properties.find(p=>p.id===id)?.name||'Residence';
 const isStaff=()=>['admin','employee'].includes(data.user.role);
 const btn=(text,action,id='',primary=false)=>`<button class="${primary?'primary':''}" data-action="${action}" data-id="${esc(id)}">${esc(text)}</button>`;
+// Keep the overview resilient when an older API response does not include
+// dashboard tile configuration. The counts are derived from the records we
+// already have, so a missing optional setting can never blank the workspace.
+function dashboardTileGroups(){
+ const properties=Array.isArray(data?.properties)?data.properties:[];
+ const arrivals=Array.isArray(data?.arrivals)?data.arrivals:[];
+ const inspections=Array.isArray(data?.inspections)?data.inspections:[];
+ const work=Array.isArray(data?.work)?data.work:[];
+ const requests=Array.isArray(data?.requests)?data.requests:[];
+ const tile=(title,count,action)=>`<button class="card dashboard-tile" data-action="navigate" data-id="${action}"><span class="eyebrow">${esc(title)}</span><strong>${count}</strong><span>View details →</span></button>`;
+ return `<section class="dashboard-section"><h2>Residences &amp; Arrivals</h2><div class="dashboard-tiles">${tile('Residences',properties.length,'properties')}${tile('Upcoming arrivals',arrivals.filter(a=>!['completed','cancelled'].includes(a.status)).length,'arrivals')}${tile('Submitted arrivals',arrivals.filter(a=>a.status==='submitted').length,'arrivals')}</div></section><section class="dashboard-section"><h2>Inspections &amp; Service</h2><div class="dashboard-tiles">${tile('Inspection reports',inspections.filter(i=>i.status==='published').length,'inspections')}${tile('Upcoming inspections',inspections.filter(i=>i.status==='draft').length,'inspections')}${tile('Work orders',work.filter(w=>w.status!=='completed').length,'work')}${tile('Service requests',requests.filter(r=>r.status!=='completed').length,'requests')}</div></section>`;
+}
 const shoppingCategories=['Produce','Dairy & Eggs','Meat & Seafood','Bakery','Pantry Staples','Beverages','Snacks','Frozen Foods','Household Supplies','Cleaning Supplies','Paper Products','Personal Care','Pet Supplies','Baby & Child','Outdoor & Garden','Pharmacy & Wellness','Other'];
 const shoppingCategorySelect=()=>select('category','Category','<option value="">Choose a category</option>'+shoppingCategories.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join(''));
 const shoppingUnits=['gallon','dozen','pound','individual','case','package','bottle','box','bag','can','ounce','other'];
