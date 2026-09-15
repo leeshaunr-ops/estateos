@@ -12,7 +12,7 @@ import {createCommunications} from './communications.mjs';
 import {sendInspectionEmail} from './inspection-email.mjs';
 import {lockFamily, linkAcceptedMember, revokeMemberAccess} from './family-access.mjs';
 import {invitationHistory, cancelInvitation, claimInvitation} from './invitations.mjs';
-import {sendInvitation} from './email.mjs';
+import {sendInvitation,sendPasswordReset} from './email.mjs';
 import http from 'node:http';
 import {createSaas,platformOwner} from './saas.mjs';
 import {createDemos} from './demos.mjs';
@@ -263,6 +263,32 @@ async function api(req, res, url, user) {
         if(!await security.verify(u,b.code))fail(401,'Enter your authenticator code or a recovery code.');
         (await session(res, req, u));
         return json(res, 200, { user: safeUser(u) });
+    }
+    if (p === '/api/password-reset/request' && method === 'POST') {
+        rate(req, 'password-reset');
+        const b = await body(req), email = String(b.email || '').trim().toLowerCase();
+        const u = await get('SELECT * FROM users WHERE LOWER(email)=? AND active=1', email);
+        if (u) {
+            const token = randomBytes(32).toString('hex');
+            await run('DELETE FROM password_resets WHERE user_id=? AND used_at IS NULL', u.id);
+            await run('INSERT INTO password_resets(token_hash,user_id,expires_at,used_at,created_at) VALUES(?,?,?,?,?)', hash(token), u.id, Date.now() + 3600000, null, now());
+            await sendPasswordReset({to:u.email, resetPath:`/login?reset=${token}`});
+        }
+        return json(res, 200, { ok: true });
+    }
+    if (p === '/api/password-reset' && method === 'POST') {
+        rate(req, 'password-reset');
+        const b = await body(req), token = String(b.token || ''), newPassword = String(b.newPassword || '');
+        if (!/^[a-f0-9]{64}$/.test(token)) fail(422, 'This reset link is invalid or expired.');
+        if (newPassword !== String(b.confirmPassword || '')) fail(422, 'New passwords must match.');
+        const pw = passwordHash(newPassword), reset = await get('SELECT * FROM password_resets WHERE token_hash=? AND used_at IS NULL AND expires_at>?', hash(token), Date.now());
+        if (!reset) fail(422, 'This reset link is invalid or expired.');
+        await transaction(async () => {
+            await run('UPDATE users SET password_hash=? WHERE id=? AND active=1', pw, reset.user_id);
+            await run('UPDATE password_resets SET used_at=? WHERE token_hash=?', now(), reset.token_hash);
+            await run('DELETE FROM sessions WHERE user_id=?', reset.user_id);
+        });
+        return json(res, 200, { ok: true });
     }
     if (p === '/api/accept-invite' && method === 'POST') {
         rate(req, 'invite');
@@ -1053,7 +1079,7 @@ const server = http.createServer(async (req, res) => {
         if (file === 'live.html') res.setHeader('X-Robots-Tag','noindex, nofollow');
         if (url.pathname === '/') res.setHeader('Vary','Cookie');
         res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://nominatim.openstreetmap.org https://photon.komoot.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");
-        res.writeHead(200, { 'Content-Type': file.endsWith('.html') ? 'text/html; charset=utf-8' : file.endsWith('.css') ? 'text/css' : 'text/javascript', 'Cache-Control': 'no-store' });
+        res.writeHead(200, { 'Content-Type': file.endsWith('.html') ? 'text/html; charset=utf-8' : file.endsWith('.css') ? 'text/css' : 'text/javascript', 'Cache-Control': 'no-store, max-age=0, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' });
         if (req.method === 'HEAD') return res.end();
         fs.createReadStream(path.join(root, 'public', file)).pipe(res);
     }
