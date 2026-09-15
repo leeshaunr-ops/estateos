@@ -100,6 +100,7 @@ function auth(configured,invitation){
 function companyLogo(){return data&&data.workspaceLogo?`<img class="company-logo" src="${esc(data.workspaceLogo)}" alt="">`:"";}
 function logoField(){return `<div class="field"><label for="f-companyLogo">Company logo (optional)</label><input id="f-companyLogo" name="companyLogo" type="file" accept="image/png,image/jpeg,image/webp"></div>`;}
 async function readCompanyLogo(form){const file=form?.querySelector("[name=companyLogo]")?.files?.[0];if(!file)return "";if(file.size>2*1024*1024)throw Error("Logo must be smaller than 2 MB.");return await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(",")[1]||"");reader.onerror=reject;reader.readAsDataURL(file);});}
+function fitWorkspaceName(){}
 function initializeNavigation(){}
 function recordNavigation(){}
 function groupedNavigation(nav){return nav.map(function(item){return `<button class="nav-item ${page===item[0]?"active":""}" data-action="navigate" data-id="${esc(item[0])}">${esc(item[1])}</button>`;}).join("");}
