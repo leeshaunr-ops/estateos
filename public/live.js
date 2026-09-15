@@ -1,3 +1,4 @@
+function assignmentSummary(w){const assignee=w.assigned_name||w.vendor_name||w.assignee_name||w.account_manager_name;return "<p class=\"work-assignment\"><strong>Assignment:</strong> "+esc(assignee||"Unassigned")+(w.vendor_name&&w.assigned_name?" · "+esc(w.vendor_name):"")+"</p>";}
 function residenceSummary(p){
  const reports=data.inspections.filter(i=>i.property_id===p.id&&i.status==='published').sort((a,b)=>(b.inspection_date||'').localeCompare(a.inspection_date||'')||(b.published_at||'').localeCompare(a.published_at||''));
  const last=reports[0],due=last?.next_due;
