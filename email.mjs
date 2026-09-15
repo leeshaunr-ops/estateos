@@ -34,3 +34,11 @@ export async function sendInvitation({to, invitePath, company = 'your workspace'
     return result.id ? {emailStatus:'sent'} : {emailStatus:'failed'};
   } catch { return {emailStatus:'failed'}; }
 }
+
+export async function sendPasswordReset({to, resetPath}, {env = process.env, fetcher = fetch} = {}) {
+  if (!env.RESEND_API_KEY) return {emailStatus:'not_configured'};
+  let link;
+  try { const base=new URL(env.APP_URL||'https://estateaegis.com'); if(base.protocol!=='https:')throw Error('Invalid app URL'); link=new URL(resetPath,base.origin); if(link.origin!==base.origin||link.pathname!=='/login'||!/^\/login\?reset=[a-f0-9]{64}$/.test(resetPath))throw Error('Invalid reset link'); } catch { return {emailStatus:'failed'}; }
+  const payload={from:env.EMAIL_FROM||'EstateAegis <notifications@estateaegis.com>',to:[to],subject:'Reset your EstateAegis password',text:`Reset your EstateAegis password here: ${link.href}\n\nThis link expires in one hour and can be used once. If you did not request this, you can ignore this email.`,html:`<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:28px;color:#1f2933;background:#f7f8fa"><h1 style="color:#8b242b">EstateAegis</h1><p>We received a request to reset your password.</p><p><a href="${escapeHtml(link.href)}" style="display:inline-block;background:#8b242b;color:white;padding:14px 22px;text-decoration:none;border-radius:8px">Reset password</a></p><p>This link expires in one hour and can be used once. If you did not request this, you can ignore this email.</p></div>`};
+  try { const response=await fetcher('https://api.resend.com/emails',{method:'POST',signal:AbortSignal.timeout(15000),headers:{Authorization:`Bearer ${env.RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify(payload)}); if(!response.ok)return {emailStatus:'failed'}; const result=await response.json(); return result.id?{emailStatus:'sent'}:{emailStatus:'failed'}; } catch { return {emailStatus:'failed'}; }
+}
