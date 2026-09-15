@@ -38,7 +38,7 @@ export function createStripeClient({secret=process.env.STRIPE_SECRET_KEY, origin
     if(site.protocol!=='https:' || site.username || site.password || site.search || site.hash) throw new Error('A secure public URL is required.');
     if(!organizationId || !attemptId) throw new Error('Checkout identity required.');
     if(![successPath,cancelPath].every(p=>p.startsWith('/')&&!p.startsWith('//')&&new URL(p,site.origin).origin===site.origin))throw Error('Invalid checkout return URL.');
-    const fields={mode:'subscription',success_url:site.origin+successPath,cancel_url:site.origin+cancelPath,client_reference_id:organizationId,'subscription_data[metadata][organization_id]':organizationId,'metadata[organization_id]':organizationId,'metadata[attempt_id]':attemptId,'payment_method_types[0]':'card',billing_address_collection:'required'};
+    const fields={mode:'subscription',success_url:site.origin+successPath,cancel_url:site.origin+cancelPath,client_reference_id:organizationId,'subscription_data[metadata][organization_id]':organizationId,'subscription_data[trial_period_days]':'30','metadata[organization_id]':organizationId,'metadata[attempt_id]':attemptId,'payment_method_types[0]':'card',billing_address_collection:'required'};
     if(customer)fields.customer=customer;else fields.customer_email=email;
     const items=[[plans[plan],1],...(extraSeats?[[addons.seats,extraSeats]]:[]),...(storagePacks?[[addons.storage,storagePacks]]:[])];
     for(let i=0;i<items.length;i++){fields[`line_items[${i}][price]`]=await price(items[i][0]);fields[`line_items[${i}][quantity]`]=String(items[i][1]);}
