@@ -1,5 +1,5 @@
 'use strict';
-const plans={essentials:{price:7900,residences:50,seats:2,gb:10},growth:{price:12900,residences:150,seats:5,gb:30},professional:{price:19900,residences:300,seats:10,gb:50}};
+const plans={essentials:{price:5900,residences:50,seats:2,gb:10},growth:{price:10900,residences:150,seats:5,gb:30},professional:{price:17900,residences:300,seats:10,gb:50}};
 const $=id=>document.getElementById(id),params=new URLSearchParams(location.search),money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n/100);
 if(plans[params.get('plan')])$('signup-plan').value=params.get('plan');
 function quote(){const p=plans[$('signup-plan').value],seats=Number($('extra-seats').value),packs=Number($('storage-packs').value);return {...p,extraSeats:seats,storagePacks:packs,total:p.price+seats*1500+packs*500};}
