@@ -14,3 +14,9 @@ body{overflow:visible}
 }
 
 .ea-brand-icon{display:block;width:40px;height:40px;object-fit:contain;flex-shrink:0}.site-footer .ea-brand-icon{width:30px;height:30px}
+
+/* Refined public footer */
+.site-footer{display:grid;grid-template-columns:1.35fr 1fr 1fr 1.25fr;gap:42px;align-items:start;border-top:1px solid var(--line);margin-top:20px;padding-top:42px;padding-bottom:42px}
+.site-footer .brand{font-size:25px}.footer-brand p{max-width:220px;margin:14px 0 0;font-size:14px}.footer-label{margin:0 0 13px;color:var(--ink);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.footer-contact,.footer-connect,.footer-legal{display:grid;align-content:start;gap:10px}.footer-contact a,.footer-connect>a,.legal-links a{text-decoration:none;color:var(--muted);font-size:14px}.footer-contact a:hover,.footer-connect>a:hover,.legal-links a:hover{color:var(--wine)}.social-links{display:flex;gap:14px;flex-wrap:wrap}.social-links a{display:inline-flex;align-items:center;gap:7px;color:var(--wine);font-size:14px;text-decoration:none}.social-links a:hover{text-decoration:underline}.social-links svg{width:19px;height:19px;fill:currentColor;stroke:currentColor;stroke-width:1.5}.social-links a:nth-child(2) svg{fill:none}.legal-links{display:flex;flex-wrap:wrap;gap:8px 16px}.legal-links a{white-space:nowrap}
+@media(max-width:1000px){.site-footer{grid-template-columns:1fr 1fr;gap:30px}}
+@media(max-width:720px){.site-footer{display:grid;grid-template-columns:1fr 1fr;gap:26px;padding-top:32px;padding-bottom:32px}.footer-brand,.footer-legal{grid-column:1/-1}.site-footer address{margin:0}.footer-contact,.footer-connect{gap:9px}}
