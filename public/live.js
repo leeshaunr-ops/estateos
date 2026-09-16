@@ -111,7 +111,7 @@ function groupedNavigation(nav){
  let saved={};try{saved=JSON.parse(localStorage.getItem(sidebarStorageKey())||'{}')||{};}catch{}
  const active=page==='property'?'properties':page==='inspection'?'inspections':page==='asset-inspection'?'assets':page;
  const item=([id,title])=>`<button data-action="navigate" data-id="${id}" class="nav-item ${active===id?'active':''}" ${active===id?'aria-current="page"':''}>${esc(title)}</button>`;
- const direct=nav.filter(n=>n[0]==='dashboard').map(item).join('');
+ const direct=nav.filter(n=>['dashboard','messages'].includes(n[0])).map(item).join('');
  const grouped=groups.map(([id,title,ids])=>{const entries=ids.map(key=>nav.find(n=>n[0]===key)).filter(Boolean);if(!entries.length)return '';const open=entries.some(n=>n[0]===active)||saved[id]===true;return `<details class="nav-group" data-nav-group="${id}" ${open?'open':''}><summary>${esc(title)}<span class="nav-chevron" aria-hidden="true">›</span></summary><div class="nav-group-items">${entries.map(item).join('')}</div></details>`;}).join('');
  return `<nav aria-label="Main navigation" class="grouped-nav">${direct}${grouped}</nav>`;
 }
