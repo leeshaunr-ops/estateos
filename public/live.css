@@ -112,7 +112,11 @@ th{background:#faf8f3;color:#746c5e;font-weight:600}td{color:#514b41}a,.link-but
 .topbar-unread{display:inline-flex;align-items:center;margin-left:12px;padding:5px 9px;border-radius:999px;background:#fbe9e7;color:#9d322b;font-size:12px;font-weight:700;white-space:nowrap}
 
 
-/* Compact company identity in the workspace sidebar */
-.workspace-brand{display:flex;align-items:center;gap:10px;min-width:0;margin:0 0 24px;padding:8px 12px 18px;border-bottom:1px solid var(--line)}
-.workspace-brand-icon{width:28px;height:30px;flex:0 0 auto;object-fit:contain}
-.workspace-brand strong{display:-webkit-box;min-width:0;overflow:hidden;color:#3b342b;font-size:22px;font-weight:650;line-height:1.2;letter-spacing:-.35px;overflow-wrap:anywhere;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+/* Workspace logo and responsive company wordmark */
+.workspace-brand{display:grid;justify-items:center;gap:12px;min-width:0;margin:0 0 24px;padding:8px 12px 18px;border-bottom:1px solid var(--line);text-align:center}
+.workspace-brand-logo{width:72px;height:64px;display:grid;place-items:center}
+.workspace-brand-logo:empty{display:none}
+.workspace-brand-logo img{display:block;width:100%;height:100%;object-fit:contain}
+.workspace-brand strong{display:block;max-width:100%;min-width:0;overflow:hidden;color:#3b342b;font-size:22px;font-weight:650;line-height:1.2;letter-spacing:-.35px;overflow-wrap:anywhere;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.topbar .company-brand{display:flex;align-items:center;gap:8px}
+.powered-by-logo{width:24px;height:26px;flex:0 0 auto;object-fit:contain}
