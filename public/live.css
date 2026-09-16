@@ -104,3 +104,5 @@ th{background:#faf8f3;color:#746c5e;font-weight:600}td{color:#514b41}a,.link-but
 .collapse-count{display:inline-flex;align-items:center;justify-content:center;min-width:1.7rem;height:1.7rem;margin-left:.5rem;padding:0 .45rem;border-radius:999px;background:#edf2f5;color:#315a78;font-size:.85rem;font-weight:700;vertical-align:middle}
 
 .inspection-recipient-line{display:flex;align-items:center;gap:16px;flex-wrap:wrap}.inspection-recipient-line p{margin:0}.inspection-recipient-line button{margin:0}
+
+.inspection-recipient-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}.inspection-recipient-head button{margin:0}
