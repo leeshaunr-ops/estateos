@@ -98,3 +98,5 @@ th{background:#faf8f3;color:#746c5e;font-weight:600}td{color:#514b41}a,.link-but
 .dashboard-tiles{margin-bottom:26px}.dashboard-group{margin-bottom:26px}.two{gap:28px;padding-top:28px}.two>.panel{margin:0 0 24px}.inspection-row{margin:16px 0;padding:20px 24px}.inspection-row+.inspection-row{margin-top:18px}.inspection-row-body{margin-top:18px;padding-top:18px}
 
 .onboarding-panel{margin-bottom:32px!important}.dashboard-group{margin-bottom:32px!important}.dashboard-group+.dashboard-group{margin-top:24px}.two{margin-top:32px!important;gap:32px!important}.two>.panel{margin-bottom:32px!important}
+
+.collapsible-panel>summary{cursor:pointer;list-style:none;font-size:1.35rem;font-weight:700;color:var(--ink);padding:0}.collapsible-panel>summary::-webkit-details-marker{display:none}.collapsible-panel>summary:after{content:'+';float:right;color:var(--gold);font-size:1.5rem}.collapsible-panel[open]>summary:after{content:'−'}.collapsible-content{margin-top:24px}.residence-overview-panels{align-items:start}.residence-overview-panels>.collapsible-panel{margin-bottom:0}
