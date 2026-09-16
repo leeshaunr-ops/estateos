@@ -135,6 +135,21 @@ function dashboardTileGroups(){const groups=[['Residences & Arrivals', [['Reside
 function scheduleView(){return head('Staff schedules','Review staff assignments and upcoming work.',btn('Back','browser-back'))+'<div class="panel">'+workRows(data.work||[])+'</div>';}
 function staffAction(name,key){if(name==='staff-schedule')return dialog('Staff schedule','<p class="muted">Schedule details can be managed from assigned work orders.</p>'+btn('Back','browser-back'),'Close',async()=>{});return false;}
 function staffView(){const users=(data.users||[]).filter(u=>u.role!=='client');return head('Staff & vendors','Manage team access and assignments.',btn('Add staff member','new-invite','',true))+'<div class="panel">'+users.map(u=>'<div class="row"><div><strong>'+esc(u.name||u.email)+'</strong><div class="muted">'+esc(u.email||'')+' · '+esc(label(u.role))+'</div></div>'+badge(u.active===false?'inactive':'active')+'</div>').join('')+('</div>');}
+function messagesView(){
+ const m=data.messaging||{threads:[],people:[]};
+ if(activeMessageThread&&messageDetail){
+  const t=messageDetail.thread;
+  return head(t.subject||'Conversation','Messages',btn('Back to messages','message-back'))+`
+   <div class="panel message-detail">
+    <div class="message-detail-head"><div><p class="eyebrow">${t.kind==='announcement'?'COMPANY-WIDE':'DIRECT MESSAGE'}</p><h2>${esc(t.subject)}</h2></div><div class="actions">${messageDetail.hasOlder?btn('Load older messages','message-older'):''}${btn('Refresh','message-refresh')}</div></div>
+    <div class="message-list">${messageDetail.messages.map(x=>`<article class="message-bubble ${x.sender_id===data.user.id?'mine':''}"><strong>${esc(x.sender_name||'Unknown user')}</strong><p>${esc(x.body)}</p><time>${esc(new Date(x.created_at).toLocaleString())}</time></article>`).join('')||empty('No messages yet.')}</div>
+    <div class="message-reply-actions">${btn('Reply','message-reply','',true)}</div>
+   </div>`;
+ }
+ return head('Messages','Talk with staff, vendors, employees, clients, or the whole company.',btn('New message','message-new','',true))+
+  `<div class="panel message-inbox">${m.threads.map(t=>`<button class="message-thread ${Number(t.unread)>0?'unread':''}" data-action="message-open" data-id="${esc(t.id)}"><span class="message-thread-copy"><strong>${esc(t.subject)}</strong><span>${esc((t.people||[]).map(p=>p.name).join(', '))}</span></span><span class="message-thread-meta">${Number(t.unread)>0?'<b>'+esc(t.unread)+' unread</b>':''}<small>${t.updated_at?esc(new Date(t.updated_at).toLocaleString()):''}</small></span></button>`).join('')||empty('No conversations yet. Start a message to someone on your team or send a company-wide update.')}</div>`;
+}
+
 function view(){
  if(page==='approvals')return approvalsView();if(page==='automation')return automationView();if(page==='email-activity')return deliveryView();if(page==='dashboard'&&data.user.role==='client')return clientHome();
  if(page==='messages')return messagesView();
