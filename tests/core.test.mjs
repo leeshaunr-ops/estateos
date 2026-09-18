@@ -36,6 +36,14 @@ test('Real accounts, persistence, tenant scope, inspection/photo/PDF, vendor rev
  await clientA.req('requests',{propertyId:pb.id,title:'Unauthorized'},404);
  await clientA.req('invoices',{clientId:ca.id},403);await vendorA.req('invoices',{},403);await employee.req('invoices',{},403);
  const asset=await admin.req('assets',{propertyId:pa.id,name:'Generator',category:'Equipment'},201);
+ const privateAsset=await admin.req('assets',{propertyId:pb.id,name:'Private generator',category:'Equipment'},201);
+ await admin.req('asset-inspections',{assetId:asset.id,date:'2026-09-10',answers:[{key:'engine',label:'Engine condition',status:'pass'}],notes:'Earlier inspection'},201);
+ await admin.req('asset-inspections',{assetId:asset.id,date:'2026-09-18',answers:[{key:'engine',label:'Engine condition',status:'attention',note:'Battery needs service'}],notes:'Latest inspection'},201);
+ await admin.req('asset-inspections',{assetId:privateAsset.id,date:'2026-09-17',answers:[{key:'engine',label:'Private check',status:'pass'}],notes:'Other residence inspection'},201);
+ assert.equal((await admin.req('data')).asset_inspections.filter(row=>row.asset_id===asset.id).length,2,'asset inspections append rather than overwrite');
+ const latestReport=await admin.raw('assets/latest-inspections.pdf');assert.equal(latestReport.status,200);assert.equal(latestReport.headers.get('content-type'),'application/pdf');assert.ok((await latestReport.arrayBuffer()).byteLength>500,'latest asset inspection report returns a PDF');
+ const employeeReport=await employee.raw('assets/latest-inspections.pdf');assert.equal(employeeReport.status,200);const employeePdf=Buffer.from(await employeeReport.arrayBuffer()).toString('latin1');assert.ok(employeePdf.includes('Residence A'));assert.ok(!employeePdf.includes('Private generator'),'employee reports only include assigned residences');
+ assert.equal((await clientA.raw('assets/latest-inspections.pdf')).status,403,'clients cannot download the staff asset report');
  await admin.req('work',{propertyId:pb.id,assetId:asset.id,title:'Wrong property'},422);
  const job=await admin.req('work',{propertyId:pa.id,assetId:asset.id,title:'Generator service',vendorId:va.id},201);
  assert.equal((await vendorA.req('data')).work.length,1);assert.equal((await vendorB.req('data')).work.length,0);
