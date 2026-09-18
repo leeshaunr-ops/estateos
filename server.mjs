@@ -336,6 +336,20 @@ async function api(req, res, url, user) {
         res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="EstateAegis-Inspection-${row.id}.pdf"`, 'Cache-Control': 'no-store' });
         return res.end(pdf);
     }
+    if (p === '/api/assets/latest-inspections.pdf' && method === 'GET') {
+        roles(user, 'admin', 'employee');
+        const assets = await all('SELECT a.id,a.name,a.category,a.property_id,p.name property_name,p.timezone FROM assets a JOIN properties p ON p.id=a.property_id WHERE p.organization_id=?', user.organization_id);
+        const visibleAssets = await filterAsync(assets, async asset => { try { await property(user, asset.property_id, 'read'); return true; } catch { return false; } });
+        if (!visibleAssets.length) fail(404, 'No accessible assets are available for the report.');
+        const rows = await all('SELECT ai.*,a.name asset_name,a.category,a.property_id,p.name property_name,p.timezone,u.name inspector_name FROM asset_inspections ai JOIN assets a ON a.id=ai.asset_id JOIN properties p ON p.id=a.property_id LEFT JOIN users u ON u.id=ai.inspector_id WHERE ai.asset_id IN (' + visibleAssets.map(() => '?').join(',') + ') ORDER BY ai.inspection_date DESC,ai.created_at DESC', ...visibleAssets.map(asset => asset.id));
+        const seen = new Set(), latest = rows.filter(row => { if (seen.has(row.asset_id)) return false; seen.add(row.asset_id); return true; });
+        if (!latest.length) fail(404, 'No completed asset inspections are available to report yet.');
+        const answers = latest.flatMap(row => JSON.parse(row.answers || '[]').map(answer => ({ ...answer, section: `${row.asset_name} · ${row.property_name} · ${row.inspection_date}` })));
+        const report = { id: 'Latest asset inspections', completedAt: now(), timezone: latest[0].timezone || 'UTC', company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, companyLogo: (await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?', user.organization_id))?.logo_data || '', property: [...new Set(latest.map(row => row.property_name))].length === 1 ? latest[0].property_name : 'Multiple residences', client: '', date: latest[0].inspection_date, inspector: [...new Set(latest.map(row => row.inspector_name).filter(Boolean))].length === 1 ? latest[0].inspector_name : 'Multiple inspectors', overall: answers.some(answer => answer.status === 'attention') ? 'Action needed' : 'Passed', answers, summary: `Most recently completed inspection for each of ${latest.length} asset(s)`, notes: latest.map(row => `${row.asset_name} (${row.inspection_date}) — ${row.notes || 'No overall notes recorded.'}`).join('\n'), fileIds: [] };
+        const pdf = inspectionPdf(report, []);
+        res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="EstateAegis-Latest-Asset-Inspections.pdf"', 'Cache-Control': 'no-store' });
+        return res.end(pdf);
+    }
     if (/^\/api\/asset-inspections\/[^/]+\/pdf$/.test(p) && method === 'GET') {
         const row = await get('SELECT ai.*,a.name asset_name,a.category,a.property_id FROM asset_inspections ai JOIN assets a ON a.id=ai.asset_id WHERE ai.id=?', p.split('/')[3]);
         if (!row) fail(404, 'Asset inspection not found.');
