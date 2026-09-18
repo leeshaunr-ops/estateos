@@ -43,7 +43,7 @@ test('Real accounts, persistence, tenant scope, inspection/photo/PDF, vendor rev
  assert.equal((await admin.req('data')).asset_inspections.filter(row=>row.asset_id===asset.id).length,2,'asset inspections append rather than overwrite');
  const latestReport=await admin.raw('assets/latest-inspections.pdf');assert.equal(latestReport.status,200);assert.equal(latestReport.headers.get('content-type'),'application/pdf');assert.ok((await latestReport.arrayBuffer()).byteLength>500,'latest asset inspection report returns a PDF');
  const employeeReport=await employee.raw('assets/latest-inspections.pdf');assert.equal(employeeReport.status,200);const employeePdf=Buffer.from(await employeeReport.arrayBuffer()).toString('latin1');assert.ok(employeePdf.includes('Residence A'));assert.ok(!employeePdf.includes('Private generator'),'employee reports only include assigned residences');
- assert.equal((await clientA.raw('assets/latest-inspections.pdf')).status,403,'clients cannot download the staff asset report');
+ const clientReport=await clientA.raw('assets/latest-inspections.pdf');assert.equal(clientReport.status,200,'clients can download their residence asset report');const clientPdf=Buffer.from(await clientReport.arrayBuffer()).toString('latin1');assert.ok(clientPdf.includes('Generator'));assert.ok(!clientPdf.includes('Private generator'),'clients only see assets at their own residence');
  await admin.req('work',{propertyId:pb.id,assetId:asset.id,title:'Wrong property'},422);
  const job=await admin.req('work',{propertyId:pa.id,assetId:asset.id,title:'Generator service',vendorId:va.id},201);
  assert.equal((await vendorA.req('data')).work.length,1);assert.equal((await vendorB.req('data')).work.length,0);
