@@ -16,3 +16,24 @@
 .resident-sidebar .identity small{color:#81796e}
 .resident-sidebar .identity button{border-radius:8px}
 @media(max-width:760px){.resident-sidebar .resident-nav{gap:15px}.resident-sidebar .resident-nav-item{min-height:46px}.resident-sidebar .resident-welcome{padding-bottom:14px}}
+
+/* Compact, collapsible resident navigation. */
+.shell .resident-sidebar{padding:18px 14px}
+.resident-sidebar .workspace-brand{gap:7px;margin:0 0 12px;padding:4px 8px 12px}
+.resident-sidebar .workspace-brand-logo{width:50px;height:44px}
+.resident-sidebar .workspace-brand strong{font-size:18px}
+.resident-sidebar .resident-welcome{padding:2px 10px 12px;margin-bottom:4px}
+.resident-welcome .eyebrow{font-size:9px;letter-spacing:.14em;margin-bottom:5px}
+.resident-welcome strong{font-size:16px}
+.resident-welcome p{font-size:11px;line-height:1.4;margin-top:4px}
+.shell aside .resident-nav{gap:9px}
+.resident-nav-primary{grid-template-columns:1fr 1fr;gap:6px}
+.shell aside .resident-nav-item{min-height:36px;padding:7px 10px;border-radius:7px;font-size:13px}
+.shell aside details.resident-nav-section{display:block;margin:0;border:1px solid #eee8de;border-radius:8px;background:#fff}
+.shell aside details.resident-nav-section>summary.resident-nav-label{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:38px;padding:8px 10px;border-radius:7px;color:#6d6252;font-size:10px;letter-spacing:.11em;line-height:1.2}
+.shell aside details.resident-nav-section>summary.resident-nav-label:hover{background:#f8f5ef;color:#8b242b}
+.shell aside details.resident-nav-section>summary.resident-nav-label:focus-visible{outline:2px solid #8b242b;outline-offset:2px}
+.resident-nav-items{display:grid;gap:2px;padding:2px 7px 7px}
+.resident-nav-items .resident-nav-item{min-height:34px}
+.resident-sidebar .identity{padding-top:12px;margin-top:14px}
+@media(max-width:760px){.resident-sidebar .workspace-brand{margin-bottom:10px}.resident-sidebar .resident-nav{gap:8px}.resident-sidebar .resident-welcome{padding-bottom:9px}}
