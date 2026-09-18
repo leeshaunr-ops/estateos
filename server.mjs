@@ -1030,9 +1030,43 @@ async function api(req, res, url, user) {
         fail(404, 'Endpoint not found.');
     return json(res, 201, result);
 }
-function validateAnswers(answers) { if (!Array.isArray(answers) || answers.length !== template.length)
-    fail(422, 'Checklist does not match the template.'); return template.map(t => { const a = answers.find(x => x.key === t.key); if (!a || !['unchecked', 'pass', 'monitor', 'attention', 'na'].includes(a.status))
-    fail(422, 'Invalid inspection result.'); return { ...t, status: a.status, note: note(a.note) }; }); }
+function validateAnswers(answers) {
+    if (!Array.isArray(answers) || answers.length < template.length)
+        fail(422, 'Checklist does not match the template.');
+    const keys = new Set();
+    for (const answer of answers) {
+        if (!answer || typeof answer.key !== 'string' || keys.has(answer.key))
+            fail(422, 'Checklist contains a duplicate or invalid item.');
+        keys.add(answer.key);
+    }
+    const validStatuses = ['unchecked', 'pass', 'monitor', 'attention', 'na'];
+    const standard = template.map(t => {
+        const a = answers.find(x => x.key === t.key);
+        if (!a || !validStatuses.includes(a.status))
+            fail(422, 'Invalid inspection result.');
+        return { ...t, status: a.status, note: note(a.note) };
+    });
+    const roomChecks = { condition: 'Overall condition', readiness: 'Cleanliness and readiness', fixtures: 'Fixtures and equipment' };
+    const grouped = new Map();
+    const custom = answers.filter(a => !template.some(t => t.key === a.key)).map(a => {
+        const match = /^space-(.+)-(condition|readiness|fixtures)$/.exec(a.key);
+        if (!match || !validStatuses.includes(a.status))
+            fail(422, 'Invalid room checklist item.');
+        let roomKey;
+        try { roomKey = decodeURIComponent(match[1]); } catch { fail(422, 'Invalid room checklist item.'); }
+        if (!roomKey || encodeURIComponent(roomKey) !== match[1] || a.label !== roomChecks[match[2]])
+            fail(422, 'Invalid room checklist item.');
+        const roomName = note(a.room_name, 160);
+        if (!roomName || note(a.section, 160) !== roomName)
+            fail(422, 'Invalid room checklist item.');
+        if (!grouped.has(roomKey)) grouped.set(roomKey, new Set());
+        grouped.get(roomKey).add(match[2]);
+        return { key: a.key, section: roomName, label: roomChecks[match[2]], status: a.status, note: note(a.note), room_key: roomKey, room_name: roomName };
+    });
+    if ([...grouped.values()].some(checks => checks.size !== Object.keys(roomChecks).length || Object.keys(roomChecks).some(key => !checks.has(key))))
+        fail(422, 'Each room needs all of its checklist items.');
+    return [...standard, ...custom];
+}
 const server = http.createServer(async (req, res) => {
     try {
         const host = req.headers.host || '';
