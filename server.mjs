@@ -337,7 +337,7 @@ async function api(req, res, url, user) {
         return res.end(pdf);
     }
     if (p === '/api/assets/latest-inspections.pdf' && method === 'GET') {
-        roles(user, 'admin', 'employee');
+        roles(user, 'admin', 'employee', 'client');
         const assets = await all('SELECT a.id,a.name,a.category,a.property_id,p.name property_name,p.timezone FROM assets a JOIN properties p ON p.id=a.property_id WHERE p.organization_id=?', user.organization_id);
         const visibleAssets = await filterAsync(assets, async asset => { try { await property(user, asset.property_id, 'read'); return true; } catch { return false; } });
         if (!visibleAssets.length) fail(404, 'No accessible assets are available for the report.');
