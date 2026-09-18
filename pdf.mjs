@@ -25,6 +25,15 @@ export function inspectionPdf(report,photos=[]){
  for(const [label,value] of [['Family',report.client||'Not specified'],['Inspected by',report.inspector||'Not recorded'],['Inspection date',report.date||'Not recorded'],['Completed',reportTimestamp(report.completedAt)],['Report reference',report.id||'Not recorded']]){
   const row=lines(value,390,10);need(row.length*15+9);text(label,40,y,10,C.muted,true);for(const line of row){text(line,162,y,10);y+=15;}y+=5;
  }
+ if(report.assetDetails?.length){
+  heading('Asset and equipment details');
+  for(const asset of report.assetDetails){
+   need(42);text(`${asset.name||'Asset'}${asset.category?' · '+asset.category:''}`,40,y,11,C.brand,true);y+=19;
+   const fields=[['Location',asset.location],['Model',asset.model],['Serial',asset.serial],['Warranty',asset.warranty],['Mileage',asset.mileage],['Hours',asset.hours]];
+   for(let i=0;i<fields.length;i+=2){const left=lines(`${fields[i][0]}: ${fields[i][1]||'Not recorded'}`,245,9),right=lines(`${fields[i+1][0]}: ${fields[i+1][1]||'Not recorded'}`,245,9);const count=Math.max(left.length,right.length);need(count*13+4);for(let line=0;line<count;line++){if(left[line])text(left[line],44,y+line*13,9,C.ink);if(right[line])text(right[line],315,y+line*13,9,C.ink);}y+=count*13+4;}
+  }
+  y+=8;
+ }
  y+=8;need(68);
  for(const [index,status] of ['pass','monitor','attention'].entries()){const x=40+index*180;rect(x,y,172,58,backgrounds[status]);text(String((report.answers||[]).filter(a=>a.status===status).length),x+13,y+8,21,C[status],true);text(statusLabel(status),x+13,y+36,9,C[status],true);}y+=76;
  paragraph('Overall condition: '+(report.overall||'Not recorded'),11,C.ink,520,40);
