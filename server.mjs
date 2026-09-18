@@ -460,6 +460,14 @@ async function api(req, res, url, user) {
         (await audit(user, 'property.updated', row.id));
         result = { id: row.id };
     }
+    else if (p === '/api/properties/rooms') {
+        roles(user, 'admin', 'employee');
+        const row = await property(user, b.propertyId, 'operate');
+        const profile = roomProfile(b.roomProfile);
+        await run('UPDATE properties SET room_profile=? WHERE id=?', JSON.stringify(profile), row.id);
+        await audit(user, 'property.rooms_updated', row.id);
+        result = { id: row.id, roomProfile: profile };
+    }
     else if (p === '/api/properties/archive') {
         roles(user, 'admin');
         const row = (await property(user, b.id, 'operate'));
