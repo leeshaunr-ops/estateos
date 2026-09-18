@@ -26,6 +26,12 @@ test('Real accounts, persistence, tenant scope, inspection/photo/PDF, vendor rev
  async function invite(client,role,email,extra={}){const inv=await admin.req('invitations',{role,email,...extra},201);const token=new URL('http://test'+inv.invitePath).searchParams.get('invite');return client.req('accept-invite',{token,name:email,password:pw},201);}
  await invite(clientA,'client','a@example.test',{clientId:ca.id});await invite(clientB,'client','b@example.test',{clientId:cb.id});await invite(vendorA,'vendor','va@example.test',{vendorId:va.id});await invite(vendorB,'vendor','vb@example.test',{vendorId:vb.id});const emp=await invite(employee,'employee','employee@example.test');
  assert.equal((await employee.req('data')).properties.length,0);await admin.req('access',{userId:emp.user.id,propertyId:pa.id},201);assert.equal((await employee.req('data')).properties.length,1);
+ await admin.req('properties/rooms',{propertyId:pa.id,roomProfile:{rooms:[{key:'kitchen',name:'Main kitchen',type:'Kitchen',floor:'Ground floor'}]}});
+ let roomsHome=(await admin.req('data')).properties.find(p=>p.id===pa.id);assert.equal(JSON.parse(roomsHome.room_profile).rooms[0].name,'Main kitchen');
+ await employee.req('properties/rooms',{propertyId:pa.id,roomProfile:{rooms:[{key:'kitchen',name:'Main kitchen',type:'Kitchen'},{key:'office',name:'Library office',type:'Office'}]}});
+ roomsHome=(await employee.req('data')).properties.find(p=>p.id===pa.id);assert.equal(JSON.parse(roomsHome.room_profile).rooms.length,2);
+ await clientA.req('properties/rooms',{propertyId:pa.id,roomProfile:{rooms:[]}},403);
+ await employee.req('properties/rooms',{propertyId:pb.id,roomProfile:{rooms:[]}},404);
  assert.deepEqual((await clientA.req('data')).properties.map(p=>p.id),[pa.id]);
  await clientA.req('requests',{propertyId:pb.id,title:'Unauthorized'},404);
  await clientA.req('invoices',{clientId:ca.id},403);await vendorA.req('invoices',{},403);await employee.req('invoices',{},403);
