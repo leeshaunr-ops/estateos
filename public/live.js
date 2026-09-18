@@ -105,19 +105,21 @@ async function readCompanyLogo(form){const file=form?.querySelector("[name=compa
 function fitWorkspaceName(){const brand=document.querySelector('.workspace-brand'),name=brand?.querySelector('strong');if(!brand||!name)return;name.style.whiteSpace='nowrap';let size=22;name.style.fontSize=size+'px';while(size>10&&name.scrollWidth>name.clientWidth){size=Math.max(10,size-.5);name.style.fontSize=size+'px';}if(name.scrollWidth>name.clientWidth){name.style.whiteSpace='normal';name.style.overflowWrap='anywhere';}}
 function initializeNavigation(){}
 function recordNavigation(){}
-function sidebarStorageKey(){return 'estateos-sidebar-groups:'+data.user.id;}
+function sidebarStorageKey(){return (data.user.role==='client'?'estateos-resident-nav:':'estateos-sidebar-groups:')+data.user.id;}
 function groupedNavigation(nav){
  if(data.user.role==='client'){
   const active=page==='property'?'properties':page==='inspection'?'inspections':page==='asset-inspection'?'assets':page;
   const sections=[
-   ['YOUR HOME',[['properties','My residences'],['arrivals','Arrival plans'],['shopping','Shopping list']]],
-   ['CARE & UPDATES',[['work','Service updates'],['requests','Service requests'],['inspections','Inspection reports'],['calendar','Calendar'],['documents','Home documents']]],
-   ['YOUR ACCOUNT',[['approvals','Approvals'],['profile','My profile'],['notifications','Notifications']]]
+   ['resident-home','YOUR HOME',[['properties','My residences'],['arrivals','Arrival plans'],['shopping','Shopping list']]],
+   ['resident-care','CARE & UPDATES',[['work','Service updates'],['requests','Service requests'],['inspections','Inspection reports'],['calendar','Calendar'],['documents','Home documents']]],
+   ['resident-account','YOUR ACCOUNT',[['approvals','Approvals'],['profile','My profile'],['notifications','Notifications']]]
   ];
+  let saved={};try{saved=JSON.parse(localStorage.getItem(sidebarStorageKey())||'{}')||{};}catch{}
   const direct=nav.filter(n=>['dashboard','messages'].includes(n[0]));
   const link=([id,title])=>{if(!nav.some(n=>n[0]===id))return '';const current=active===id;const unread=id==='messages'?Number(data.unreadMessages||0):0;const shown=id==='messages'?title.replace(/\s+\(\d+\)$/,''):title;return '<button data-action="navigate" data-id="'+id+'" class="resident-nav-item '+(current?'active':'')+'" '+(current?'aria-current="page"':'')+'><span>'+esc(shown)+'</span>'+(unread?'<span class="resident-unread" aria-label="'+unread+' unread">'+unread+'</span>':'')+'</button>';};
   const firstName=String(data.user.name||'').trim().split(/\s+/)[0]||'there';
-  return '<div class="resident-welcome"><div class="eyebrow">YOUR HOME</div><strong>Welcome, '+esc(firstName)+'</strong><p>Your residence, plans and updates in one place.</p></div><nav aria-label="Resident navigation" class="resident-nav"><div class="resident-nav-primary">'+direct.map(n=>link([n[0],n[1]])).join('')+'</div>'+sections.map(([title,ids])=>{const items=ids.map(link).join('');return items?'<section class="resident-nav-section"><div class="resident-nav-label">'+esc(title)+'</div>'+items+'</section>':'';}).join('')+'</nav>';
+  const grouped=sections.map(([id,title,ids])=>{const items=ids.map(link).join('');if(!items)return '';const isOpen=typeof saved[id]==='boolean'?saved[id]:ids.some(([key])=>active===key);return '<details class="nav-group resident-nav-section" data-nav-group="'+id+'" '+(isOpen?'open':'')+'><summary class="resident-nav-label">'+esc(title)+'<span class="nav-chevron" aria-hidden="true">›</span></summary><div class="resident-nav-items">'+items+'</div></details>';}).join('');
+  return '<div class="resident-welcome"><div class="eyebrow">YOUR HOME</div><strong>Welcome, '+esc(firstName)+'</strong><p>Your residence, plans and updates in one place.</p></div><nav aria-label="Resident navigation" class="resident-nav"><div class="resident-nav-primary">'+direct.map(n=>link([n[0],n[1]])).join('')+'</div>'+grouped+'</nav>';
  }
  const groups=[['residences','Residences & Clients',['properties','clients','arrivals','shopping']],['operations','Daily Operations',['work','requests','inspections','calendar','routes']],['people','Staff & Vendors',['staff','staff-schedules','vendors','users']],['records','Property Records',['assets','maintenance','documents']],['administration','Administration',['platform','workspace','billing','audit']],['account','Account',['profile','notifications']]];
  let saved={};try{saved=JSON.parse(localStorage.getItem(sidebarStorageKey())||'{}')||{};}catch{}
