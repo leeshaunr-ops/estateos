@@ -1,0 +1,18 @@
+/* Resident portal navigation: warm, personal and distinct from staff tools. */
+.shell .resident-sidebar{background:#fbfaf7;border-right-color:#e9e1d5;padding:26px 18px}
+.resident-sidebar .workspace-brand{margin-bottom:18px;border-bottom-color:#e9e1d5}
+.resident-sidebar .resident-welcome{padding:5px 11px 20px;margin-bottom:12px}
+.resident-welcome .eyebrow{font-size:10px;letter-spacing:.15em;color:#8a765c;margin-bottom:9px}
+.resident-welcome strong{display:block;color:#312f2b;font-size:18px;font-weight:650;letter-spacing:-.2px}
+.resident-welcome p{margin:7px 0 0;color:#777064;font-size:12px;line-height:1.55}
+.shell aside .resident-nav{display:grid;gap:20px}
+.resident-nav-primary,.resident-nav-section{display:grid;gap:5px}
+.resident-nav-label{padding:0 12px 3px;color:#8a8173;font-size:10px;font-weight:700;letter-spacing:.13em}
+.shell aside .resident-nav-item{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;width:100%;padding:10px 13px;border:1px solid transparent;border-radius:9px;background:transparent;color:#585449;text-align:left;font-size:14px;font-weight:500;transition:background .15s,border-color .15s,color .15s}
+.shell aside .resident-nav-item:hover{background:#f3efe7;color:#6f4d36}
+.shell aside .resident-nav-item.active{background:#f4ebe4;border-color:#e9d9ca;color:#8b242b;font-weight:650;box-shadow:inset 3px 0 #8b242b}
+.resident-unread{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:#8b242b;color:#fff;font-size:11px;font-weight:700}
+.resident-sidebar .identity{margin-top:auto;border-top-color:#e9e1d5;color:#504a40}
+.resident-sidebar .identity small{color:#81796e}
+.resident-sidebar .identity button{border-radius:8px}
+@media(max-width:760px){.resident-sidebar .resident-nav{gap:15px}.resident-sidebar .resident-nav-item{min-height:46px}.resident-sidebar .resident-welcome{padding-bottom:14px}}
