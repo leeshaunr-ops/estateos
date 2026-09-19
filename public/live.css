@@ -122,3 +122,26 @@ th{background:#faf8f3;color:#746c5e;font-weight:600}td{color:#514b41}a,.link-but
 .powered-by-logo{width:24px;height:26px;flex:0 0 auto;object-fit:contain}
 
 .asset-card{padding:0;overflow:hidden}.asset-card-summary{display:flex;align-items:center;justify-content:space-between;gap:16px;list-style:none;cursor:pointer;padding:18px 22px}.asset-card-summary::-webkit-details-marker{display:none}.asset-card-summary::after{content:'+';flex:none;color:var(--gold);font-size:22px;font-weight:500}.asset-card[open]>.asset-card-summary::after{content:'−'}.asset-card-summary h2{margin:2px 0 4px}.asset-card-summary p{margin:0}.asset-card-body{padding:0 22px 20px;border-top:1px solid var(--line)}.asset-card-body>.summary{margin-top:16px}.asset-card-body>button{margin:12px 8px 0 0}.asset-inspection-history{margin-top:12px;border-top:1px solid var(--line)}.asset-inspection-history>summary{cursor:pointer;padding:9px 0;list-style:none}.asset-inspection-history>summary::-webkit-details-marker{display:none}.asset-inspection-history[open]>summary{border-bottom:1px solid var(--line)}
+
+
+/* Refined asset card controls */
+.asset-card{margin:18px 0;border-radius:12px;overflow:hidden}
+.asset-card-summary{position:relative;min-height:96px;padding:24px 30px 24px 38px;align-items:flex-start}
+.asset-card-summary::before{content:'⌄';position:absolute;left:14px;top:50%;transform:translateY(-55%);color:#8b242b;font-size:22px;font-weight:700;line-height:1;transition:transform .15s ease}
+.asset-card-summary::after{content:none}
+.asset-card[open]>.asset-card-summary::before{transform:translateY(-45%) rotate(180deg)}
+.asset-card-summary h2{font-size:24px;margin:0 0 8px;color:#243242}
+.asset-card-summary .eyebrow{margin-top:2px}
+.asset-card-summary p{max-width:22rem;line-height:1.45}
+.asset-card-summary .badge{align-self:center;margin-left:auto}
+.asset-card-body{padding:24px 30px 30px;border-top:1px solid var(--line)}
+.asset-card-body>.summary{margin-top:0;padding:0 0 20px;line-height:1.6}
+.asset-card-body>button,.asset-card-body>.button{margin:14px 10px 0 0}
+.asset-card-body .actions{gap:14px;padding-top:4px}
+.asset-card-body .asset-inspection-history{margin-top:22px}
+@media(max-width:760px){
+  .asset-card-summary{padding:20px 22px 20px 34px}
+  .asset-card-summary .badge{margin-left:0}
+  .asset-card-body{padding:20px 22px 24px}
+  .asset-card-body>button,.asset-card-body>.button{margin:12px 8px 0 0}
+}
