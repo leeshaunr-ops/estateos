@@ -145,3 +145,15 @@ th{background:#faf8f3;color:#746c5e;font-weight:600}td{color:#514b41}a,.link-but
   .asset-card-body{padding:20px 22px 24px}
   .asset-card-body>button,.asset-card-body>.button{margin:12px 8px 0 0}
 }
+
+/* Widen asset cards so summary content has room to breathe */
+.asset-card{grid-column:1/-1;width:100%;max-width:none}
+.asset-card-summary{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:28px}
+.asset-card-summary>div{min-width:0}
+.asset-card-summary p{max-width:none;overflow-wrap:anywhere}
+.asset-card-summary .badge{justify-self:end;white-space:nowrap}
+.asset-card-body{max-width:100%}
+@media(max-width:760px){
+ .asset-card-summary{grid-template-columns:1fr;row-gap:12px}
+ .asset-card-summary .badge{justify-self:start}
+}
