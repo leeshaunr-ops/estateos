@@ -336,18 +336,20 @@ async function api(req, res, url, user) {
         res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="EstateAegis-Inspection-${row.id}.pdf"`, 'Cache-Control': 'no-store' });
         return res.end(pdf);
     }
-    if (p === '/api/assets/latest-inspections.pdf' && method === 'GET') {
+    if (/^\/api\/properties\/[^/]+\/assets\/latest-inspections\.pdf$/.test(p) && method === 'GET') {
         roles(user, 'admin', 'employee', 'client');
-        const assets = await all('SELECT a.id,a.name,a.category,a.property_id,p.name property_name,p.timezone FROM assets a JOIN properties p ON p.id=a.property_id WHERE p.organization_id=?', user.organization_id);
-        const visibleAssets = await filterAsync(assets, async asset => { try { await property(user, asset.property_id, 'read'); return true; } catch { return false; } });
-        if (!visibleAssets.length) fail(404, 'No accessible assets are available for the report.');
-        const rows = await all('SELECT ai.*,a.name asset_name,a.category,a.property_id,p.name property_name,p.timezone,u.name inspector_name FROM asset_inspections ai JOIN assets a ON a.id=ai.asset_id JOIN properties p ON p.id=a.property_id LEFT JOIN users u ON u.id=ai.inspector_id WHERE ai.asset_id IN (' + visibleAssets.map(() => '?').join(',') + ') ORDER BY ai.inspection_date DESC,ai.created_at DESC', ...visibleAssets.map(asset => asset.id));
+        const propertyId = decodeURIComponent(p.split('/')[3]);
+        const residence = await property(user, propertyId, 'read');
+        const assets = await all('SELECT a.*,p.name property_name,p.timezone FROM assets a JOIN properties p ON p.id=a.property_id WHERE a.property_id=? AND p.organization_id=? ORDER BY a.name', residence.id, user.organization_id);
+        if (!assets.length) fail(404, 'No assets are recorded for this residence.');
+        const rows = await all('SELECT ai.*,a.name asset_name,a.category,a.location,a.model,a.serial,a.warranty,a.mileage,a.hours,a.property_id,p.name property_name,p.timezone,u.name inspector_name FROM asset_inspections ai JOIN assets a ON a.id=ai.asset_id JOIN properties p ON p.id=a.property_id LEFT JOIN users u ON u.id=ai.inspector_id WHERE a.property_id=? AND p.organization_id=? ORDER BY ai.inspection_date DESC,ai.created_at DESC', residence.id, user.organization_id);
         const seen = new Set(), latest = rows.filter(row => { if (seen.has(row.asset_id)) return false; seen.add(row.asset_id); return true; });
-        if (!latest.length) fail(404, 'No completed asset inspections are available to report yet.');
-        const answers = latest.flatMap(row => JSON.parse(row.answers || '[]').map(answer => ({ ...answer, section: `${row.asset_name} · ${row.property_name} · ${row.inspection_date}` })));
-        const report = { id: 'Latest asset inspections', completedAt: now(), timezone: latest[0].timezone || 'UTC', company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, companyLogo: (await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?', user.organization_id))?.logo_data || '', property: [...new Set(latest.map(row => row.property_name))].length === 1 ? latest[0].property_name : 'Multiple residences', client: '', date: latest[0].inspection_date, inspector: [...new Set(latest.map(row => row.inspector_name).filter(Boolean))].length === 1 ? latest[0].inspector_name : 'Multiple inspectors', overall: answers.some(answer => answer.status === 'attention') ? 'Action needed' : 'Passed', answers, summary: `Most recently completed inspection for each of ${latest.length} asset(s)`, notes: latest.map(row => `${row.asset_name} (${row.inspection_date}) — ${row.notes || 'No overall notes recorded.'}`).join('\n'), fileIds: [] };
+        if (!latest.length) fail(404, 'No completed asset inspections are available for this residence yet.');
+        const answers = latest.flatMap(row => JSON.parse(row.answers || '[]').map(answer => ({ ...answer, section: `${row.asset_name} · ${row.inspection_date}` })));
+        const assetDetails = latest.map(row => ({ name:row.asset_name,category:row.category,location:row.location,model:row.model,serial:row.serial,warranty:row.warranty,mileage:row.mileage,hours:row.hours }));
+        const report = { id: `Resident asset report ${residence.id}`, completedAt: now(), timezone: residence.timezone || 'UTC', company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, companyLogo: (await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?', user.organization_id))?.logo_data || '', property: residence.name, client: '', date: latest[0].inspection_date, inspector: [...new Set(latest.map(row => row.inspector_name).filter(Boolean))].length === 1 ? latest[0].inspector_name : 'Multiple inspectors', overall: answers.some(answer => answer.status === 'attention') ? 'Action needed' : 'Passed', answers, assetDetails, summary: `Latest completed inspections for ${latest.length} asset(s) at this residence`, notes: latest.map(row => `${row.asset_name} (${row.inspection_date}) — ${row.notes || 'No overall notes recorded.'}`).join('\n'), fileIds: [] };
         const pdf = inspectionPdf(report, []);
-        res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="EstateAegis-Latest-Asset-Inspections.pdf"', 'Cache-Control': 'no-store' });
+        res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="EstateAegis-${residence.id}-Asset-Report.pdf"`, 'Cache-Control': 'no-store' });
         return res.end(pdf);
     }
     if (/^\/api\/asset-inspections\/[^/]+\/pdf$/.test(p) && method === 'GET') {
