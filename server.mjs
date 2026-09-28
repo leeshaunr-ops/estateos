@@ -166,7 +166,7 @@ async function snapshot(user) {
     const assets = user.role === 'vendor' ? [] : (await scoped('assets'));
     const assetIds = new Set(assets.map(a => a.id));
     const assetInspections = assetIds.size ? (await all('SELECT ai.* FROM asset_inspections ai JOIN assets a ON a.id=ai.asset_id WHERE a.id IN (' + [...assetIds].map(() => '?').join(',') + ')', ...assetIds)).map(i => ({ ...i, answers: JSON.parse(i.answers || '[]') })) : [];
-    return { unreadMessages:await communications.unread(user), companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'', primaryAdminId:(await communications.primary(user.organization_id))?.id||'', workspaceSupport:(await get('SELECT support_email FROM workspace_settings WHERE organization_id=?',user.organization_id))?.support_email||'', demo:await demos.lookup(user.organization_id), user: {...safeUser(user), platformAccess:(await master.permissions(user)).length>0, ...profile}, company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, properties: props.map(p => { if (user.role === 'vendor')
+    return { unreadMessages:await communications.unread(user), companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'', primaryAdminId:(await communications.primary(user.organization_id))?.id||'', workspaceSupport:(await get('SELECT support_email FROM workspace_settings WHERE organization_id=?',user.organization_id))?.support_email||'',clientPortalTitle:(await get('SELECT client_portal_title FROM workspace_settings WHERE organization_id=?',user.organization_id))?.client_portal_title||'',clientPortalSubtitle:(await get('SELECT client_portal_subtitle FROM workspace_settings WHERE organization_id=?',user.organization_id))?.client_portal_subtitle||'', demo:await demos.lookup(user.organization_id), user: {...safeUser(user), platformAccess:(await master.permissions(user)).length>0, ...profile}, company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, properties: props.map(p => { if (user.role === 'vendor')
             return { id: p.id, name: p.name, address: p.address, account_manager_name:p.account_manager_name }; if (user.role === 'client') {
             const { manual, ...safe } = p;
             return safe;
@@ -224,7 +224,7 @@ async function api(req, res, url, user) {
         const organization=organizations.find(row=>String(row.name||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')===slug);
         if(!organization) fail(404,'Client portal not found.');
         const settings=await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',organization.id);
-        return json(res,200,{company:organization.name,logo:settings?.logo_data||'',poweredBy:'EstateAegis'});
+        return json(res,200,{company:organization.name,logo:settings?.logo_data||'',title:settings?.client_portal_title||'',subtitle:settings?.client_portal_subtitle||'',poweredBy:'EstateAegis'});
     }
     if (p === '/api/status' && method === 'GET')
         return json(res, 200, { configured: !!(await get('SELECT id FROM users LIMIT 1')), user: safeUser(user) });
