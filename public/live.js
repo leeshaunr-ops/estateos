@@ -423,3 +423,5 @@ function portalAuth(configured,invitation,brand=null){let portal=brand||invitati
  window.addEventListener('beforeunload',saveView);
 })();
         
+
+setTimeout(()=>{if(document.querySelector('.loading')){try{portalAuth(true,null,{company:'EstateAegis'});}catch(e){document.querySelector('.loading')?.insertAdjacentHTML('beforeend','<p>Login unavailable. Please refresh.</p>');}}},10000);
