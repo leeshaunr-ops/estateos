@@ -425,3 +425,8 @@ function portalAuth(configured,invitation,brand=null){let portal=brand||invitati
         
 
 setTimeout(()=>{if(document.querySelector('.loading')){try{portalAuth(true,null,{company:'EstateAegis'});}catch(e){document.querySelector('.loading')?.insertAdjacentHTML('beforeend','<p>Login unavailable. Please refresh.</p>');}}},10000);
+/* Show the reusable company client portal URL in Company settings. */
+document.addEventListener('click',event=>{const trigger=event.target.closest('[data-actio
+
+/* Show the reusable company client portal URL in Company settings. */
+document.addEventListener('click',event=>{const trigger=event.target.closest('[data-action="workspace-settings"]');if(!trigger)return;setTimeout(()=>{const form=document.querySelector('#modal form');if(!form||form.querySelector('#clientPortalUrl'))return;const field=document.createElement('div');field.className='field full';field.innerHTML='<label for="clientPortalUrl">Client portal URL</label><div class="actions"><input id="clientPortalUrl" readonly><button type="button" class="button" id="copyClientPortalUrl">Copy URL</button></div><p class="muted">Share this reusable link with your clients. It always opens this company’s branded portal.</p>';field.querySelector('#clientPortalUrl').value=clientPortalUrl();field.querySelector('#copyClientPortalUrl').addEventListener('click',()=>{navigator.clipboard?.writeText(clientPortalUrl()).then(()=>toast('Client portal URL copied.')).catch(()=>toast(clientPortalUrl()));});form.insertBefore(field,form.lastElementChild);},0);});
