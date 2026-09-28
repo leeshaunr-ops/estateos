@@ -172,7 +172,7 @@ function messagesView(){
 function view(){
  if(page==='approvals')return approvalsView();if(page==='automation')return automationView();if(page==='email-activity')return deliveryView();if(page==='dashboard'&&data.user.role==='client')return clientHome();
  if(page==='messages')return messagesView();
- if(page==='platform'&&(data.user.platformOwner||data.user.role==='admin'))return platformView();
+ if(page==='platform'&&(data.user.platformOwner||data.user.role==='admin'))return billingView();
  if(page==='workspace'&&data.user.role==='admin')return head('Company settings','Settings for your company workspace.')+`<div class="panel"><div class="company-settings-brand">${companyLogo()}<h2>${esc(data.company)}</h2></div><p>Main administrator: ${esc(data.users.find(u=>u.id===data.primaryAdminId)?.name||'Not selected')}</p>${btn('Edit company branding and settings','workspace-settings')}</div>`;
  if(page==='profile')return profileView();
  if(page==='clients'&&activeClient&&data.user.role==='admin'){const c=data.clients.find(c=>c.id===activeClient);if(c)return clientView(c);}
