@@ -422,3 +422,4 @@ function portalAuth(configured,invitation,brand=null){let portal=brand||invitati
  },1000);
  window.addEventListener('beforeunload',saveView);
 })();
+        
