@@ -157,3 +157,39 @@ th{background:#faf8f3;color:#746c5e;font-weight:600}td{color:#514b41}a,.link-but
  .asset-card-summary{grid-template-columns:1fr;row-gap:12px}
  .asset-card-summary .badge{justify-self:start}
 }
+
+/* Modern EstateAegis visual refresh */
+:root{font-size:15px;--green:#173e35;--green-deep:#102c25;--gold:#c79a57;--muted:#6f7d78;--line:#e3e9e6;--surface:#fff;--canvas:#f6f8f7;--soft:#eef4f1}
+body{background:var(--canvas);color:#1d302b;letter-spacing:-.01em}
+button,.button{border-radius:10px;padding:10px 15px;box-shadow:0 1px 1px rgba(16,44,37,.04);transition:background .15s ease,border-color .15s ease,transform .15s ease,box-shadow .15s ease}
+button:hover:not(:disabled),.button:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(16,44,37,.08)}
+.primary{box-shadow:0 4px 10px rgba(23,62,53,.16)}
+.shell{grid-template-columns:224px minmax(0,1fr)}
+aside{padding:24px 16px;background:linear-gradient(180deg,#102c25 0%,#173e35 100%)}
+.brand{font-size:21px;margin-bottom:30px}
+main{max-width:1500px;width:100%;padding:30px 38px 54px}
+.head{margin:0 0 24px;align-items:flex-end}
+.head h1{font-size:clamp(28px,3vw,40px);letter-spacing:-.045em;line-height:1.08;margin:5px 0 8px}
+.head h2,.panel h2{font-size:22px;letter-spacing:-.03em}
+.muted{color:#71807a}
+.panel,.card,.residence-summary,.asset-card{border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:0 8px 24px rgba(26,54,45,.045)}
+.panel{padding:24px}
+.card{padding:22px}
+.grid{gap:18px}
+.row{padding:15px 0;border-color:#edf1ef}
+.eyebrow{font-size:11px;letter-spacing:.16em;font-weight:750;color:#7b8782}
+.badge{border-radius:7px;padding:5px 9px;font-size:12px}
+input,select,textarea{border:1px solid #d8e2dd;border-radius:9px;background:#fbfcfc;padding:11px 12px}
+input:focus,select:focus,textarea:focus{border-color:#9bb9aa;box-shadow:0 0 0 3px rgba(39,102,79,.12)}
+nav a,aside a{border-radius:9px}
+.residence-summary{overflow:hidden}
+.residence-summary .residence-photo{background:#edf3f0}
+.residence-information{padding:22px 24px}
+.residence-information h2{font-size:24px;letter-spacing:-.04em;margin:5px 0 7px}
+.residence-facts{padding:18px 24px;background:#fbfcfc;border-top:1px solid var(--line)}
+.asset-card-summary{padding:20px 24px}
+.asset-card-summary h2{font-size:22px}
+.asset-card-body{padding:20px 24px 24px}
+.onboarding-panel{background:#fbfcfb}
+@media(max-width:900px){main{padding:24px 22px 44px}.shell{grid-template-columns:200px minmax(0,1fr)}}
+@media(max-width:760px){main{padding:20px 16px 36px}.panel{padding:18px}.head{margin-bottom:18px}.head h1{font-size:30px}.shell{display:block}aside{position:relative;min-height:auto;padding:16px} }
