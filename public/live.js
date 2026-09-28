@@ -1,3 +1,4 @@
+
 function residenceSummary(p){
  const reports=data.inspections.filter(i=>i.property_id===p.id&&i.status==='published').sort((a,b)=>(b.inspection_date||'').localeCompare(a.inspection_date||'')||(b.published_at||'').localeCompare(a.published_at||''));
  const last=reports[0],due=last?.next_due;
