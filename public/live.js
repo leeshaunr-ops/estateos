@@ -10,6 +10,7 @@ function residenceSummary(p){
 
 let activeClient=null,activeMessageThread=null,messageDetail=null;
 let data=null,page='dashboard',propertyId=null,tab='overview',activeInspection=null,activeAssetInspection=null,activeAssetInspectionRecord=null,assetInspectionReadOnly=false,activeArrival=null,arrivalFilter='pending',search='',inspectionUpcomingOnly=false;
+let navigationHistory=[],navigationRestoring=false;
 const $=id=>document.getElementById(id),esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const label=s=>String(s==='employee'?'staff':s||'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
 const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n/100);
@@ -104,7 +105,9 @@ function logoField(){return `<div class="field"><label for="f-companyLogo">Compa
 async function readCompanyLogo(form){const file=form?.querySelector("[name=companyLogo]")?.files?.[0];if(!file)return "";if(file.size>2*1024*1024)throw Error("Logo must be smaller than 2 MB.");return await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(",")[1]||"");reader.onerror=reject;reader.readAsDataURL(file);});}
 function fitWorkspaceName(){const brand=document.querySelector('.workspace-brand'),name=brand?.querySelector('strong');if(!brand||!name)return;name.style.whiteSpace='nowrap';let size=22;name.style.fontSize=size+'px';while(size>10&&name.scrollWidth>name.clientWidth){size=Math.max(10,size-.5);name.style.fontSize=size+'px';}if(name.scrollWidth>name.clientWidth){name.style.whiteSpace='normal';name.style.overflowWrap='anywhere';}}
 function initializeNavigation(){}
-function recordNavigation(){}
+function navigationSnapshot(){return {page,propertyId,tab,activeInspection,activeAssetInspection,activeAssetInspectionRecord,assetInspectionReadOnly,activeArrival,activeClient};}
+function recordNavigation(){if(navigationRestoring)return;const state=navigationSnapshot(),signature=JSON.stringify(state);if(navigationHistory.at(-1)?.signature===signature)return;navigationHistory.push({signature,state});if(navigationHistory.length>50)navigationHistory.shift();}
+function restorePreviousView(){if(!data)return false;if(navigationHistory.length>1){navigationHistory.pop();const previous=navigationHistory.at(-1).state;Object.assign({},{}) ;page=previous.page;propertyId=previous.propertyId;tab=previous.tab;activeInspection=previous.activeInspection;activeAssetInspection=previous.activeAssetInspection;activeAssetInspectionRecord=previous.activeAssetInspectionRecord;assetInspectionReadOnly=previous.assetInspectionReadOnly;activeArrival=previous.activeArrival;activeClient=previous.activeClient;navigationRestoring=true;render();navigationRestoring=false;return true;}if(page!=='dashboard'){page='dashboard';propertyId=null;tab='overview';activeInspection=null;activeAssetInspection=null;activeAssetInspectionRecord=null;assetInspectionReadOnly=false;activeArrival=null;activeClient=null;render();return true;}return false;}
 function sidebarStorageKey(){return (data.user.role==='client'?'estateos-resident-nav:':'estateos-sidebar-groups:')+data.user.id;}
 function groupedNavigation(nav){
  if(data.user.role==='client'){
@@ -255,7 +258,7 @@ async function action(name,key,button){if(await proactiveAction(name,key))return
  if(name==='platform-invite')return dialog('Invite a company',input('company','Company name')+input('email','First administrator email','email'),'Create invitation',async b=>{const result=await api('platform/invite',b);platformInvite=location.origin+result.invitePath;platformEmailStatus=result.emailStatus;});
  if(name==='platform-status'){const company=platformCompanies.find(c=>c.id===key);const status=company.status==='active'?'suspended':'active';if(!confirm(`${status==='suspended'?'Suspend':'Reactivate'} ${company.name}?`))return;await api('platform/status',{organizationId:key,status});await load();return;}
 
- if(name==='browser-back'){history.back();return;}
+ if(name==='browser-back'){if(restorePreviousView())return;return;}
  if(name==='edit-profile')return createForm('Edit my profile',input('name','Name','text',data.user.name)+input('phone','Phone','tel',data.user.phone||'',false)+select('preferredContact','Preferred contact method',['No preference','Email','Phone call','Text message'].map(v=>`<option ${v===data.user.preferred_contact?'selected':''}>${v}</option>`).join('')),'profile');
  if(name==='profile-password')return createForm('Change password',input('currentPassword','Current password','password')+input('newPassword','New password (at least 12 characters)','password')+input('confirmPassword','Confirm new password','password')+'<p class="muted">Your other signed-in devices will be signed out.</p>','profile/password');
  if(name==='profile-email')return createForm('Change login email',input('email','New login email','email',data.user.email)+input('currentPassword','Current password','password')+'<p class="muted">Use this email to sign in after saving. Your other devices will be signed out.</p>','profile/email');
