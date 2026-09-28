@@ -217,15 +217,6 @@ async function api(req, res, url, user) {
     if(await communications.handle(req,res,url,user))return;
     if(await operations.handle(req,res,url,user))return;
     if(await security.handle(req,res,url,user))return;
-    if (p === '/api/client-portal' && method === 'GET') {
-        const slug=String(url.searchParams.get('slug')||'').trim().toLowerCase();
-        if(!/^[a-z0-9-]{2,80}$/.test(slug)) fail(422,'A valid client portal name is required.');
-        const organizations=await all('SELECT id,name FROM organizations');
-        const organization=organizations.find(row=>String(row.name||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')===slug);
-        if(!organization) fail(404,'Client portal not found.');
-        const settings=await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',organization.id);
-        return json(res,200,{company:organization.name,logo:settings?.logo_data||'',poweredBy:'EstateAegis'});
-    }
     if (p === '/api/status' && method === 'GET')
         return json(res, 200, { configured: !!(await get('SELECT id FROM users LIMIT 1')), user: safeUser(user) });
     if (p === '/api/geocode/autocomplete' && method === 'GET') {
