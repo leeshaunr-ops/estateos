@@ -452,3 +452,13 @@ function portalAuth(configured,invitation,brand=null){let portal=brand||invitati
  style.textContent='.access-group>summary{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;grid-template-rows:auto auto!important;align-items:start!important;column-gap:24px!important;row-gap:6px!important}.access-group>summary>strong{grid-column:1!important;grid-row:1!important;display:block!important;margin:0!important;line-height:1.25!important}.access-group>summary>small{grid-column:1!important;grid-row:2!important;display:block!important;margin:0!important;line-height:1.35!important;white-space:normal!important}.access-group>summary>.badge{grid-column:2!important;grid-row:1 / span 2!important;align-self:start!important;margin:0!important}';
  document.head.appendChild(style);
 })();
+
+
+/* Team & access: wrap summary title and details after every render */
+(()=>{
+ const fix=()=>document.querySelectorAll('.access-group>summary').forEach(summary=>{
+  const title=summary.querySelector(':scope>strong'),detail=summary.querySelector(':scope>small');
+  if(!title||!detail||summary.querySelector(':scope>.access-summary-copy'))return;
+  const copy=document.createElement('span');copy.className='access-summary-copy';summary.insertBefore(copy,title);copy.append(title,detail);
+ });
+ const style=document.createElement('style');style.textContent='.access-group>summary{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;align-items:start!important;gap:6px 24px!important}.access-group>summary>.access-summary-copy{display:flex!important;flex-direction:column!important;align-items:flex-start!important;gap:6px!important;min-width:0!important;grid-column:1!important}.access-group>summary>.access-summary-copy>strong,.access-group>summary>.access-summary-copy>small{display:block!important;margin:0!important;line-height:1.35!important;white-space:normal!important}.access-group>summary>.badge{grid-column:2!important;grid-row:1!important;margin:0!important;align-self:start!important}';document.head.appendChild(style);new MutationObserver(fix).observe(document.body,{childList:true,subtree:true});fix();})();
