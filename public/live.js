@@ -474,3 +474,18 @@ function portalAuth(configured,invitation,brand=null){let portal=brand||invitati
  });
 };new MutationObserver(apply).observe(document.body,{childList:true,subtree:true});apply();
 })();
+
+
+/* Global search: include Team & access accounts, families, and vendor companies. */
+(()=>{
+ const previousSearch=globalSearch;
+ globalSearch=()=>{
+  const q=search.trim().toLowerCase();
+  if(!q)return view();
+  const match=v=>Object.values(v||{}).some(x=>typeof x==='string'&&x.toLowerCase().includes(q));
+  const props=data.properties.filter(match),jobs=data.work.filter(match);
+  const users=(data.users||[]).filter(match),clients=(data.clients||[]).filter(match),vendors=(data.vendors||[]).filter(match);
+  const accessRows=[...clients.map(c=>({kind:'Client family',name:c.name,detail:[c.email,c.phone].filter(Boolean).join(' · '),action:'client-open',id:c.id})),...vendors.map(v=>({kind:'Vendor company',name:v.name,detail:[v.trade,v.email,v.phone].filter(Boolean).join(' · '),action:'navigate',id:'vendors'})),...users.map(u=>({kind:'Account',name:u.name||u.email,detail:[u.email,label(u.role)].filter(Boolean).join(' · '),action:'navigate',id:'users'}))];
+  return head('Search results',`Matches for “${esc(search)}”`)+`<div class="panel"><h2>Team & access</h2>${accessRows.map(r=>`<div class="row"><div><strong>${esc(r.name)}</strong><div class="muted">${esc(r.kind)}${r.detail?' · '+esc(r.detail):''}</div></div>${btn('Open',r.action,r.id)}</div>`).join('')||empty('No matching people, client families, or vendor companies.')}</div><div class="panel"><h2>Residences</h2>${props.map(p=>`<div class="row"><strong>${esc(p.name)}</strong>${btn('View residence','property',p.id)}</div>`).join('')||empty('No matching residences.')}</div><div class="panel"><h2>Work orders</h2>${workRows(jobs)||empty('No matching work orders.')}</div>`;
+ };
+})();
