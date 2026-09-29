@@ -462,3 +462,15 @@ function portalAuth(configured,invitation,brand=null){let portal=brand||invitati
   const copy=document.createElement('span');copy.className='access-summary-copy';summary.insertBefore(copy,title);copy.append(title,detail);
  });
  const style=document.createElement('style');style.textContent='.access-group>summary{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;align-items:start!important;gap:6px 24px!important}.access-group>summary>.access-summary-copy{display:flex!important;flex-direction:column!important;align-items:flex-start!important;gap:6px!important;min-width:0!important;grid-column:1!important}.access-group>summary>.access-summary-copy>strong,.access-group>summary>.access-summary-copy>small{display:block!important;margin:0!important;line-height:1.35!important;white-space:normal!important}.access-group>summary>.badge{grid-column:2!important;grid-row:1!important;margin:0!important;align-self:start!important}';document.head.appendChild(style);new MutationObserver(fix).observe(document.body,{childList:true,subtree:true});fix();})();
+
+
+/* Team & access: final fallback for the actual collapsible summaries */
+(()=>{
+ const apply=()=>document.querySelectorAll('details>summary').forEach(summary=>{
+  const text=summary.textContent||'';
+  if(!/Company members|Client family|Vendor company|Administrators and staff|Roofing/.test(text))return;
+  summary.style.setProperty('display','grid','important');summary.style.setProperty('grid-template-columns','minmax(0,1fr) auto','important');summary.style.setProperty('align-items','start','important');summary.style.setProperty('gap','6px 24px','important');
+  [...summary.children].forEach(child=>{if(child.classList.contains('badge')){child.style.setProperty('grid-column','2','important');child.style.setProperty('grid-row','1 / span 2','important');}else if(child.tagName==='STRONG'){child.style.setProperty('display','block','important');child.style.setProperty('grid-column','1','important');child.style.setProperty('grid-row','1','important');child.style.setProperty('margin','0','important');}else if(child.tagName==='SMALL'){child.style.setProperty('display','block','important');child.style.setProperty('grid-column','1','important');child.style.setProperty('grid-row','2','important');child.style.setProperty('margin','0','important');child.style.setProperty('line-height','1.35','important');}});
+ });
+};new MutationObserver(apply).observe(document.body,{childList:true,subtree:true});apply();
+})();
