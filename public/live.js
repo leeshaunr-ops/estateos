@@ -444,3 +444,11 @@ function portalAuth(configured,invitation,brand=null){let portal=brand||invitati
  style.textContent='.access-group>summary{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;align-items:start!important;column-gap:24px!important}.access-group>summary>span:first-child{display:flex!important;flex-direction:column!important;align-items:flex-start!important;gap:8px!important;min-width:0!important;white-space:normal!important}.access-group>summary>span:first-child>strong,.access-group>summary>span:first-child>span{display:block!important;line-height:1.35!important;white-space:normal!important}.access-group>summary>.badge{display:block!important;align-self:start!important;margin-left:0!important}';
  document.head.appendChild(style);
 })();
+
+
+/* Team & access: stack direct summary title and details */
+(()=>{
+ const style=document.createElement('style');
+ style.textContent='.access-group>summary{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;grid-template-rows:auto auto!important;align-items:start!important;column-gap:24px!important;row-gap:6px!important}.access-group>summary>strong{grid-column:1!important;grid-row:1!important;display:block!important;margin:0!important;line-height:1.25!important}.access-group>summary>small{grid-column:1!important;grid-row:2!important;display:block!important;margin:0!important;line-height:1.35!important;white-space:normal!important}.access-group>summary>.badge{grid-column:2!important;grid-row:1 / span 2!important;align-self:start!important;margin:0!important}';
+ document.head.appendChild(style);
+})();
