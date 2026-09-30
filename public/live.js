@@ -441,6 +441,7 @@ portalAuth=(...args)=>{originalPortalAuth(...args);ensureAdminSetupEmail();};
    if(data){saveView();const last=Number(localStorage.getItem(activityKey)||Date.now());if(Date.now()-last>=idleLimit){localStorage.removeItem(stateKey);localStorage.removeItem(activityKey);fetch('/api/logout',{method:'POST',credentials:'same-origin',keepalive:true}).catch(()=>{}).finally(()=>location.replace('/login'));}}
  },1000);
  window.addEventListener('beforeunload',saveView);
+new MutationObserver(()=>{const intro=document.querySelector('.auth-intro'),powered=intro?.querySelector('.powered-by');if(intro&&!intro.querySelector('.auth-intro-copy'))powered?.insertAdjacentHTML('beforebegin','<div class="auth-intro-copy"><h1>Your residences.<br>Our team.<br>One place.</h1><p>Manage property care, prepare for arrivals, and keep every service and inspection connected to the right residence.</p></div>');}).observe(document.body,{childList:true,subtree:true});
 })();
 
 /* Family access: show the primary client and allow admins to suspend access. */
