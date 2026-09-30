@@ -219,3 +219,7 @@ nav a,aside a{border-radius:9px}
 
 /* Hide the native disclosure marker on asset cards. */
 .asset-card-summary{list-style:none}.asset-card-summary::-webkit-details-marker{display:none}.asset-card-summary::marker{content:""}
+
+
+/* Remove the legacy custom red asset marker. */
+.asset-card-summary::before{content:none!important;display:none!important}
