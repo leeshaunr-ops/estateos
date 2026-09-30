@@ -67,3 +67,4 @@ th{background:#faf8f3;color:#746c5e;font-weight:600}td{color:#514b41}a,.link-but
 .shell .residence .residence-top .eyebrow{color:#8b242b}
 .shell .stat-link b,.shell .link-button{color:#8b242b}
 .shell button:focus-visible,.shell input:focus-visible,.shell select:focus-visible,.shell textarea:focus-visible,.shell a:focus-visible{outline-color:#8b242b}
+.asset-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px}.asset-actions button{white-space:nowrap}.card>button{display:block;margin-top:10px;max-width:100%}
