@@ -269,7 +269,7 @@ async function action(name,key,button){if(await proactiveAction(name,key))return
  if(name==='profile-email')return createForm('Change login email',input('email','New login email','email',data.user.email)+input('currentPassword','Current password','password')+'<p class="muted">Use this email to sign in after saving. Your other devices will be signed out.</p>','profile/email');
  if(name==='close'){$('modal').close();return;}
  if(name==='menu'){$('sidebar').classList.toggle('open');return;}
- if(name==='logout'){clearInspectionDrafts();await api('logout',{});data=null;auth(true);return;}
+ if(name==='logout'){clearInspectionDrafts();await api('logout',{});data=null;page='dashboard';propertyId=null;tab='overview';activeInspection=null;activeAssetInspection=null;activeAssetInspectionRecord=null;assetInspectionReadOnly=false;activeArrival=null;activeClient=null;auth(true);return;}
  if(name==='navigate'){activeClient=null;inspectionUpcomingOnly=key==='inspections-upcoming';page=key==='inspections-upcoming'?'inspections':key;search='';activeInspection=null;await load();return;}
  if(name==='arrival-filter'){arrivalFilter=key;activeArrival=null;render();return;}
  if(name==='arrival-open'){activeArrival=key;page='arrivals';render();return;}
