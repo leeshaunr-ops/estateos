@@ -200,8 +200,26 @@ const demos=createDemos({get,all,run,transaction,id,now,hash,randomBytes,body,js
 const saas = createSaas({get,all,run,transaction,fail,text,note,id,hash,now,passwordHash,session,json,body,rate,audit,randomBytes,demos,demoSignup});
 const staff = createStaff({get,all,run,transaction,fail,text,note,id,now,passwordHash,json,body,audit,communications,assertCapacity:billing.assertCapacity});
 async function assertWorkspaceActive(organizationId){if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',organizationId))?.status==='suspended')fail(403,'This company workspace is suspended. Contact support.');const d=await demos.lookup(organizationId);if(d&&Number(d.expires_at)<=Date.now())fail(403,'Your seven-day demo has ended. Contact sales@estateaegis.com for more time.');}
+const clientErrorWindows = new Map();
+function clientErrorAllowed(req){
+    const key=String(req.headers['x-forwarded-for']||req.socket.remoteAddress||'unknown').split(',')[0].trim();
+    const current=clientErrorWindows.get(key)||{at:0,count:0};
+    const timestamp=Date.now();
+    if(timestamp-current.at>60000){current.at=timestamp;current.count=0;}
+    current.count++;
+    clientErrorWindows.set(key,current);
+    if(clientErrorWindows.size>1000)for(const [address,window] of clientErrorWindows)if(timestamp-window.at>120000)clientErrorWindows.delete(address);
+    return current.count<=20;
+}
 async function api(req, res, url, user) {
     const method = req.method, p = url.pathname;
+    if(p==='/api/client-error'&&method==='POST'){
+        if(!clientErrorAllowed(req))return json(res,204,{});
+        const report=await body(req);
+        const clean={message:String(report.message||'Unknown client error').slice(0,500),source:String(report.source||'unknown').slice(0,40),file:String(report.file||'').slice(0,300),line:Number.isSafeInteger(Number(report.line))?Number(report.line):undefined,page:String(report.page||'').slice(0,120),user:user?{id:user.id,role:user.role,organizationId:user.organization_id}:null};
+        console.error('Client error:',JSON.stringify(clean));
+        return json(res,204,{});
+    }
     if(await demoSignup.handle(req,res,url))return;
     if(await paidSignup.handle(req,res,url))return;
     if(user&&!['/api/login','/api/logout','/api/status'].includes(p))await assertWorkspaceActive(user.organization_id);
@@ -1157,7 +1175,7 @@ const server = http.createServer(async (req, res) => {
         }
         const status = error.status || 500;
         if (status === 500)
-            console.error('Request failed:', error.message);
+            console.error('Request failed:',JSON.stringify({message:error.message,stack:error.stack,method:req.method,path:url?.pathname}));
         json(res, status, { error: status === 500 ? 'The action could not be saved. Check the server log.' : error.message });
     }
 });
