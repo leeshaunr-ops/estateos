@@ -425,7 +425,7 @@ function ensureAdminSetupEmail(){
  form.insertBefore(field,form.querySelector('[name=password]')?.parentElement||null);
 }
 const originalPortalAuth=portalAuth;
-portalAuth=(...args)=>{originalPortalAuth(...args);ensureAdminSetupEmail();};
+portalAuth=(...args)=>{if((location.pathname==='/client-login'||new URLSearchParams(location.search).has('invite'))&&!args[2])args[2]={company:'EstateAegis',logo:'/ea-shield.png'};originalPortalAuth(...args);ensureAdminSetupEmail();};
 
 /* Session timeout and refresh-safe SPA state */
 (()=>{
