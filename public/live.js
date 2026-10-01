@@ -463,3 +463,5 @@ new MutationObserver(()=>{const intro=document.querySelector('.auth-intro'),powe
   return head(c.name||'Family','Family details',btn('Back to families','navigate','clients'))+'<div class="panel"><h2>'+esc(c.name||'Family')+'</h2><p class="muted">'+esc(c.email||'No email')+(c.phone?' · '+esc(c.phone):'')+'</p><h3>Primary client</h3><div class="row"><div><strong>'+esc(primaryName)+'</strong><div class="muted">'+esc(primaryEmail)+' · Main client</div></div><div class="actions">'+primaryActions+'</div></div><h3>Residences</h3>'+homes.map(p=>'<div class="row"><div><strong>'+esc(p.name)+'</strong><div class="muted">'+esc(p.address||'Address not entered')+'</div></div>'+btn('View residence','property',p.id)+'</div>').join('')+'</div>';
  };
 })();
+/* Keep invitation form enhancement idempotent. */
+(()=>{const d=Object.getOwnPropertyDescriptor(Node.prototype,'textContent');if(d?.set&&!window.__estateTextContentGuard){window.__estateTextContentGuard=true;Object.defineProperty(Node.prototype,'textContent',{configurable:d.configurable,enumerable:d.enumerable,get:d.get,set(value){if(this.textContent===value)return;d.set.call(this,value);}});}})();
