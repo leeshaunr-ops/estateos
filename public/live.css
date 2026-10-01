@@ -285,3 +285,12 @@ nav a,aside a{border-radius:9px}
 .auth-intro .brand{width:fit-content;max-width:100%;white-space:nowrap;overflow:visible;overflow-wrap:normal}
 .auth-intro .powered-by{width:100%;max-width:100%;margin:3px 0 0;text-align:right}
 @media(max-width:760px){.auth-brand-lockup{width:100%}.auth-intro .brand{width:100%;white-space:normal;overflow-wrap:anywhere}.auth-intro .powered-by{width:100%}}
+
+/* Restore tutorial motion and align powered-by to the company wordmark. */
+.auth-intro .auth-video{display:block!important}
+.auth-intro{background:#173e35 url('/waterfront.jpg') center/cover no-repeat}
+.auth-brand-lockup{width:max-content;max-width:100%;min-width:0}
+.auth-intro .brand{width:max-content;max-width:100%;min-width:0;white-space:normal;overflow:visible;overflow-wrap:anywhere}
+.auth-intro .brand-name{min-width:0}
+.auth-intro .powered-by{width:calc(100% - 62px);margin:4px 0 0 62px;text-align:right}
+@media(max-width:760px){.auth-brand-lockup{width:100%}.auth-intro .brand{width:100%}.auth-intro .powered-by{width:calc(100% - 56px);margin-left:56px}}
