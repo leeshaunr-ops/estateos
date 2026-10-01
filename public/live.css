@@ -266,3 +266,16 @@ nav a,aside a{border-radius:9px}
 .auth-intro::before{background:linear-gradient(90deg,rgba(10,30,27,.82),rgba(10,30,27,.42)),linear-gradient(180deg,rgba(10,30,27,.18),rgba(10,30,27,.5))}
 .auth-intro .auth-video{display:none!important}
 @media(max-width:760px){.auth-intro{background-position:center 42%}}
+
+/* Final polish for company-branded invitation screen. */
+.auth{grid-template-columns:minmax(360px,.88fr) minmax(520px,1.12fr)}
+.auth-intro{padding:clamp(42px,7vh,78px) clamp(30px,4.5vw,72px)}
+.auth-intro::before{background:linear-gradient(90deg,rgba(8,30,27,.68),rgba(8,30,27,.28)),linear-gradient(180deg,rgba(8,30,27,.08),rgba(8,30,27,.3))}
+.auth-brand-lockup{width:min(100%,500px);max-width:100%;min-width:0}
+.auth-intro .brand{display:flex;align-items:flex-start;gap:14px;width:100%;max-width:100%;min-width:0;margin:0;font-size:clamp(22px,2.3vw,31px);line-height:1.12;white-space:normal;overflow:visible;overflow-wrap:anywhere;text-shadow:0 2px 12px #0005}
+.auth-intro .brand .ea-brand-icon{flex:0 0 auto;width:48px;height:48px}
+.auth-intro .powered-by{width:100%;margin:8px 0 0;padding-right:2px;font-size:14px;line-height:1.2;text-align:right}
+.auth-intro h1{margin-top:clamp(72px,13vh,132px);font-size:clamp(28px,2.7vw,42px)}
+.auth-form>div{max-width:400px;padding:30px 32px;border-radius:16px}
+@media(max-width:900px){.auth{grid-template-columns:minmax(300px,.9fr) minmax(400px,1.1fr)}.auth-intro .brand{font-size:25px}}
+@media(max-width:760px){.auth{display:block}.auth-intro{min-height:310px;padding:30px 24px}.auth-intro .brand{font-size:25px}.auth-intro .brand .ea-brand-icon{width:42px;height:42px}.auth-intro h1{margin-top:58px}.auth-form>div{padding:26px 22px}}
