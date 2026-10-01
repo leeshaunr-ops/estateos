@@ -6,13 +6,13 @@
 
 .workspace-brand strong{display:block;width:100%;white-space:nowrap;overflow-wrap:normal}.topbar .company-brand{display:flex;align-items:center;justify-content:flex-end;gap:10px}.topbar .company-brand .company-logo{max-width:100px;max-height:40px;flex-shrink:0}
 .estate-contact{width:100%;background:#f7f3eb;border-top:1px solid #e6ddd0;color:#34475a;font-size:14px;line-height:1.5}
-.estate-contact-inner{width:min(1320px,100%);margin:0 auto;padding:32px 38px;display:grid;grid-template-columns:minmax(220px,1.2fr) minmax(0,2fr) auto;align-items:center;gap:30px}
-.estate-contact-brand{display:grid;gap:7px}.estate-contact-brand strong{color:#98232d;font-size:20px;letter-spacing:-.03em}.estate-contact-brand span{color:#687a87;font-size:13px}
-.estate-contact address{display:flex;flex-wrap:wrap;gap:18px 34px;margin:0;font-style:normal}
+.estate-contact-inner{width:100%;max-width:1500px;margin:0 auto;padding:34px 6vw;display:grid;grid-template-columns:minmax(260px,1.35fr) repeat(4,minmax(130px,1fr));align-items:center;gap:34px}
+.estate-contact-brand{display:flex;align-items:center;gap:13px}.estate-contact-brand img{width:42px;height:42px;padding:7px;background:#fff;border:1px solid #e4d8c9;border-radius:11px;object-fit:contain}.estate-contact-brand strong{display:block;color:#98232d;font-size:20px;letter-spacing:-.03em}.estate-contact-brand span{display:block;margin-top:5px;color:#687a87;font-size:13px}
+.estate-contact address{display:contents;margin:0;font-style:normal}
 .estate-contact address div{display:grid;gap:4px}.estate-contact address span{color:#687a87;font-size:10px;font-weight:750;letter-spacing:.14em;text-transform:uppercase}
 .estate-contact a{color:#98232d;text-decoration:none;overflow-wrap:anywhere}.estate-contact a:hover{color:#6f1821}.estate-contact a:focus-visible{outline:3px solid #c79a57;outline-offset:4px;border-radius:2px}
-.estate-contact-powered{color:#687a87;font-size:12px;white-space:nowrap}
-@media(max-width:900px){.estate-contact-inner{grid-template-columns:1fr 1fr;gap:24px}.estate-contact-powered{grid-column:1/-1}}
+.estate-contact-powered{grid-column:1/-1;padding-top:18px;border-top:1px solid #e6ddd0;color:#687a87;font-size:12px;white-space:nowrap}
+@media(max-width:1050px){.estate-contact-inner{grid-template-columns:1fr 1fr;gap:24px}.estate-contact-brand{grid-column:1/-1}.estate-contact-powered{grid-column:1/-1}}
 @media(max-width:760px){.estate-contact-inner{padding:28px 20px;grid-template-columns:1fr;gap:22px}.estate-contact address{gap:16px 24px}.estate-contact address div{min-width:135px}.estate-contact-powered{grid-column:auto}}
 @media print{.estate-contact{display:none}}
 
