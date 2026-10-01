@@ -686,6 +686,15 @@ async function api(req, res, url, user) {
         (await audit(user, 'user.suspended', member.id));
         result = { ok: true };
     }
+    else if (p === '/api/users/reactivate') {
+        roles(user, 'admin');
+        const member = (await get('SELECT * FROM users WHERE id=? AND organization_id=?', b.userId, user.organization_id));
+        if (!member || member.id === user.id)
+            fail(422, 'Cannot reactivate this account.');
+        await run('UPDATE users SET active=1 WHERE id=? AND organization_id=?', member.id, user.organization_id);
+        await audit(user, 'user.reactivated', member.id);
+        result = { ok: true };
+    }
     else if (p === '/api/assets/update') {
         roles(user, 'admin', 'employee');
         const asset = await get('SELECT * FROM assets WHERE id=?', b.id);
