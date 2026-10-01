@@ -294,3 +294,8 @@ nav a,aside a{border-radius:9px}
 .auth-intro .brand-name{min-width:0}
 .auth-intro .powered-by{width:calc(100% - 62px);margin:4px 0 0 62px;text-align:right}
 @media(max-width:760px){.auth-brand-lockup{width:100%}.auth-intro .brand{width:100%}.auth-intro .powered-by{width:calc(100% - 56px);margin-left:56px}}
+
+/* Improve contrast on the video-backed client invitation brand lockup. */
+.auth-intro .brand,.auth-intro .brand-name{color:#fff!important;text-shadow:0 2px 14px rgba(0,0,0,.72)}
+.auth-intro .powered-by{color:#fff!important;text-shadow:0 2px 10px rgba(0,0,0,.72);font-weight:600}
+.auth-intro .ea-brand-icon{filter:drop-shadow(0 2px 5px rgba(0,0,0,.35))}
