@@ -220,6 +220,11 @@ nav a,aside a{border-radius:9px}
 /* Hide the native disclosure marker on asset cards. */
 .asset-card-summary{list-style:none}.asset-card-summary::-webkit-details-marker{display:none}.asset-card-summary::marker{content:""}
 
+/* Keep family access controls together on desktop; allow the row to wrap on small screens. */
+.family-member-actions .actions{flex-wrap:nowrap;gap:6px}
+.family-member-actions .actions button{padding:7px 10px;font-size:12px;white-space:nowrap}
+@media(max-width:760px){.family-member-actions .actions{flex-wrap:wrap}.family-member-actions .actions button{font-size:14px;padding:10px 14px}}
+
 
 /* Remove the legacy custom red asset marker. */
 .asset-card-summary::before{content:none!important;display:none!important}
