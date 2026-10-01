@@ -468,3 +468,4 @@ new MutationObserver(()=>{const intro=document.querySelector('.auth-intro'),powe
 })();
 /* Keep invitation form enhancement idempotent. */
 (()=>{const d=Object.getOwnPropertyDescriptor(Node.prototype,'textContent');if(d?.set&&!window.__estateTextContentGuard){window.__estateTextContentGuard=true;Object.defineProperty(Node.prototype,'textContent',{configurable:d.configurable,enumerable:d.enumerable,get:d.get,set(value){if(this.textContent===value)return;d.set.call(this,value);}});}})();
+(()=>{const update=()=>{const clientView=location.pathname==='/client-login'||location.search.includes('invite=')||document.querySelector('.resident-sidebar');document.documentElement.classList.toggle('client-view',Boolean(clientView));};new MutationObserver(update).observe(document.body,{childList:true,subtree:true});update();})();
