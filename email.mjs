@@ -9,7 +9,7 @@ export async function sendInvitation({to, invitePath, company = 'your workspace'
     const base = new URL(env.APP_URL || 'https://estateaegis.com');
     if (base.protocol !== 'https:' || base.username || base.password) throw Error('Invalid app URL');
     link = new URL(invitePath, base.origin);
-    if (link.origin !== base.origin || link.pathname !== '/' || !/^\/?\?((workspaceInvite)|(invite))=[a-f0-9]{64}$/.test(invitePath)) throw Error('Invalid invitation');
+    if (link.origin !== base.origin || !['/','/client-login'].includes(link.pathname) || /^(?:\/?\?(?:workspaceInvite|invite)=[a-f0-9]{64}|\/client-login\?invite=[a-f0-9]{64})$/.test(invitePath) === false) throw Error('Invalid invitation');
     if (clientPortalPath) { portalLink = new URL(clientPortalPath, base.origin); if (portalLink.origin !== base.origin || !portalLink.pathname.startsWith('/client/') || portalLink.pathname.length < 9 || portalLink.pathname.length > 88) throw Error('Invalid client portal link'); }
   } catch { return {emailStatus:'failed'}; }
   const intro = `You have been invited to ${company} on EstateAegis.${planDescription?' Your paid subscription: '+planDescription+'.':''}`;
