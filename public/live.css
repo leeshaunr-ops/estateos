@@ -232,9 +232,9 @@ nav a,aside a{border-radius:9px}
 /* Refined company-branded login panel. */
 .auth-intro{justify-content:flex-start;padding:clamp(34px,9vh,104px) clamp(24px,4vw,64px)}
 .auth-intro .brand{margin:0;align-self:flex-start;max-width:100%;text-shadow:0 2px 16px #0006}
-.auth-intro .powered-by{margin:12px 0 0 clamp(96px,8vw,124px);color:#f2f5f3;font-size:15px;font-weight:500;letter-spacing:.01em;text-shadow:0 2px 12px #0007}
+.auth-intro .powered-by{align-self:stretch;margin:12px 0 0;color:#f2f5f3;font-size:15px;font-weight:500;letter-spacing:.01em;text-align:right;text-shadow:0 2px 12px #0007}
 .auth-intro h1{margin-top:clamp(78px,13vh,150px);margin-bottom:18px;max-width:520px}
 .auth-intro h1:after{content:'';display:block;width:54px;height:3px;margin-top:22px;background:#c79a57;border-radius:3px}
-@media(max-width:760px){.auth-intro{padding:34px 26px}.auth-intro .powered-by{margin-left:50px}.auth-intro h1{margin-top:64px}}
+@media(max-width:760px){.auth-intro{padding:34px 26px}.auth-intro .powered-by{text-align:right}.auth-intro h1{margin-top:64px}}
 :root.client-view #siteFooter,body:has(.resident-sidebar) #siteFooter{display:none}
 
