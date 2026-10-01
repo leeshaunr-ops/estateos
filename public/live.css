@@ -238,3 +238,7 @@ nav a,aside a{border-radius:9px}
 @media(max-width:760px){.auth-intro{padding:34px 26px}.auth-intro .powered-by{text-align:right}.auth-intro h1{margin-top:64px}}
 :root.client-view #siteFooter,body:has(.resident-sidebar) #siteFooter{display:none}
 
+
+/* Keep client branding and the powered-by label in one aligned lockup. */
+.auth-brand-lockup{width:max-content;max-width:100%;display:grid;gap:4px}.auth-brand-lockup .brand{width:100%;max-width:100%}.auth-brand-lockup .powered-by{width:100%;margin:0;text-align:right}.auth-intro h1{margin-top:clamp(68px,11vh,128px)}
+@media(max-width:760px){.auth-brand-lockup{width:100%}.auth-intro h1{margin-top:56px}}
