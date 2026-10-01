@@ -244,6 +244,15 @@ async function api(req, res, url, user) {
         const settings=await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',organization.id);
         return json(res,200,{company:organization.name,logo:settings?.logo_data||'',title:settings?.client_portal_title||'',subtitle:settings?.client_portal_subtitle||'',poweredBy:'EstateAegis'});
     }
+    if (p === '/api/invite-info' && method === 'GET') {
+        const token = String(url.searchParams.get('token') || '');
+        if (!/^[a-f0-9]{64}$/.test(token)) fail(422, 'Invalid invitation.');
+        const invitation = await get('SELECT organization_id,role FROM invitations WHERE token_hash=? AND used_at IS NULL AND expires_at>?', hash(token), Date.now());
+        if (!invitation) fail(404, 'Invitation expired, cancelled, or already accepted.');
+        const organization = await get('SELECT name FROM organizations WHERE id=?', invitation.organization_id);
+        const settings = await get('SELECT logo_data,client_portal_title,client_portal_subtitle FROM workspace_settings WHERE organization_id=?', invitation.organization_id);
+        return json(res, 200, {company:organization?.name||'EstateAegis', logo:settings?.logo_data||'', title:settings?.client_portal_title||'', subtitle:settings?.client_portal_subtitle||'', poweredBy:'EstateAegis'});
+    }
     if (p === '/api/status' && method === 'GET')
         return json(res, 200, { configured: !!(await get('SELECT id FROM users LIMIT 1')), user: safeUser(user) });
     if (p === '/api/geocode/autocomplete' && method === 'GET') {
@@ -600,7 +609,7 @@ async function api(req, res, url, user) {
             }
             await run('UPDATE clients SET profile=? WHERE id=?', JSON.stringify({...profile,members}), family.id);
         });
-        result = token ? {invitePath:'/?invite='+token, email:recipient, ...await sendWorkspaceInvitation(user,{to:recipient,invitePath:'/?invite='+token})} : {saved:true,alreadyPending};
+        result = token ? {invitePath:'/client-login?invite='+token, email:recipient, ...await sendWorkspaceInvitation(user,{to:recipient,invitePath:'/client-login?invite='+token})} : {saved:true,alreadyPending};
     }
     else if (p === '/api/invitations/cancel' || p === '/api/invitations/email') {
         roles(user, 'admin');
@@ -631,7 +640,7 @@ async function api(req, res, url, user) {
                 await audit(user, 'invitation.cancelled', previous.email);
                 await audit(user, 'invitation.created', email);
             });
-            result = {invitePath:'/?invite='+token, expiresInHours:48, ...await sendWorkspaceInvitation(user,{to:email,invitePath:'/?invite='+token})};
+            result = {invitePath:'/client-login?invite='+token, expiresInHours:48, ...await sendWorkspaceInvitation(user,{to:email,invitePath:'/client-login?invite='+token})};
         }
     }
     else if (p === '/api/invitations') {
@@ -651,7 +660,7 @@ async function api(req, res, url, user) {
             fail(409, 'That account already exists.');
         (await run('INSERT INTO invitations VALUES(?,?,?,?,?,?,?,?)', hash(token), user.organization_id, email, role, role === 'client' ? b.clientId : null, role === 'vendor' ? b.vendorId : null, Date.now() + 48 * 3600000, null));
         (await audit(user, 'invitation.created', email));
-        result = { invitePath: '/?invite=' + token, expiresInHours: 48, ...await sendWorkspaceInvitation(user,{to:email,invitePath:'/?invite='+token}) };
+        result = { invitePath: '/client-login?invite=' + token, expiresInHours: 48, ...await sendWorkspaceInvitation(user,{to:email,invitePath:'/client-login?invite='+token}) };
     }
     else if (p === '/api/access' || p === '/api/properties/manager') {
         roles(user, 'admin');
