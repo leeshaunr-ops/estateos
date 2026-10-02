@@ -1,4 +1,4 @@
-import {normalizeTemplate,presetItems} from './checklist-templates.mjs';
+import {normalizeTemplate,presetItems,starterSets,VISIT_TYPES} from './checklist-templates.mjs';
 
 const ITEM_COLUMNS='id,template_version_id,section,label,help_text,response_type,options,required,photo_rule,scope,room_types,sort_order,stable_key,alert_on_fail';
 const parseItem=i=>({...i,options:JSON.parse(i.options||'[]'),room_types:JSON.parse(i.room_types||'[]'),required:!!Number(i.required),alert_on_fail:!!Number(i.alert_on_fail)});
@@ -30,7 +30,9 @@ export function createChecklistTemplates({get,all,run,transaction,body,json,fail
    });
    await audit(user,'checklist_template.created',key); return json(res,201,{id:key,version:1});
   }
-  const match=p.match(/^\/api\/checklist-templates\/([^/]+)\/(publish|items|published|versions)$/); if(match){
+  // Starter item sets the editor can load into a draft (built-in presets, read-only).
+  if(p==='/api/checklist-templates/starter-sets'&&method==='GET')return json(res,200,{sets:starterSets()});
+  const match=p.match(/^\/api\/checklist-templates\/([^/]+)\/(publish|items|published|versions|details)$/); if(match){
    const template=await get('SELECT * FROM checklist_templates WHERE id=? AND organization_id=?',match[1],user.organization_id); if(!template)fail(404,'Checklist template not found.');
    // Editor read: the working (current) version plus the last published version, so the
    // editor can show the Draft/Published state and which items have unpublished edits.
@@ -72,6 +74,19 @@ export function createChecklistTemplates({get,all,run,transaction,body,json,fail
      return version;
     });
     await audit(user,'checklist_template.updated',template.id);return json(res,200,{saved:true,version:result.version,status:'draft'});
+   }
+   // Template details (name, visit type, description) are not versioned: they label the
+   // template itself, so they update in place and never touch items or publish state.
+   if(match[2]==='details'&&method==='POST'){
+    roles(user,'admin');
+    const b=await body(req), next={name:template.name,visit_type:template.visit_type,description:template.description||''};
+    if(b.name!==undefined){next.name=String(b.name||'').trim();if(!next.name)fail(422,'Template name is required.');if(next.name.length>120)fail(422,'Template name must be 120 characters or fewer.');}
+    if(b.visit_type!==undefined){if(!VISIT_TYPES.has(b.visit_type))fail(422,'Unknown visit type.');next.visit_type=b.visit_type;}
+    if(b.description!==undefined)next.description=String(b.description||'').trim();
+    const timestamp=now();
+    await run('UPDATE checklist_templates SET name=?,visit_type=?,description=?,updated_at=? WHERE id=?',next.name,next.visit_type,next.description,timestamp,template.id);
+    await audit(user,'checklist_template.details_updated',template.id);
+    return json(res,200,{template:{...template,...next,updated_at:timestamp}});
    }
    if(match[2]==='publish'&&method==='POST'){
     roles(user,'admin');

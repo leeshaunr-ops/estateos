@@ -178,3 +178,48 @@ test('relativeTime',()=>{
  assert.equal(M.relativeTime(0,0),'');
  assert.equal(M.relativeTime(1,1+5*60000),'5 min ago');
 });
+
+import {VISIT_TYPES as SERVER_VISIT_TYPES,presetItems,normalizeTemplate} from '../checklist-templates.mjs';
+
+test('editor visit types match the server, including the storm types',()=>{
+ assert.deepEqual(M.VISIT_TYPES.map(t=>t.value),[...SERVER_VISIT_TYPES]);
+ assert.equal(M.visitType('pre_storm').label,'Hurricane prep');
+ assert.equal(M.visitType('post_storm').label,'Post-storm');
+ assert.equal(M.visitType('nonsense').value,'custom');
+});
+
+const sets=[{visit_type:'routine',items:presetItems('routine')},{visit_type:'seasonal',items:presetItems('seasonal')},{visit_type:'pre_storm',items:presetItems('pre_storm')},{visit_type:'post_storm',items:presetItems('post_storm')}];
+test('suggestStarter picks the storm set for storm templates',()=>{
+ assert.equal(M.suggestStarter({name:'Anything',visit_type:'post_storm'},sets),'post_storm');
+ assert.equal(M.suggestStarter({name:'Hurrican Checklist',visit_type:'seasonal'},sets),'pre_storm');
+ assert.equal(M.suggestStarter({name:'After the storm',visit_type:'custom'},sets),'post_storm');
+ assert.equal(M.suggestStarter({name:'Spring check',visit_type:'seasonal'},sets),'seasonal');
+ assert.equal(M.suggestStarter({name:'Mine',visit_type:'custom'},sets),'routine');
+ assert.equal(M.suggestStarter({name:'Mine',visit_type:'custom'},[]),null);
+});
+
+test('loading starter items into an empty draft produces a saveable checklist',()=>{
+ const r=M.loadStarterItems([],presetItems('pre_storm'),'replace');
+ assert.equal(r.items.length,presetItems('pre_storm').length);
+ assert.equal(r.added.length,r.items.length);
+ assert.equal(M.sectionNames(r.items)[0],'Exterior & yard');
+ const payload=M.toPayload(r.items);
+ assert.equal(payload.length,r.items.length);
+ const saved=normalizeTemplate({name:'Hurricane prep',items:payload}).items;
+ const shutters=saved.find(i=>/^Shutters/.test(i.label));
+ assert.equal(shutters.alert_on_fail,true);assert.equal(shutters.photo_rule,'required_on_fail');assert.equal(shutters.required,true);
+ assert.ok(saved.find(i=>/Generator fuel/.test(i.label)).response_type==='number');
+});
+
+test('starter items can be added after or replace existing items without key collisions',()=>{
+ const current=M.fromApi(rows());
+ const appended=M.loadStarterItems(current,presetItems('pre_storm'),'append');
+ assert.equal(appended.items.length,current.length+presetItems('pre_storm').length);
+ assert.deepEqual(appended.items.slice(0,current.length).map(x=>x.uid),current.map(x=>x.uid),'existing items stay first');
+ const twice=M.loadStarterItems(appended.items,presetItems('pre_storm'),'append');
+ assert.equal(new Set(twice.items.map(x=>x.stable_key)).size,twice.items.length,'loading twice still gives unique keys');
+ assert.doesNotThrow(()=>normalizeTemplate({name:'x',items:M.toPayload(twice.items)}));
+ const replaced=M.loadStarterItems(current,presetItems('post_storm'),'replace');
+ assert.equal(replaced.items.length,presetItems('post_storm').length);
+ assert.ok(!replaced.items.some(x=>current.some(c=>c.uid===x.uid)));
+});

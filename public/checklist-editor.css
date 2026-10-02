@@ -94,6 +94,39 @@ html.ce-fullpage body{background:var(--canvas)}
 .ce .ce-tpl-head{background:var(--ce-surface);border:1px solid var(--ce-line);border-radius:16px;padding:24px;box-shadow:var(--ce-shadow-sm);margin-bottom:24px}
 .ce .ce-tpl-title{font-size:24px;line-height:32px;font-weight:650;letter-spacing:-.02em;margin:6px 0 4px;color:var(--ce-ink);overflow-wrap:anywhere}
 .ce .ce-tpl-desc{color:var(--ce-muted);overflow-wrap:anywhere}
+/* Template details: inline name field and visit type. */
+.ce .ce-head-row{display:flex;align-items:center;gap:8px;margin:-6px -8px 0 0;min-height:32px}
+.ce .ce-tpl-title{margin:4px 0 6px}
+.ce .ce-name-input{display:block;width:calc(100% + 18px);margin:0 -9px;padding:2px 8px;font:inherit;font-size:inherit;line-height:inherit;font-weight:inherit;letter-spacing:inherit;color:var(--ce-ink);background:transparent;border:1px solid transparent;border-radius:8px;box-shadow:none;min-height:0;height:auto;text-overflow:ellipsis;transition:border-color .15s,box-shadow .15s,background .15s}
+.ce .ce-name-input:hover{border-color:var(--ce-line);background:var(--ce-surface)}
+.ce .ce-name-input:focus{outline:none;border-color:var(--ce-accent);background:var(--ce-surface);box-shadow:var(--ce-ring)}
+.ce .ce-type-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin-top:12px}
+.ce .ce-type-k{font-size:13px;font-weight:600;color:var(--ce-ink)}
+.ce .ce-select-sm{flex:0 1 240px;min-width:200px}
+.ce .ce-select-sm select{height:38px;padding:0 34px 0 42px;font-size:14px;font-weight:550}
+.ce .ce-select-sm .ce-sec-icon{left:8px}
+/* Empty checklist: starter items call to action. */
+.ce .ce-empty-start{display:grid;justify-items:center;gap:10px;padding:40px 32px 32px;border-style:dashed}
+.ce .ce-empty-ic{width:52px;height:52px;border-radius:14px;display:grid;place-items:center;background:var(--ce-accent-soft);color:var(--ce-accent);box-shadow:inset 0 0 0 1px var(--ce-accent-line);margin-bottom:4px}
+.ce .ce-empty-start h3{font-size:16px;font-weight:650;color:var(--ce-ink);letter-spacing:-.01em}
+.ce .ce-empty-start p{max-width:480px;line-height:1.55}
+.ce .ce-empty-start p b{color:var(--ce-ink);font-weight:600}
+.ce .ce-empty-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:6px}
+.ce .ce-empty-actions .ce-btn{height:40px;padding:0 18px}
+.ce .ce-empty-foot{font-size:12px;color:var(--ce-faint)}
+/* Starter items dialog. */
+.ce .ce-dialog-wide{width:min(640px,calc(100vw - 24px))}
+.ce .ce-starter-list{display:grid;gap:8px}
+.ce .ce-starter-card{width:100%;align-items:center}
+.ce .ce-starter-text{flex:1;min-width:0}
+.ce .ce-starter-card .ce-opt-d{overflow-wrap:anywhere}
+.ce .ce-starter-count{flex:none;height:24px;padding:0 10px;border-radius:999px;background:var(--ce-line-soft);color:var(--ce-muted);font-size:12px;font-weight:600;display:inline-flex;align-items:center;white-space:nowrap}
+.ce .ce-starter-card.is-on .ce-starter-count{background:var(--ce-surface);color:var(--ce-accent-strong);box-shadow:inset 0 0 0 1px var(--ce-accent-line)}
+.ce .ce-starter-match{display:inline-flex;align-items:center;height:20px;margin-left:6px;padding:0 7px;border-radius:999px;background:var(--ce-pass-soft);color:var(--ce-pass);font-size:11px;font-weight:600;vertical-align:1px;white-space:nowrap}
+.ce .ce-starter-mode{display:grid;gap:8px;justify-items:start;padding-top:4px}
+.ce .ce-starter-mode .ce-lbl{font-size:13px;font-weight:600}
+.ce .ce-check{display:flex;align-items:flex-start;gap:10px;font-size:13px;line-height:1.45;padding:10px 12px;border-radius:10px;background:var(--ce-surface-2);box-shadow:inset 0 0 0 1px var(--ce-line-soft);cursor:pointer}
+.ce .ce-check input{width:16px;height:16px;min-height:0;margin:1px 0 0;padding:0;flex:none;accent-color:var(--ce-accent)}
 .ce .ce-stats{display:flex;flex-wrap:wrap;gap:8px 24px;margin-top:16px;padding-top:16px;border-top:1px solid var(--ce-line-soft)}
 .ce .ce-stat{display:flex;align-items:center;gap:8px;color:var(--ce-muted);font-size:13px}
 .ce .ce-stat b{color:var(--ce-ink);font-weight:600}
@@ -354,6 +387,8 @@ html.ce-fullpage body{background:var(--canvas)}
  .ce .ce-saved{margin-right:auto;flex:0 1 auto;white-space:normal;flex-wrap:wrap;min-width:0}
  .ce .ce-tpl-head{padding:20px;margin-bottom:16px}
  .ce .ce-tpl-title{font-size:21px;line-height:28px}
+ .ce .ce-select-sm{flex:1 1 200px}
+ .ce .ce-empty-start{padding:28px 18px 24px}
  .ce .ce-inspector.is-inline{position:static;max-height:none;box-shadow:var(--ce-shadow-md);border-color:var(--ce-accent-line);margin:0}
  .ce .ce-inspector.is-inline .ce-insp-body{padding:16px;gap:20px;overflow:visible}
  .ce .ce-inspector.is-inline .ce-insp-head{padding:12px 12px 12px 16px}
@@ -374,3 +409,6 @@ html.ce-fullpage body{background:var(--canvas)}
  .ce .ce-photo-grid{grid-template-columns:1fr 1fr}
  .ce .ce-opt-card{padding:10px;gap:8px}
 }
+/* Long dialogs (starter items) keep the header and actions in view and scroll the body. */
+.ce .ce-dialog-wide[open]{display:flex;flex-direction:column}
+.ce .ce-dialog-wide .ce-dialog-body{overflow-y:auto;min-height:0;flex:1 1 auto;padding-top:2px}
