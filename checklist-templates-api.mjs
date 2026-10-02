@@ -12,7 +12,7 @@ export function createChecklistTemplates({get,all,run,body,json,fail,roles,prope
   if(p==='/api/checklist-templates'&&method==='POST'){
    roles(user,'admin');
    const b=await body(req), template=normalizeTemplate(b), key=id(), versionId=id(), timestamp=now();
-   await run('INSERT INTO checklist_templates(id,organization_id,name,visit_type,description,is_system,is_default,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)',key,user.organization_id,template.name,template.visit_type,template.description,0,!!b.isDefault,user.id,timestamp,timestamp);
+   await run('INSERT INTO checklist_templates(id,organization_id,name,visit_type,description,is_system,is_default,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)',key,user.organization_id,template.name,template.visit_type,template.description,0,b.isDefault?1:0,user.id,timestamp,timestamp);
    await run('INSERT INTO checklist_template_versions(id,template_id,version,status,created_at) VALUES(?,?,?,?,?)',versionId,key,1,'draft',timestamp);
    for(const item of template.items) await run('INSERT INTO checklist_template_items(id,template_version_id,section,label,help_text,response_type,options,required,photo_rule,scope,room_types,sort_order,stable_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',id(),versionId,item.section,item.label,item.help_text,item.response_type,JSON.stringify(item.options),item.required?1:0,item.photo_rule,item.scope,JSON.stringify(item.room_types),item.sort_order,item.stable_key);
    await audit(user,'checklist_template.created',key); return json(res,201,{id:key,version:1});
