@@ -8,6 +8,13 @@ function clean(s){return String(s??'').replace(/[–—]/g,'-').replace(/[‘’
 function escape(s){return clean(s).replace(/([\\()])/g,'\\$1').replace(/[\r\n]/g,' ');}
 function lines(s,width,size=10){const max=Math.max(12,Math.floor(width/(size*.64)));return clean(s).split('\n').flatMap(line=>{const out=[];let current='';for(let word of line.split(/\s+/)){while(word.length>max){if(current){out.push(current);current='';}out.push(word.slice(0,max));word=word.slice(max);}if((current+' '+word).trim().length>max){out.push(current);current=word;}else current=(current+' '+word).trim();}out.push(current);return out;});}
 export function reportTimestamp(value,timezone='America/New_York') {if(!value)return 'Not recorded';try{return new Intl.DateTimeFormat('en-US',{year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZone:timezone,timeZoneName:'short'}).format(new Date(value));}catch{return 'Not recorded';}}
+// Photos captured by the offline mobile flow carry the device capture time; show it in the residence's timezone.
+export function photoTakenAt(photo){
+ if(!photo?.capturedAt)return '';const at=new Date(photo.capturedAt);if(Number.isNaN(at.getTime()))return '';
+ const format=timeZone=>at.toLocaleString('en-US',{timeZone,year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'});
+ let value;try{value=format(photo.timezone||'America/New_York');}catch{value=format('America/New_York');}
+ return 'Taken '+value.replace(/[\u202f\u00a0]/g,' ');
+}
 export function inspectionPdf(report,photos=[]){
  const objects=[];const add=o=>(objects.push(o),objects.length);const catalog=add(''),root=add('');const regular=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>'),bold=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
  const pages=[];let page,y;
@@ -52,8 +59,8 @@ export function inspectionPdf(report,photos=[]){
  }
  if(photos.length){for(const [i,photo] of photos.entries()){
   const d=jpegSize(photo.bytes),scale=Math.min(508/d.width,440/d.height),w=d.width*scale,h=d.height*scale;
-  need(h+(i===0?101:66));if(i===0)heading('Photo evidence');text('PHOTO '+(i+1),40,y,9,C.brand,true);y+=19;
-  const image=add(Buffer.concat([Buffer.from(`<< /Type /XObject /Subtype /Image /Width ${d.width} /Height ${d.height} /ColorSpace /${d.channels===1?'DeviceGray':'DeviceRGB'} /BitsPerComponent 8 /Filter /DCTDecode /Length ${photo.bytes.length} >>\nstream\n`),photo.bytes,Buffer.from('\nendstream')]));const name='Im'+image;page.images.push([name,image]);page.stream+=`q ${w} 0 0 ${h} ${40+(532-w)/2} ${792-y-h} cm /${name} Do Q\n`;y+=h+9;paragraph(photo.name||'Inspection evidence',9,C.muted,520,40);y+=12;
+  const taken=photoTakenAt(photo);need(h+(i===0?101:66)+(taken?15:0));if(i===0)heading('Photo evidence');text('PHOTO '+(i+1),40,y,9,C.brand,true);y+=19;
+  const image=add(Buffer.concat([Buffer.from(`<< /Type /XObject /Subtype /Image /Width ${d.width} /Height ${d.height} /ColorSpace /${d.channels===1?'DeviceGray':'DeviceRGB'} /BitsPerComponent 8 /Filter /DCTDecode /Length ${photo.bytes.length} >>\nstream\n`),photo.bytes,Buffer.from('\nendstream')]));const name='Im'+image;page.images.push([name,image]);page.stream+=`q ${w} 0 0 ${h} ${40+(532-w)/2} ${792-y-h} cm /${name} Do Q\n`;y+=h+9;paragraph(photo.name||'Inspection evidence',9,C.muted,520,40);if(taken)paragraph(taken,9,C.muted,520,40);y+=12;
  }}
  heading('Notes to the client');paragraph(report.notes||'No additional notes.');
  heading('Inspection summary');paragraph(report.summary||'No summary recorded.');
