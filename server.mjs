@@ -1,3 +1,4 @@
+import {createChecklistTemplates} from './checklist-templates-api.mjs';
 import {createPlatformGoogle} from './platform-google.mjs';
 import {createPlatformDashboard} from './platform-dashboard.mjs';
 import {createStripeBilling} from './stripe-billing.mjs';
@@ -199,6 +200,7 @@ const demoSignup=createDemoSignup({get,run,transaction,body,json,fail,rate,id,no
 const demos=createDemos({get,all,run,transaction,id,now,hash,randomBytes,body,json,fail,audit,platformOwner,deleteBytes});
 const saas = createSaas({get,all,run,transaction,fail,text,note,id,hash,now,passwordHash,session,json,body,rate,audit,randomBytes,demos,demoSignup});
 const staff = createStaff({get,all,run,transaction,fail,text,note,id,now,passwordHash,json,body,audit,communications,assertCapacity:billing.assertCapacity});
+const checklistTemplates = createChecklistTemplates({get,all,run,body,json,fail,roles,property,id,now,audit});
 async function assertWorkspaceActive(organizationId){if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',organizationId))?.status==='suspended')fail(403,'This company workspace is suspended. Contact support.');const d=await demos.lookup(organizationId);if(d&&Number(d.expires_at)<=Date.now())fail(403,'Your seven-day demo has ended. Contact sales@estateaegis.com for more time.');}
 const clientErrorWindows = new Map();
 function clientErrorAllowed(req){
@@ -232,6 +234,7 @@ async function api(req, res, url, user) {
     if(await subscriptions.handle(req,res,url,user))return;
     if(await saas(req,res,url,user))return;
     if(await staff.handle(req,res,url,user))return;
+    if(await checklistTemplates.handle(req,res,url,user))return;
     if(await communications.handle(req,res,url,user))return;
     if(await operations.handle(req,res,url,user))return;
     if(await security.handle(req,res,url,user))return;
