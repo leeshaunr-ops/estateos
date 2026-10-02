@@ -792,7 +792,7 @@ async function api(req, res, url, user) {
     }
     else if (p === '/api/requests/create-work') {
         roles(user,'admin','employee');
-        await transaction(async()=>{const row=await entity(user,'requests',b.id,'operate');if(row.work_order_id||row.status==='completed')fail(409,'This request already has work linked or is completed.');const key=id();await run('INSERT INTO work_orders(id,property_id,title,description,priority,created_by,created_at) VALUES(?,?,?,?,?,?,?)',key,row.property_id,row.title,row.description,row.priority,user.id,now(),null);await run("UPDATE requests SET work_order_id=?,status='in_progress' WHERE id=?",key,row.id);await audit(user,'request.work_created',row.id);await communications.work(user,key);result={id:key};});
+        await transaction(async()=>{const row=await entity(user,'requests',b.id,'operate');if(row.work_order_id||row.status==='completed')fail(409,'This request already has work linked or is completed.');const key=id();await run('INSERT INTO work_orders(id,property_id,title,description,priority,created_by,created_at) VALUES(?,?,?,?,?,?,?)',key,row.property_id,row.title,row.description,row.priority,user.id,now());await run("UPDATE requests SET work_order_id=?,status='in_progress' WHERE id=?",key,row.id);await audit(user,'request.work_created',row.id);await communications.work(user,key);result={id:key};});
     }
     else if (p === '/api/requests/assign') {
         roles(user, 'admin', 'employee');
