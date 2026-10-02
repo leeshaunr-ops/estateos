@@ -1196,7 +1196,7 @@ const server = http.createServer(async (req, res) => {
         }
         const status = error.status || 500;
         if (status === 500)
-            console.error('Request failed:',JSON.stringify({message:error.message,stack:error.stack,method:req.method,path:url?.pathname}));
+            console.error('Request failed:',JSON.stringify({message:error.message,stack:error.stack,method:req.method,path:req.url}));
         json(res, status, { error: status === 500 ? 'The action could not be saved. Check the server log.' : error.message });
     }
 });
