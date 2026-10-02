@@ -81,3 +81,50 @@ test('checklist editor API: atomic saves, draft versions and publishing',async()
  const other=client();
  await other.req('checklist-templates/'+id+'/items',undefined,401);
 });
+
+test('storm templates: starter sets, details and loading starter items into a draft',async()=>{
+ // Reuses the server and accounts from the previous test (same process, same data dir).
+ const admin=client(),employee=client();
+ await admin.req('login',{email:'owner@example.test',password:pw});
+ await employee.req('login',{email:'tech@example.test',password:pw});
+
+ const {sets}=await admin.req('checklist-templates/starter-sets');
+ const prep=sets.find(s=>s.visit_type==='pre_storm'), post=sets.find(s=>s.visit_type==='post_storm');
+ assert.equal(prep.label,'Hurricane prep');assert.ok(prep.items.length>=20);
+ assert.equal(post.label,'Post-storm');assert.ok(post.items.length>=18);
+ assert.ok(!sets.some(s=>s.visit_type==='custom'));
+
+ // A new Hurricane prep template starts with the hurricane starter items.
+ const created=await admin.req('checklist-templates',{name:'Hurricane prep',visit_type:'pre_storm',items:[]},201);
+ let editor=await admin.req('checklist-templates/'+created.id+'/items');
+ assert.equal(editor.template.visit_type,'pre_storm');assert.equal(editor.items.length,prep.items.length);
+ assert.equal(editor.items.find(i=>/^Shutters/.test(i.label)).alert_on_fail,true);
+
+ // An empty seasonal template (like one created before starter items existed)…
+ const old=await admin.req('checklist-templates',{name:'Hurrican Checklist',visit_type:'seasonal',items:[]},201);
+ const T='checklist-templates/'+old.id;
+ await admin.req(T+'/items',{items:[]});
+ assert.equal((await admin.req(T+'/items')).items.length,0);
+
+ // …can be renamed and switched to Hurricane prep without touching items or publish state.
+ const details=await admin.req(T+'/details',{name:'  Hurricane Checklist ',visit_type:'pre_storm'});
+ assert.equal(details.template.name,'Hurricane Checklist');assert.equal(details.template.visit_type,'pre_storm');
+ editor=await admin.req(T+'/items');
+ assert.equal(editor.template.name,'Hurricane Checklist');assert.equal(editor.template.visit_type,'pre_storm');
+ assert.equal(editor.version.status,'draft');assert.equal(editor.items.length,0);
+ const listed=(await admin.req('checklist-templates')).templates.find(t=>t.id===old.id);
+ assert.equal(listed.name,'Hurricane Checklist');assert.equal(listed.visit_type,'pre_storm');
+ await admin.req(T+'/details',{name:'   '},422);
+ await admin.req(T+'/details',{visit_type:'tornado'},422);
+ await employee.req(T+'/details',{name:'Nope'},403);
+ assert.equal((await admin.req(T+'/items')).template.name,'Hurricane Checklist');
+
+ // "Load starter items" saves the starter set through the normal draft save: never published.
+ const saved=await admin.req(T+'/items',{items:prep.items});
+ assert.deepEqual(saved,{saved:true,version:1,status:'draft'});
+ editor=await admin.req(T+'/items');
+ assert.equal(editor.items.length,prep.items.length);assert.equal(editor.version.status,'draft');assert.equal(editor.published,null);
+ assert.deepEqual(editor.items.map(i=>i.section).filter((s,i,a)=>a.indexOf(s)===i),['Exterior & yard','Openings & protection','Pool','Interior','Utilities & systems','Vehicles & boats','Documentation']);
+ const fuel=editor.items.find(i=>/Generator fuel/.test(i.label));assert.equal(fuel.response_type,'number');
+ await employee.req(T+'/published',undefined,404);
+});

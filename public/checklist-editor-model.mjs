@@ -21,6 +21,18 @@ export const PHOTO_RULES=[
  {value:'required_on_fail',label:'Required on fail',desc:'Only if marked Fail',icon:'alert',chip:'Photo on fail'},
  {value:'always',label:'Always required',desc:'Not available yet',icon:'camera',chip:'',unsupported:true}
 ];
+// Visit types (same values as checklist-templates.mjs VISIT_TYPES). Icons are editor icon names.
+export const VISIT_TYPES=[
+ {value:'routine',label:'Routine',icon:'home'},
+ {value:'arrival',label:'Arrival',icon:'logIn'},
+ {value:'departure',label:'Departure',icon:'logOut'},
+ {value:'seasonal',label:'Seasonal',icon:'trees'},
+ {value:'maintenance',label:'Maintenance',icon:'wrench'},
+ {value:'pre_storm',label:'Hurricane prep',icon:'storm'},
+ {value:'post_storm',label:'Post-storm',icon:'cloudSun'},
+ {value:'custom',label:'Custom',icon:'layers'}
+];
+export const visitType=value=>VISIT_TYPES.find(t=>t.value===value)||VISIT_TYPES.at(-1);
 export const LABEL_MAX=160;
 export const COMPARE_FIELDS=['section','label','help_text','response_type','options','required','photo_rule','scope','room_types','alert_on_fail'];
 
@@ -145,6 +157,34 @@ export function newSectionName(items,base='New section'){
  const names=new Set(sectionNames(items));let name=base,n=2;
  while(names.has(name))name=base+' '+(n++);
  return name;
+}
+
+/**
+ * Starter items for "Load starter items". Converts a starter set's items (API rows) into editor
+ * items with stable keys that don't collide with the current checklist.
+ * mode 'replace' discards the current items; 'append' adds the starter items after them
+ * (an item joins an existing section when the section names match).
+ * Returns {items, added:[uid...]}.
+ */
+export function loadStarterItems(current,starterRows,mode='replace'){
+ const keep=mode==='append'?current:[];
+ const taken=new Set(keep.map(x=>x.stable_key));
+ const fresh=fromApi(starterRows).map(item=>{const stable_key=taken.has(item.stable_key)?uniqueKey(item.stable_key,taken):item.stable_key;taken.add(stable_key);return {...item,stable_key};});
+ return {items:flatten(groupSections([...keep,...fresh])),added:fresh.map(x=>x.uid)};
+}
+
+/**
+ * Which starter set to pre-select: the template's own visit type when it is a storm type,
+ * then a storm set when the name mentions a storm (e.g. "Hurricane checklist" saved as Seasonal),
+ * then the template's own visit type, then the first set.
+ */
+export function suggestStarter(template,sets){
+ const has=type=>sets.some(s=>s.visit_type===type);
+ const type=template?.visit_type, name=String(template?.name||'');
+ if((type==='pre_storm'||type==='post_storm')&&has(type))return type;
+ if(/hurric|storm|tropical|cyclone|typhoon/i.test(name)){const post=/post|after|recover|damage/i.test(name)?'post_storm':'pre_storm';if(has(post))return post;}
+ if(has(type))return type;
+ return sets[0]?.visit_type||null;
 }
 
 /** API payload: blank-label items are held back (the API requires a label). */

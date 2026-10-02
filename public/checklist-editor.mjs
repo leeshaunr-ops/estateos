@@ -1,7 +1,7 @@
 // Full-page checklist template editor.
 // Layout follows the approved reference (checklist list · item inspector · live phone preview);
 // colours, type and controls come from the workspace theme (live.css / refresh.css tokens).
-import * as M from './checklist-editor-model.mjs?v=ce-1';
+import * as M from './checklist-editor-model.mjs?v=ce-2';
 
 const ICON_PATHS={
  grip:'<circle cx="9" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.4" fill="currentColor" stroke="none"/>',
@@ -47,13 +47,17 @@ const ICON_PATHS={
  cloudAlert:'<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"/><path d="M12 10v3"/><path d="M12 16h.01"/>',
  pin:'<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/>',
  pencil:'<path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/>',
- sliders:'<path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/>'
+ sliders:'<path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/>',
+ storm:'<path d="M6 16.3A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 .5 8.97"/><path d="m13 12-3 5h4l-3 5"/>',
+ cloudSun:'<path d="M12 2v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="M20 12h2"/><path d="m19.07 4.93-1.41 1.41"/><path d="M15.95 12.65a4 4 0 0 0-5.93-4.13"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6z"/>',
+ waves:'<path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/>',
+ car:'<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/>',
+ sparkles:'<path d="M9.94 14.06 4 20"/><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>'
 };
 const icon=(name,cls='')=>`<svg class="ce-i ${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICON_PATHS[name]||''}</svg>`;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const SECTION_ICONS=[[/arriv|entry|check.?in/i,'logIn'],[/depart|exit|lock.?up|check.?out/i,'logOut'],[/exterior|outside|garden|landscap|pool|perimeter/i,'trees'],[/interior|room|inside|living/i,'sofa'],[/system|utilit|electric|hvac|power|equipment/i,'zap'],[/secur|safety|alarm/i,'shield'],[/note|follow|record/i,'note'],[/maint|service|repair/i,'wrench']];
+const SECTION_ICONS=[[/pool|spa\b/i,'waves'],[/vehicle|boat|car\b|dock/i,'car'],[/document|photo|walk.?through/i,'camera'],[/opening|shutter|protect|storm|window/i,'shield'],[/arriv|entry|check.?in/i,'logIn'],[/depart|exit|lock.?up|check.?out/i,'logOut'],[/exterior|outside|garden|landscap|pool|perimeter/i,'trees'],[/interior|room|inside|living/i,'sofa'],[/system|utilit|electric|hvac|power|equipment/i,'zap'],[/secur|safety|alarm/i,'shield'],[/note|follow|record/i,'note'],[/maint|service|repair/i,'wrench']];
 const sectionIcon=name=>(SECTION_ICONS.find(([re])=>re.test(name))||[0,'layers'])[1];
-const titleCase=s=>String(s||'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
 const DESKTOP_PREVIEW=1280, MOBILE=900;
 
 export async function mountChecklistEditor({root,templateId,api,context={},onExit=()=>{},notify=()=>{}}){
@@ -65,7 +69,8 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
   items:M.fromApi(loaded.items),
   selected:null,collapsed:new Set(),renaming:null,lifted:null,liftSnapshot:null,
   lastSavedAt:loaded.template.updated_at?Date.parse(loaded.template.updated_at):null,
-  undo:null,menu:null,newSectionPending:false
+  undo:null,menu:null,newSectionPending:false,
+  starterSets:null,starter:null
  };
  const mqMobile=matchMedia(`(max-width:${MOBILE-0.02}px)`), mqPreview=matchMedia(`(min-width:${DESKTOP_PREVIEW}px)`);
  if(!mqMobile.matches&&S.items.length)S.selected=S.items[0].uid;
@@ -82,6 +87,9 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
   S.lastSavedAt=Date.now();
  },onStatus:()=>{const wasDraft=S.headerDraft;renderStatus();renderTopState();if(wasDraft!==(S.version.status!=='published'))renderHeader();}});
  const changed=({list=true,inspector=false,preview=true}={})=>{autosave.schedule();renderHeader();if(list)renderList();if(inspector)renderInspector();if(preview)renderPreview();renderTopState();};
+
+ // Starter sets load in the background; the empty state re-renders once they arrive.
+ const starterSetsReady=api('checklist-templates/starter-sets').then(r=>{S.starterSets=Array.isArray(r?.sets)?r.sets:[];if(!S.items.length&&root.isConnected)renderList();return S.starterSets;}).catch(()=>{S.starterSets=[];return S.starterSets;});
 
  // ---------- static frame ----------
  root.innerHTML=`<div class="ce" id="ceApp">
@@ -101,7 +109,7 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
   </header>
   <main class="ce-page" id="cePage">
    <section class="ce-canvas" aria-label="Checklist">
-    <div class="ce-tpl-head" id="ceHead"></div>
+    <div class="ce-tpl-head" id="ceHead"><div id="ceHeadTitle"></div><div id="ceHeadBody"></div></div>
     <div class="ce-toolbar"><h2>Sections <span class="ce-count" id="ceSecCount"></span></h2><span class="ce-spacer"></span><button type="button" class="ce-btn-ghost" data-ce="collapse-all" id="ceCollapseAll">${icon('chevUpDown','ce-i-sm')}<span>Collapse all</span></button></div>
     <p id="ceDragHelp" class="ce-sr">Press Space to pick up. Use the up and down arrow keys to move, Space to drop, Escape to cancel.</p>
     <div id="ceSections" class="ce-sections"></div>
@@ -146,6 +154,39 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
  }
 
  // ---------- top bar / header ----------
+ // Template details (name and visit type) are rendered separately from the stats so typing in
+ // the name field is never interrupted by autosave re-renders.
+ function renderTitle(){
+  const vt=M.visitType(S.template.visit_type);
+  $('#ceHeadTitle').innerHTML=`<div class="ce-head-row"><div class="eyebrow">Checklist template</div><span class="ce-spacer"></span>
+    <button type="button" class="ce-iconbtn" data-ce="template-menu" data-fk="tmenu" aria-label="Template options" aria-haspopup="menu" title="Template options">${icon('more')}</button></div>
+   <h1 class="ce-tpl-title"><label class="ce-sr" for="ceName">Template name</label><input id="ceName" class="ce-name-input" data-fk="name" value="${esc(S.template.name)}" maxlength="120" autocomplete="off" spellcheck="true" title="Click to rename"></h1>
+   ${S.template.description?`<p class="ce-tpl-desc">${esc(S.template.description)}</p>`:''}
+   <div class="ce-type-row"><label class="ce-type-k" for="ceVisitType">Visit type</label>
+    <div class="ce-select ce-select-sm"><span class="ce-sec-icon ce-sec-icon-sm" aria-hidden="true">${icon(vt.icon,'ce-i-sm')}</span><select id="ceVisitType" data-fk="vtype">${M.VISIT_TYPES.map(t=>`<option value="${t.value}" ${t.value===vt.value?'selected':''}>${esc(t.label)}</option>`).join('')}</select>${icon('chevUpDown','ce-chev2')}</div></div>`;
+  const crumb=root.querySelector('.ce-crumb-current');if(crumb)crumb.textContent=S.template.name;
+ }
+ let detailsSaving=Promise.resolve();
+ function saveDetails(patch,{message}={}){
+  const before={name:S.template.name,visit_type:S.template.visit_type};
+  Object.assign(S.template,patch);
+  preserveFocus(()=>{renderTitle();if(!S.items.length)renderList();});renderPreview();
+  detailsSaving=detailsSaving.then(async()=>{
+   try{
+    const r=await api('checklist-templates/'+encodeURIComponent(S.template.id)+'/details',patch);
+    if(r&&r.template)Object.assign(S.template,{name:r.template.name,visit_type:r.template.visit_type,description:r.template.description});
+    S.lastSavedAt=Date.now();renderStatus();
+    if(message)notify(message);
+   }catch(error){
+    Object.assign(S.template,before);
+    notify(error.message||'Could not save the template details.');
+   }
+   // Don't overwrite a name the user is still typing.
+   if(document.activeElement?.id!=='ceName')preserveFocus(()=>{renderTitle();});
+   renderPreview();
+  });
+  return detailsSaving;
+ }
  function renderTopState(){
   const draft=S.version.status!=='published';
   const pill=$('#cePill');
@@ -177,10 +218,7 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
    if(!parts.length&&d.orderChanged)parts.push('The item order has changed.');
    notice=`<b>You're editing a draft.</b> Field staff keep using published version ${esc(pubV)} until you publish.${parts.length?' '+parts.join(' '):''}`;
   }else notice=`<b>Version ${esc(pubV)} is published.</b> Changes you make are saved as a new draft. Field staff keep using version ${esc(pubV)} until you publish again.`;
-  $('#ceHead').innerHTML=`<div class="eyebrow">Checklist template</div>
-   <h1 class="ce-tpl-title">${esc(S.template.name)}</h1>
-   ${S.template.description?`<p class="ce-tpl-desc">${esc(S.template.description)}</p>`:''}
-   <div class="ce-stats">
+  $('#ceHeadBody').innerHTML=`<div class="ce-stats">
     <span class="ce-stat">${icon('listChecks')}<b>${st.items}</b> ${st.items===1?'item':'items'}</span>
     <span class="ce-stat">${icon('layers')}<b>${st.sections}</b> ${st.sections===1?'section':'sections'}</span>
     <span class="ce-stat">${icon('camera')}<b>${st.photos}</b> ask for photos</span>
@@ -246,10 +284,23 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
     </div>
    </div>`;
   }).join('');
-  sectionsEl.innerHTML=html||`<div class="ce-empty">This checklist has no items yet. Add a section to start building it.</div>`;
+  sectionsEl.innerHTML=html||emptyHTML();
   placeInspector();
   const rename=root.querySelector('[data-ce-rename]');
   if(rename&&document.activeElement!==rename){rename.focus();rename.select();}
+ }
+
+ function emptyHTML(){
+  const sets=S.starterSets, pick=sets&&sets.length?sets.find(x=>x.visit_type===M.suggestStarter(S.template,sets)):null;
+  const sections=pick?M.sectionNames(M.fromApi(pick.items)).length:0;
+  const lead=pick?`Start from the <b>${esc(pick.label)}</b> starter checklist (${pick.items.length} items in ${sections} ${sections===1?'section':'sections'}) and adjust it to this residence, or add your own sections.`:'Load a ready-made starter checklist and adjust it, or add a section to build your own.';
+  return `<div class="ce-empty ce-empty-start">
+   <span class="ce-empty-ic" aria-hidden="true">${icon(pick?M.visitType(pick.visit_type).icon:'listChecks','ce-i-lg')}</span>
+   <h3>This checklist has no items yet</h3>
+   <p>${lead}</p>
+   <div class="ce-empty-actions"><button type="button" class="primary ce-btn" data-ce="starter" data-fk="starter-empty" ${sets&&!sets.length?'disabled':''}>${icon('sparkles')}Load starter items</button></div>
+   <p class="ce-empty-foot">Starter items are saved to this draft only. Field staff won't see them until you publish.</p>
+  </div>`;
  }
 
  // ---------- inspector (middle) ----------
@@ -363,7 +414,7 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
     <div class="ce-status" aria-hidden="true"><span>9:41</span><span class="ce-sb"><i></i><i></i><i></i><b></b></span></div>
     <div class="ce-app-bar"><div class="ce-app-row">${icon('arrowLeft')}<span class="ce-ttl">${esc(S.template.name)}</span><span class="ce-step">${idx} of ${total}</span></div>
      <div class="ce-progress"><i data-pct="${pct}"></i></div>
-     <div class="ce-prop">${icon('pin','ce-i-xs')}${esc(titleCase(S.template.visit_type||'custom'))} visit</div></div>
+     <div class="ce-prop">${icon('pin','ce-i-xs')}${esc(M.visitType(S.template.visit_type).label)} visit</div></div>
     <div class="ce-p-body">${item?`
      <div class="ce-p-card">
       <div class="ce-p-sec">${icon(sectionIcon(item.section),'ce-i-xs')}${esc(item.section)}</div>
@@ -516,6 +567,13 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
    {label:'Delete section',icon:'trash',danger:true,run:()=>deleteSectionName(name)}
   ]);
  }
+ function templateMenu(trigger){
+  openMenu(trigger,[
+   {label:'Load starter items',icon:'sparkles',run:()=>openStarter()},
+   {label:'Rename template',icon:'pencil',run:()=>{const n=root.querySelector('#ceName');if(n){n.focus();n.select();}}},
+   {label:'Version history',icon:'history',run:()=>openHistory()}
+  ]);
+ }
  on($('#ceMenu'),'click',e=>{const b=e.target.closest('[data-menu-index]');if(!b||!S.menu)return;const m=S.menu.items[Number(b.dataset.menuIndex)];closeMenu();m.run();});
  on($('#ceMenu'),'keydown',e=>{
   const items=[...$('#ceMenu').querySelectorAll('.ce-menu-item:not([disabled])')], i=items.indexOf(document.activeElement);
@@ -534,6 +592,43 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
   dialog.showModal();
   const close=()=>{dialog.removeEventListener('close',close);onClose&&onClose();};
   dialog.addEventListener('close',close);
+ }
+ // ---------- starter items ----------
+ async function openStarter(){
+  openDialog(`<div class="ce-dialog-head"><h2>Load starter items</h2><button type="button" class="ce-iconbtn" data-ce="dialog-close" aria-label="Close">${icon('x')}</button></div><div class="ce-dialog-body" id="ceStarterBody"><p class="ce-muted">Loading starter checklists…</p></div><div class="ce-dialog-foot" id="ceStarterFoot"><button type="button" class="ce-btn" data-ce="dialog-close">Cancel</button></div>`,{wide:true,onClose:()=>{S.starter=null;}});
+  const sets=await starterSetsReady;
+  if(!dialog.open)return;
+  if(!sets.length){dialog.querySelector('#ceStarterBody').innerHTML='<p class="ce-error-text">Starter checklists are not available right now. Try again in a moment.</p>';return;}
+  const pick=M.suggestStarter(S.template,sets);
+  S.starter={pick,mode:S.items.length?'append':'replace',setType:pick!==S.template.visit_type&&!S.items.length};
+  renderStarter();
+  dialog.querySelector('.ce-starter-card.is-on')?.focus();
+ }
+ function renderStarter(){
+  const st=S.starter, sets=S.starterSets||[];if(!st||!dialog.open)return;
+  const set=sets.find(x=>x.visit_type===st.pick)||sets[0];
+  // The suggested set first, then the rest in their usual order.
+  const ordered=[...sets].sort((a,b)=>(b.visit_type===M.suggestStarter(S.template,sets))-(a.visit_type===M.suggestStarter(S.template,sets)));
+  const card=x=>{const on=x.visit_type===set.visit_type, secs=M.sectionNames(M.fromApi(x.items)), vt=M.visitType(x.visit_type);
+   return `<button type="button" class="ce-opt-card ce-starter-card${on?' is-on':''}" role="radio" aria-checked="${on}" tabindex="${on?0:-1}" data-ce="starter-pick" data-id="${esc(x.visit_type)}"><span class="ce-opt-ic">${icon(vt.icon)}</span><span class="ce-starter-text"><span class="ce-opt-t">${esc(x.label)}${x.visit_type===S.template.visit_type?' <span class="ce-starter-match">This template\'s visit type</span>':''}</span><span class="ce-opt-d">${esc(secs.join(' · '))}</span></span><span class="ce-starter-count">${x.items.length} items</span></button>`;};
+  const typeLabel=M.visitType(set.visit_type).label;
+  dialog.querySelector('#ceStarterBody').innerHTML=`<p class="ce-muted">Pick a starter checklist. You can edit, reorder or delete any item afterwards. Items are saved to this draft; nothing reaches field staff until you publish.</p>
+   <div class="ce-starter-list" role="radiogroup" aria-label="Starter checklists" data-group="starter">${ordered.map(card).join('')}</div>
+   ${S.items.length?`<div class="ce-starter-mode"><span class="ce-lbl" id="ceStarterModeLbl">This checklist already has ${S.items.length} ${S.items.length===1?'item':'items'}</span><div class="ce-seg" role="radiogroup" aria-labelledby="ceStarterModeLbl"><button type="button" role="radio" class="ce-seg-btn${st.mode==='append'?' is-on':''}" aria-checked="${st.mode==='append'}" data-ce="starter-mode" data-id="append">Add after current items</button><button type="button" role="radio" class="ce-seg-btn${st.mode==='replace'?' is-on':''}" aria-checked="${st.mode==='replace'}" data-ce="starter-mode" data-id="replace">Replace current items</button></div></div>`:''}
+   ${set.visit_type!==S.template.visit_type?`<label class="ce-check"><input type="checkbox" id="ceStarterType" ${st.setType?'checked':''}><span>Also change this template's visit type to <b>${esc(typeLabel)}</b></span></label>`:''}`;
+  dialog.querySelector('#ceStarterFoot').innerHTML=`<button type="button" class="ce-btn" data-ce="dialog-close">Cancel</button><button type="button" class="primary ce-btn" data-ce="starter-confirm">${st.mode==='replace'&&S.items.length?'Replace with':'Load'} ${set.items.length} items</button>`;
+ }
+ async function confirmStarter(){
+  const st=S.starter, set=(S.starterSets||[]).find(x=>x.visit_type===st?.pick);if(!set)return;
+  const setType=set.visit_type!==S.template.visit_type&&!!dialog.querySelector('#ceStarterType')?.checked;
+  const snapshot=S.items, r=M.loadStarterItems(S.items,set.items,st.mode);
+  dialog.close();
+  S.collapsed=new Set();
+  commit(r.items,{selected:mqMobile.matches?null:r.added[0],announceMsg:`Loaded ${r.added.length} ${set.label} starter items.`});
+  showUndo(`Loaded ${r.added.length} ${set.label} starter items into the draft.`,snapshot);
+  if(setType)saveDetails({visit_type:set.visit_type});
+  const first=r.added[0]&&sectionsEl.querySelector(`.ce-item[data-uid="${CSS.escape(r.added[0])}"]`);
+  (first||sectionsEl).scrollIntoView({block:'nearest',behavior:'smooth'});
  }
  async function openHistory(){
   openDialog(`<div class="ce-dialog-head"><h2>Version history</h2><button type="button" class="ce-iconbtn" data-ce="dialog-close" aria-label="Close">${icon('x')}</button></div><div class="ce-dialog-body" id="ceHistoryBody"><p class="ce-muted">Loading versions…</p></div>`);
@@ -611,6 +706,11 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
     return openPreviewDialog();
    }
    case 'publish':return openPublish();
+   case 'template-menu':return S.menu&&S.menu.trigger===b?closeMenu():templateMenu(b);
+   case 'starter':return openStarter();
+   case 'starter-pick':{if(!S.starter)return;S.starter.pick=id;S.starter.setType=id!==S.template.visit_type&&!S.items.length;renderStarter();dialog.querySelector('.ce-starter-card.is-on')?.focus();return;}
+   case 'starter-mode':{if(!S.starter)return;S.starter.mode=id;renderStarter();dialog.querySelector(`[data-ce="starter-mode"][data-id="${id}"]`)?.focus();return;}
+   case 'starter-confirm':return confirmStarter();
    case 'confirm-publish':return publish(b);
    case 'dialog-close':return dialog.close();
   }
@@ -636,6 +736,17 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
  });
  on(app,'change',e=>{
   const t=e.target;
+  if(t.id==='ceName'){
+   const name=t.value.trim();
+   if(!name){t.value=S.template.name;notify('Template name is required.');return;}
+   if(name!==S.template.name)saveDetails({name},{message:'Template renamed.'});
+   return;
+  }
+  if(t.id==='ceVisitType'){
+   if(t.value!==S.template.visit_type)saveDetails({visit_type:t.value},{message:'Visit type changed to '+M.visitType(t.value).label+'.'});
+   return;
+  }
+  if(t.id==='ceStarterType'){if(S.starter)S.starter.setType=t.checked;return;}
   if(t.id==='ceSection'){
    const item=selectedItem();if(!item)return;
    if(t.value==='__new__'){
@@ -650,6 +761,15 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
  on(app,'toggle',e=>{if(e.target.matches&&e.target.matches('.ce-advanced'))S.advancedOpen=e.target.open;},true);
  on(app,'keydown',e=>{
   const t=e.target;
+  if(t.id==='ceName'){
+   if(e.key==='Enter'){e.preventDefault();t.blur();}
+   else if(e.key==='Escape'){e.preventDefault();t.value=S.template.name;t.blur();}
+   return;
+  }
+  if(t.closest&&t.closest('[data-group="starter"]')&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){
+   const cards=[...dialog.querySelectorAll('.ce-starter-card')], i=cards.indexOf(t.closest('.ce-starter-card'));if(i<0)return;
+   e.preventDefault();cards[(i+(e.key==='ArrowLeft'||e.key==='ArrowUp'?-1:1)+cards.length)%cards.length].click();return;
+  }
   if(t.matches&&t.matches('[data-ce-rename]')){
    if(e.key==='Enter'){e.preventDefault();t.dataset.done='1';commitRename(t);}
    else if(e.key==='Escape'){e.preventDefault();t.dataset.done='1';commitRename(t,true);}
@@ -802,7 +922,7 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
  }
  function unmount(){cleanups.splice(0).forEach(fn=>{try{fn();}catch{}});resizeObserver?.disconnect();if(dialog.open)dialog.close();}
 
- renderHeader();renderList();renderInspector();renderTopState();renderStatus();
+ renderTitle();renderHeader();renderList();renderInspector();renderTopState();renderStatus();
  window.scrollTo(0,0);
  return {unmount,flush:()=>autosave.flush(),get templateId(){return S.template.id;},get busy(){return autosave.busy;},state:S};
 }
