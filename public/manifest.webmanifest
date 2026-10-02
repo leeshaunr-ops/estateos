@@ -1,0 +1,17 @@
+{
+  "name": "EstateAegis",
+  "short_name": "EstateAegis",
+  "description": "Residence inspections, service work and arrivals — works offline in the field.",
+  "id": "/login?source=pwa",
+  "start_url": "/login?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#7e202b",
+  "background_color": "#f7f8fa",
+  "icons": [
+    {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}

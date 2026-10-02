@@ -1,4 +1,5 @@
 import {createChecklistTemplates} from './checklist-templates-api.mjs';
+import {createOfflineInspections,isUuid,captureTime,submissionProblems} from './offline-inspections.mjs';
 import {createPlatformGoogle} from './platform-google.mjs';
 import {createPlatformDashboard} from './platform-dashboard.mjs';
 import {createStripeBilling} from './stripe-billing.mjs';
@@ -118,7 +119,8 @@ async function audit(user, action, entityId) { (await run('INSERT INTO audit VAL
 async function notifyProperty(p, title, entityId, audience = 'staff') { const recipients = (await filterAsync((await all('SELECT * FROM users WHERE organization_id=? AND active=1', p.organization_id)), async (u) => audience === 'client' ? u.role === 'client' && u.client_id === p.client_id : u.role === 'admin' || u.role === 'employee' && (await get('SELECT 1 FROM property_access WHERE user_id=? AND property_id=?', u.id, p.id)))); for (const u of recipients)
     (await run('INSERT INTO notifications VALUES(?,?,?,?,?,?)', id(), u.id, title, entityId, null, now())); }
 function json(res, status, data, headers = {}) { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers }); res.end(JSON.stringify(data)); }
-async function body(req) { let length = 0; const chunks = []; for await (const chunk of req) {
+async function body(req) { if (req.parsedBody !== undefined) return req.parsedBody; return req.parsedBody = await readBody(req); }
+async function readBody(req) { let length = 0; const chunks = []; for await (const chunk of req) {
     length += chunk.length;
     if (length > 15 * 1024 * 1024)
         fail(413, 'Upload exceeds 10 MB.');
@@ -201,6 +203,7 @@ const demos=createDemos({get,all,run,transaction,id,now,hash,randomBytes,body,js
 const saas = createSaas({get,all,run,transaction,fail,text,note,id,hash,now,passwordHash,session,json,body,rate,audit,randomBytes,demos,demoSignup});
 const staff = createStaff({get,all,run,transaction,fail,text,note,id,now,passwordHash,json,body,audit,communications,assertCapacity:billing.assertCapacity});
 const checklistTemplates = createChecklistTemplates({get,all,run,transaction,body,json,fail,roles,property,id,now,audit});
+const offlineInspections = createOfflineInspections({get,all,run,body,json,fail,roles,property,entity,hash,now,template});
 async function assertWorkspaceActive(organizationId){if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',organizationId))?.status==='suspended')fail(403,'This company workspace is suspended. Contact support.');const d=await demos.lookup(organizationId);if(d&&Number(d.expires_at)<=Date.now())fail(403,'Your seven-day demo has ended. Contact sales@estateaegis.com for more time.');}
 const clientErrorWindows = new Map();
 function clientErrorAllowed(req){
@@ -235,6 +238,7 @@ async function api(req, res, url, user) {
     if(await saas(req,res,url,user))return;
     if(await staff.handle(req,res,url,user))return;
     if(await checklistTemplates.handle(req,res,url,user))return;
+    if(await offlineInspections.handle(req,res,url,user))return;
     if(await communications.handle(req,res,url,user))return;
     if(await operations.handle(req,res,url,user))return;
     if(await security.handle(req,res,url,user))return;
@@ -370,8 +374,7 @@ async function api(req, res, url, user) {
         if (row.status !== 'published')
             fail(409, 'Publish the inspection first.');
         const report = {...JSON.parse(row.report_snapshot),companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'', completedAt:JSON.parse(row.report_snapshot).completedAt||row.published_at};
-        const photos = (await mapAsync(report.fileIds, async (fileId) => { const f = (await readFile(user, fileId)); return { name: f.name, bytes: (await readBytes(f.storage_key)) }; }));
-        const pdf = inspectionPdf(report, photos);
+        const pdf = inspectionPdf(report, await inspectionPhotos(user, report));
         res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="EstateAegis-Inspection-${row.id}.pdf"`, 'Cache-Control': 'no-store' });
         return res.end(pdf);
     }
@@ -807,7 +810,10 @@ async function api(req, res, url, user) {
     else if (p === '/api/inspections') {
         roles(user, 'admin', 'employee');
         const inspectionProperty = await property(user, b.propertyId, 'operate');
-        const key = id();
+        // Offline-started visits arrive with a client-generated UUID. A repeat from the same inspector at the same residence is the same visit.
+        if (b.id !== undefined && !isUuid(b.id)) fail(422, 'Inspection ID must be a UUID.');
+        if (b.id) { const existing = await get('SELECT i.id,i.property_id,i.inspector_id FROM inspections i WHERE i.id=?', b.id); if (existing) { if (existing.inspector_id === user.id && existing.property_id === inspectionProperty.id) return json(res, 201, { id: existing.id, existing: true }); fail(409, 'That inspection ID is already in use.'); } }
+        const key = b.id || id();
         const inspectionDate = date(b.date), frequency = ['One-time', '7 days', '30 days', '60 days'].includes(b.frequency) ? b.frequency : (b.frequency === 'Custom' ? 'Custom' : 'One-time');
         const customDays = frequency === 'Custom' ? Math.max(1, Math.min(3650, Number(b.customDays) || 0)) : ({ '7 days': 7, '30 days': 30, '60 days': 60 }[frequency] || 0);
         const next = customDays ? (() => { const d = new Date(inspectionDate + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + customDays); return d.toISOString().slice(0, 10); })() : '';
@@ -862,6 +868,7 @@ async function api(req, res, url, user) {
         const changed=await run("UPDATE inspections SET answers=?,summary=?,notes=?,internal_notes=?,version=version+1 WHERE id=? AND status='draft' AND version=?",JSON.stringify(answers),note(b.summary),note(b.notes),note(b.internalNotes),row.id,row.version);
         if(changed.changes!==1)fail(409,'This inspection changed. Refresh before saving.');
         (await audit(user, 'inspection.saved', row.id));
+        if (b.conflictResolution) (await audit(user, 'inspection.conflict_resolved', row.id));
         result = { id: row.id, version: row.version + 1 };
     }
     else if (p === '/api/inspections/email') {
@@ -869,6 +876,41 @@ async function api(req, res, url, user) {
         const row=await entity(user,'inspections',b.id,'operate');
         if(row.status!=='published')fail(409,'Publish this report first.');
         result=await deliverInspection(user,row.id);
+    }
+    else if (p === '/api/inspections/submit') {
+        // Field techs (and admins) mark a visit complete, often from an offline queue. It waits as `submitted` for an admin to publish.
+        roles(user, 'admin', 'employee');
+        const row = (await entity(user, 'inspections', b.id, 'operate'));
+        if (row.status === 'submitted' || row.status === 'published') result = { id: row.id, status: row.status, version: row.version, alreadyCompleted: true };
+        else {
+            assertVersion(row, b);
+            const problems = submissionProblems(row);
+            if (problems.length) fail(422, problems.join(' '));
+            const submittedAt = now();
+            await transaction(async () => {
+                const changed = await run("UPDATE inspections SET status='submitted',submitted_at=?,submitted_by=?,version=version+1 WHERE id=? AND status='draft' AND version=?", submittedAt, user.id, row.id, row.version);
+                if (changed.changes !== 1) fail(409, 'This inspection changed. Refresh before submitting.');
+                await audit(user, 'inspection.submitted', row.id);
+                const pRow = await get('SELECT * FROM properties WHERE id=?', row.property_id);
+                await notifyProperty(pRow, 'Inspection submitted for review: ' + pRow.name, row.id);
+            });
+            result = { id: row.id, status: 'submitted', version: row.version + 1, submitted_at: submittedAt };
+            if (b.autoPublish === true && user.role === 'admin') {
+                const fresh = await get('SELECT * FROM inspections WHERE id=?', row.id);
+                const published = await publishInspection(user, fresh, { key: 'submit:' + row.id + ':' + fresh.version, route: '/api/inspections/publish', requestHash: hash('auto-publish:' + row.id) });
+                result = { ...result, ...published, status: 'published', version: fresh.version + 1 };
+            }
+        }
+    }
+    else if (p === '/api/inspections/reopen') {
+        roles(user, 'admin');
+        const row = (await entity(user, 'inspections', b.id, 'operate'));
+        assertVersion(row, b);
+        if (row.status !== 'submitted') fail(409, 'Only submitted inspections can be returned to draft.');
+        const changed = await run("UPDATE inspections SET status='draft',version=version+1 WHERE id=? AND status='submitted' AND version=?", row.id, row.version);
+        if (changed.changes !== 1) fail(409, 'This inspection changed. Refresh and try again.');
+        await audit(user, 'inspection.reopened', row.id);
+        result = { id: row.id, status: 'draft', version: row.version + 1 };
     }
     else if (p === '/api/inspections/publish') {
         roles(user, 'admin');
@@ -881,31 +923,16 @@ async function api(req, res, url, user) {
             return json(res, 200, JSON.parse(saved.response));
         }
         assertVersion(row, b);
-        if (row.status !== 'draft')
-            fail(409, 'Already published.');
-        const answers = JSON.parse(row.answers);
-        if(answers.some(a=>a.status==='unchecked'))fail(422,'Complete every checklist item before publishing.');
-        if (!row.summary.trim())
-            fail(422, 'Add an inspection summary.');
-        const pRow = (await property(user, row.property_id));
-        const fileIds = (await all('SELECT id FROM files WHERE inspection_id=? ORDER BY created_at', row.id)).map(f => f.id);
-        const completedAt=now();
-        const report = { id: row.id, completedAt, timezone:pRow.timezone||'UTC', company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id)).name, companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'', property: pRow.name, client: (await get('SELECT name FROM clients WHERE id=?', pRow.client_id)).name, date: row.inspection_date, inspector: (await get('SELECT name FROM users WHERE id=?', row.inspector_id)).name, overall: answers.some(a => a.status === 'attention') ? 'Action needed' : answers.some(a => a.status === 'monitor') ? 'Monitor' : answers.every(a => a.status === 'na') ? 'Not assessed' : 'Passed', answers, summary: row.summary, notes: row.notes, fileIds };
-        result = { id: row.id, published: true };
-        await transaction(async()=>{
-            const updated=await run("UPDATE inspections SET status='published',published_at=?,report_snapshot=?,report_email=?,version=version+1 WHERE id=? AND status='draft' AND version=?",completedAt,JSON.stringify(report),pRow.inspection_report_email||'',row.id,row.version);
-            if(updated.changes!==1)fail(409,'This report changed or was already published.');
-            await notifyProperty(pRow,'Inspection report available: '+pRow.name,row.id,'client');
-            await audit(user,'inspection.published',row.id);
-            await run('INSERT INTO idempotency VALUES(?,?,?,?,?)',user.id,key,p,requestHash,JSON.stringify(result));
-        });
-        result={...result,...await deliverInspection(user,row.id)};
-        await run('UPDATE idempotency SET response=? WHERE user_id=? AND key=? AND route=?',JSON.stringify(result),user.id,key,p);
+        result = await publishInspection(user, row, { key, route: p, requestHash });
     }
     else if (p === '/api/files') {
         roles(user, 'admin', 'employee', 'vendor');
         const authorizedJob=b.workId?await work(user,b.workId):null;
         const pRow = authorizedJob&&authorizedJob.property_id===b.propertyId?await get('SELECT * FROM properties WHERE id=? AND organization_id=?',b.propertyId,user.organization_id):(await property(user, b.propertyId, user.role === 'vendor' ? 'job' : 'operate'));
+        // Offline photo uploads carry the outbox operation ID so a retried upload never creates a second file.
+        const clientOpId = b.clientOpId ?? req.headers['idempotency-key'] ?? null;
+        if (clientOpId != null && !isUuid(clientOpId)) fail(422, 'Upload ID must be a UUID.');
+        if (clientOpId) { const existing = await get('SELECT id,inspection_id,work_order_id FROM files WHERE created_by=? AND client_op_id=?', user.id, clientOpId); if (existing) { if ((existing.inspection_id || null) !== (b.inspectionId || null) || (existing.work_order_id || null) !== (b.workId || null)) fail(422, 'This upload ID was already used for another record.'); return json(res, 201, { id: existing.id, existing: true }); } }
         if (b.inspectionId) {
             roles(user, 'admin', 'employee');
             const inspection = (await entity(user, 'inspections', b.inspectionId, 'operate'));
@@ -921,6 +948,7 @@ async function api(req, res, url, user) {
             fail(403, 'Upload evidence to an assigned job.');
         if (b.inspectionId && b.workId)
             fail(422, 'Choose one evidence target.');
+        const capturedAt = captureTime(b.capturedAt);
         const bytes = Buffer.from(text(b.base64, 'File', 14 * 1024 * 1024), 'base64');
         if (bytes.length > 10 * 1024 * 1024)
             fail(413, 'Maximum file size is 10 MB.');
@@ -935,12 +963,13 @@ async function api(req, res, url, user) {
             await transaction(async()=>{
                 await subscriptions.ensureSpace(user.organization_id,bytes.length);
                 await putBytes(storageKey,bytes,isJpeg?'image/jpeg':'application/pdf');stored=true;
-                await run('INSERT INTO files(id,property_id,inspection_id,work_order_id,name,mime,bytes,storage_key,visibility,created_by,created_at,answer_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',key,pRow.id,b.inspectionId||null,b.workId||null,text(b.name,'Filename',200),isJpeg?'image/jpeg':'application/pdf',bytes.length,storageKey,b.visibility==='client'?'client':'internal',user.id,now(),null);
+                const receivedAt=now();
+                await run('INSERT INTO files(id,property_id,inspection_id,work_order_id,name,mime,bytes,storage_key,visibility,created_by,created_at,answer_key,client_op_id,captured_at,received_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',key,pRow.id,b.inspectionId||null,b.workId||null,text(b.name,'Filename',200),isJpeg?'image/jpeg':'application/pdf',bytes.length,storageKey,b.visibility==='client'?'client':'internal',user.id,receivedAt,null,clientOpId||null,capturedAt,receivedAt);
                 await audit(user,'file.uploaded',key);
             });
         } catch(e){if(stored)await deleteBytes(storageKey);throw e;}
         await subscriptions.monitor(user.organization_id).catch(e=>console.error('Storage monitoring:',e.message));
-        result = { id: key };
+        result = { id: key, captured_at: capturedAt };
     }
     else if (p === '/api/shopping/update' || p === '/api/shopping/delete') {
         roles(user, 'admin', 'employee', 'client');
@@ -1149,14 +1178,14 @@ const server = http.createServer(async (req, res) => {
                 fail(415, 'JSON content required.');
         }
         if (url.pathname.startsWith('/api/'))
-            return await api(req, res, url, (await actor(req)));
+{ const user = await actor(req); return await offlineInspections.idempotent(req, res, url, user, () => api(req, res, url, user)); }
         if (url.pathname === '/robots.txt' || url.pathname === '/sitemap.xml') {
             const sitemap = url.pathname === '/sitemap.xml';
             const content = sitemap ? '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://estateaegis.com/</loc></url><url><loc>https://estateaegis.com/home-watch-software</loc></url><url><loc>https://estateaegis.com/private-residence-management</loc></url><url><loc>https://estateaegis.com/inspection-report-software</loc></url><url><loc>https://estateaegis.com/about</loc></url><url><loc>https://estateaegis.com/home-watch-checklist</loc></url><url><loc>https://estateaegis.com/arrival-preparation-checklist</loc></url><url><loc>https://estateaegis.com/example-workflow</loc></url><url><loc>https://estateaegis.com/resources</loc></url></urlset>' : 'User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /login\nSitemap: https://estateaegis.com/sitemap.xml\n';
             res.writeHead(200, {'Content-Type': sitemap ? 'application/xml; charset=utf-8' : 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600'});
             return res.end(req.method === 'HEAD' ? undefined : content);
         }
-        if (['/demo-quickstart.mp4','/demo-quickstart.vtt','/demo-quickstart.png','/ea-shield.png', '/apple-touch-icon.png', '/share-preview.jpg', '/waterfront.mp4', '/waterfront.jpg', '/tutorial.mp4', '/product.png', '/report.png', '/overview.pdf', '/tutorial.vtt','/home-watch-checklist.txt','/arrival-preparation-checklist.txt','/sample-inspection-report.pdf'].includes(url.pathname)) {
+        if (['/demo-quickstart.mp4','/demo-quickstart.vtt','/demo-quickstart.png','/ea-shield.png', '/apple-touch-icon.png', '/share-preview.jpg', '/waterfront.mp4', '/waterfront.jpg', '/tutorial.mp4', '/product.png', '/report.png', '/overview.pdf', '/tutorial.vtt','/home-watch-checklist.txt','/arrival-preparation-checklist.txt','/sample-inspection-report.pdf','/icon-192.png','/icon-512.png','/icon-maskable-512.png'].includes(url.pathname)) {
             const mediaPath = path.join(root, 'public', url.pathname.slice(1));
             const size = fs.statSync(mediaPath).size;
             const type = {'.mp4':'video/mp4','.jpg':'image/jpeg','.png':'image/png','.pdf':'application/pdf','.vtt':'text/vtt; charset=utf-8','.txt':'text/plain; charset=utf-8','.txt':'text/plain; charset=utf-8'}[path.extname(mediaPath)];
@@ -1177,8 +1206,16 @@ const server = http.createServer(async (req, res) => {
             if (req.method === 'HEAD') return res.end();
             return fs.createReadStream(mediaPath).pipe(res);
         }
+        if (url.pathname === '/sw.js' || url.pathname === '/manifest.webmanifest') {
+            // The service worker is versioned by a hash of the app shell, so every deploy that changes the shell installs a fresh cache.
+            res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
+            res.writeHead(200, { 'Content-Type': url.pathname === '/sw.js' ? 'text/javascript; charset=utf-8' : 'application/manifest+json; charset=utf-8', 'Cache-Control': 'no-cache' });
+            if (req.method === 'HEAD') return res.end();
+            const content = fs.readFileSync(path.join(root, 'public', url.pathname.slice(1)), 'utf8');
+            return res.end(url.pathname === '/sw.js' ? content.replace('__SHELL_VERSION__', shellVersion()) : content);
+        }
         const appHome = url.pathname === '/' && (url.searchParams.has('invite') || url.searchParams.has('workspaceInvite') || await actor(req));
-        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/security':'security.html' };
+        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/security':'security.html' };
         const file = names[url.pathname] || (url.pathname === '/client-login' || /^\/client\/[a-z0-9-]+$/i.test(url.pathname) ? 'live.html' : null);
         if (!file)
             fail(404, 'Page not found.');
@@ -1200,12 +1237,38 @@ const server = http.createServer(async (req, res) => {
         json(res, status, { error: status === 500 ? 'The action could not be saved. Check the server log.' : error.message });
     }
 });
+const SHELL_FILES = ['live.html','live.js','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png'];
+let cachedShellVersion = null;
+function shellVersion() { if (!cachedShellVersion) { const digest = createHash('sha256'); for (const name of SHELL_FILES) { try { digest.update(name).update(fs.readFileSync(path.join(root, 'public', name))); } catch { digest.update(name + ':missing'); } } cachedShellVersion = digest.digest('hex').slice(0, 12); } return cachedShellVersion; }
+setInterval(() => offlineInspections.purge().catch(e => console.error('Idempotency cleanup:', e.message)), 3600000).unref();
 const port = Number(process.env.PORT || 4317), host = process.env.ESTATEOS_HOST || '127.0.0.1';
 if (host !== '127.0.0.1' && (!process.env.ESTATEOS_SETUP_KEY || process.env.ESTATEOS_SETUP_KEY.length < 24 || process.env.ESTATEOS_SECURE_COOKIES !== '1'))
     throw Error('Nonlocal hosting requires a strong setup key, HTTPS termination and secure cookies. Complete the production deployment review first.');
 server.listen(port, host, () => console.log(`EstateOS running at http://${host}:${server.address().port}`));
 process.on('SIGTERM', () => server.close(async () => { await db.close(); process.exit(0); }));
 
+async function publishInspection(user,row,{key,route,requestHash}){
+ if(!['draft','submitted'].includes(row.status))fail(409,'Already published.');
+ const answers=JSON.parse(row.answers);
+ if(answers.some(a=>a.status==='unchecked'))fail(422,'Complete every checklist item before publishing.');
+ if(!row.summary.trim())fail(422,'Add an inspection summary.');
+ const pRow=await property(user,row.property_id);
+ const fileIds=(await all('SELECT id FROM files WHERE inspection_id=? ORDER BY created_at',row.id)).map(f=>f.id);
+ const completedAt=now();
+ const report={id:row.id,completedAt,timezone:pRow.timezone||'UTC',company:(await get('SELECT name FROM organizations WHERE id=?',user.organization_id)).name,companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'',property:pRow.name,client:(await get('SELECT name FROM clients WHERE id=?',pRow.client_id)).name,date:row.inspection_date,inspector:(await get('SELECT name FROM users WHERE id=?',row.inspector_id)).name,overall:answers.some(a=>a.status==='attention')?'Action needed':answers.some(a=>a.status==='monitor')?'Monitor':answers.every(a=>a.status==='na')?'Not assessed':'Passed',answers,summary:row.summary,notes:row.notes,fileIds};
+ let result={id:row.id,published:true};
+ await transaction(async()=>{
+  const updated=await run("UPDATE inspections SET status='published',published_at=?,report_snapshot=?,report_email=?,version=version+1 WHERE id=? AND status IN ('draft','submitted') AND version=?",completedAt,JSON.stringify(report),pRow.inspection_report_email||'',row.id,row.version);
+  if(updated.changes!==1)fail(409,'This report changed or was already published.');
+  await notifyProperty(pRow,'Inspection report available: '+pRow.name,row.id,'client');
+  await audit(user,'inspection.published',row.id);
+  await run('INSERT INTO idempotency VALUES(?,?,?,?,?)',user.id,key,route,requestHash,JSON.stringify(result));
+ });
+ result={...result,...await deliverInspection(user,row.id)};
+ await run('UPDATE idempotency SET response=? WHERE user_id=? AND key=? AND route=?',JSON.stringify(result),user.id,key,route);
+ return result;
+}
+async function inspectionPhotos(user,report){const tz=report.timezone||'America/New_York';return mapAsync(report.fileIds||[],async fileId=>{const f=await readFile(user,fileId);return {name:f.name,bytes:await readBytes(f.storage_key),capturedAt:f.captured_at||null,timezone:tz};});}
 async function deliverInspection(user,inspectionId){
  if(await demos.lookup(user.organization_id))return {emailStatus:'demo_disabled'};
  const row=await entity(user,'inspections',inspectionId,'operate');
@@ -1218,8 +1281,7 @@ async function deliverInspection(user,inspectionId){
  let result;
  try{
   const report={...JSON.parse(row.report_snapshot),companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'',completedAt:JSON.parse(row.report_snapshot).completedAt||row.published_at};
-  const photos=await mapAsync(report.fileIds||[],async fileId=>{const f=await readFile(user,fileId);return {name:f.name,bytes:await readBytes(f.storage_key)};});
-  result=await sendInspectionEmail({to:row.report_email,report,pdf:inspectionPdf(report,photos)});
+  result=await sendInspectionEmail({to:row.report_email,report,pdf:inspectionPdf(report,await inspectionPhotos(user,report))});
  }catch{result={emailStatus:'failed'};}
  await run('UPDATE inspection_email_delivery SET email_status=? WHERE inspection_id=?',result.emailStatus,row.id);
  return result;
