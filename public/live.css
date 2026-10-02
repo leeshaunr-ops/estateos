@@ -302,3 +302,7 @@ nav a,aside a{border-radius:9px}
 
 /* Remove the legacy gold/red logo treatment from the client auth overlay. */
 .auth-intro .ea-brand-icon{filter:grayscale(1) brightness(0) invert(1) drop-shadow(0 2px 5px rgba(0,0,0,.35))}
+
+/* Override legacy .brand span styling on the company wordmark. */
+.auth-intro .brand-name{display:inline!important;width:auto!important;height:auto!important;padding:0!important;border-radius:0!important;background:transparent!important;color:#fff!important;line-height:inherit!important;box-shadow:none!important}
+.auth-intro .ea-brand-icon{filter:drop-shadow(0 2px 5px rgba(0,0,0,.35))!important}
