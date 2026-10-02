@@ -445,7 +445,7 @@ portalAuth=(...args)=>{if((location.pathname==='/client-login'||new URLSearchPar
  const saveView=()=>{if(!data)return;try{localStorage.setItem(stateKey,JSON.stringify({page,propertyId,tab,activeInspection,activeAssetInspection,activeArrival,search,at:Date.now()}));localStorage.setItem(activityKey,String(Date.now()));}catch{}};
  const restoreView=()=>{try{const saved=JSON.parse(localStorage.getItem(stateKey)||'null');if(!saved||Date.now()-Number(saved.at||0)>24*60*60*1000)return;page=saved.page||page;propertyId=saved.propertyId||null;tab=saved.tab||tab;activeInspection=saved.activeInspection||null;activeAssetInspection=saved.activeAssetInspection||null;activeArrival=saved.activeArrival||null;search=saved.search||'';}catch{}};
  restoreView();
- page='dashboard';propertyId=null;tab='overview';activeInspection=null;activeAssetInspection=null;activeAssetInspectionRecord=null;assetInspectionReadOnly=false;activeArrival=null;activeClient=null;
+ if(!page)page='dashboard';
  const originalLoad=load;load=async function(...args){if(!data){page='dashboard';propertyId=null;tab='overview';activeInspection=null;activeAssetInspection=null;activeAssetInspectionRecord=null;assetInspectionReadOnly=false;activeArrival=null;activeClient=null;}return originalLoad(...args);};
  const markActivity=()=>{if(data)try{localStorage.setItem(activityKey,String(Date.now()));}catch{}};
  ['pointerdown','keydown','touchstart','mousemove','scroll'].forEach(type=>window.addEventListener(type,markActivity,{passive:true}));
