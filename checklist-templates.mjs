@@ -23,6 +23,7 @@ export function normalizeItem(input, index=0){
  item.options=Array.isArray(item.options)?item.options.map(String):[];
  item.room_types=Array.isArray(item.room_types)?item.room_types.map(String):[];
  item.required=!!item.required;
+ item.alert_on_fail=!!item.alert_on_fail;
  item.scope=item.scope==='room'?'room':'property';
  item.sort_order=Number.isFinite(Number(item.sort_order))?Number(item.sort_order):index;
  if(!item.label) throw new Error('Checklist item label is required');
