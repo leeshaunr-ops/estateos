@@ -99,6 +99,9 @@ catch {
 async function actor(req) { const token = (req.headers.cookie || '').match(/(?:^|; )estateos_session=([^;]+)/)?.[1]; if (!token)
     return null; return (await get('SELECT users.* FROM sessions JOIN users ON users.id=sessions.user_id WHERE token_hash=? AND expires_at>? AND users.active=1', hash(token), Date.now())) || null; }
 function safeUser(user) { return user ? { id: user.id, name: user.name, email: user.email, role: user.role, platformOwner: platformOwner(user) } : null; }
+// Request priority: stored as Low/Normal/High/Urgent; any letter case is accepted and normalized.
+const REQUEST_PRIORITIES=['Low','Normal','High','Urgent'];
+function requestPriority(value,fallback){if((value===undefined||value===null||value==='')&&fallback)return fallback;const v=String(value??'').trim().toLowerCase();const match=REQUEST_PRIORITIES.find(p=>p.toLowerCase()===v);if(!match)fail(422,'Choose a valid priority.');return match;}
 function roles(user, ...allowed) { if (!user)
     fail(401, 'Please sign in.'); if (!allowed.includes(user.role))
     fail(403, 'You do not have permission for this action.'); }
@@ -810,14 +813,14 @@ async function api(req, res, url, user) {
         roles(user, 'admin', 'employee', 'client');
         const pRow = (await property(user, b.propertyId));
         const key = id();
-        const priority=b.priority||'Normal';if(!['Low','Normal','High','Urgent'].includes(priority))fail(422,'Choose a valid priority.');
+        const priority=requestPriority(b.priority,'Normal');
         (await transaction(async () => { (await run('INSERT INTO requests(id,property_id,created_by,title,description,status,work_order_id,created_at,priority) VALUES(?,?,?,?,?,?,?,?,?)', key, pRow.id, user.id, text(b.title, 'Request', 200), note(b.description), 'new', null, now(),priority)); (await notifyProperty(pRow, 'New request: ' + b.title, key)); (await audit(user, 'request.created', key));await communications.request(user,key); }));
         result = { id: key };
     }
     else if (p === '/api/requests/priority') {
         roles(user,'admin');await entity(user,'requests',b.id,'operate');
-        if(!['Low','Normal','High','Urgent'].includes(b.priority))fail(422,'Choose a valid priority.');
-        await transaction(async()=>{await run('UPDATE requests SET priority=? WHERE id=?',b.priority,b.id);await audit(user,'request.priority_updated',b.id);});result={ok:true};
+        const priority=requestPriority(b.priority);
+        await transaction(async()=>{await run('UPDATE requests SET priority=? WHERE id=?',priority,b.id);await audit(user,'request.priority_updated',b.id);});result={ok:true};
     }
     else if (p === '/api/requests/create-work') {
         roles(user,'admin','employee');
