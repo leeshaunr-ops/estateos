@@ -358,7 +358,7 @@ body.signed-in,.shell{--muted:#5f6b76;--line:#e2e7eb}
 .shell .set-grid .res-col{display:grid;gap:20px;min-width:0}
 .shell .set-fields{border-top:1px solid #edf0f2}
 .shell .set-fields dd{overflow-wrap:anywhere}
-.shell .set-empty{color:#7a8794;font-weight:400}
+.shell .set-empty{color:#5f6b76;font-weight:400}
 .shell .set-brand{display:flex;align-items:center;gap:14px;padding:4px 20px 16px}
 .shell .set-brand .company-logo{max-height:48px;max-width:140px;width:auto;object-fit:contain}
 .shell .set-brand strong{display:block;font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:20px;color:#1f2933}
