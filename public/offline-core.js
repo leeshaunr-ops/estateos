@@ -107,7 +107,9 @@
   async function serverCopy(id){const r=await send('GET','/api/offline/inspections/'+encodeURIComponent(id));return r.status===200?r.body.inspection:null;}
   const handlers={
    async start_inspection(op){
-    const r=await send('POST','/api/inspections',{id:op.inspectionId,propertyId:op.payload.propertyId,date:op.payload.date},op.opId);
+    // Visits started by this app version name their checklist (and the exact template version they were filled against).
+    const pick=op.payload.templateId?{templateId:op.payload.templateId,visitType:op.payload.visitType,...(op.payload.templateVersionId?{templateVersionId:op.payload.templateVersionId}:{})}:{};
+    const r=await send('POST','/api/inspections',{id:op.inspectionId,propertyId:op.payload.propertyId,date:op.payload.date,...pick},op.opId);
     const kind=classify(r.status);if(kind!=='ok')return r;
     await store.updateDraft(op.inspectionId,d=>d&&Object.assign(d,{localOnly:false}));
     await done(op);return r;

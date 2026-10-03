@@ -56,8 +56,21 @@ test('post-storm starter puts safety first and alerts on critical damage',()=>{
 });
 test('starter sets list every visit type with items, and legacy keys are unchanged',()=>{
  const sets=starterSets();
- assert.deepEqual(sets.map(s=>s.visit_type),['routine','arrival','departure','seasonal','maintenance','pre_storm','post_storm']);
+ assert.deepEqual(sets.map(s=>s.key),['routine_standard','routine','arrival','departure','seasonal','maintenance','pre_storm','post_storm']);
+ assert.deepEqual(sets.map(s=>s.visit_type),['routine','routine','arrival','departure','seasonal','maintenance','pre_storm','post_storm']);
  assert.equal(sets.find(s=>s.visit_type==='pre_storm').label,'Hurricane prep');
  assert.equal(presetItems('routine')[0].stable_key,'exterior-walk-the-exterior-for-visible-damage-or-hazards-');
  assert.deepEqual(presetItems('custom'),[]);
+});
+test('the built-in standard checklist is offered as the editable "Routine visit" starter',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const builtIn=JSON.parse(readFileSync(new URL('../inspection-template.json',import.meta.url),'utf8'));
+ const set=starterSets()[0];
+ assert.equal(set.key,'routine_standard');assert.equal(set.label,'Routine visit');assert.equal(set.visit_type,'routine');
+ const residence=set.items.filter(i=>i.scope==='property'),rooms=set.items.filter(i=>i.scope==='room');
+ assert.deepEqual(residence.map(i=>[i.stable_key,i.section,i.label]),builtIn.map(a=>[a.key,a.section,a.label]),'same items, keys and wording as the built-in checklist');
+ assert.deepEqual(rooms.map(i=>[i.stable_key,i.label]),[['condition','Overall condition'],['readiness','Cleanliness and readiness'],['fixtures','Fixtures and equipment']],'per-room checks match the built-in room checks');
+ assert.ok(set.items.every(i=>i.response_type==='pass_fail_na'&&i.required));
+ assert.doesNotThrow(()=>normalizeTemplate({name:'Routine visit',visit_type:'routine',items:set.items}));
+ assert.equal(starterSets().find(s=>s.key==='routine').label,'Routine (short)');
 });

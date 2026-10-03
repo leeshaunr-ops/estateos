@@ -1,3 +1,4 @@
+import {readFileSync} from 'node:fs';
 export const RESPONSE_TYPES = new Set(['pass_fail_na','yes_no','rating','text','number','select','multi_select']);
 export const PHOTO_RULES = new Set(['none','optional','required_on_fail']);
 export const VISIT_TYPES = new Set(['routine','arrival','departure','seasonal','maintenance','pre_storm','post_storm','custom']);
@@ -79,8 +80,21 @@ export function presetItems(visitType){return (PRESET_ITEMS[visitType]||[]).map(
  const item=Array.isArray(entry)?(([section,label,response_type,photo_rule,scope])=>({section,label,response_type,photo_rule,scope,required:response_type!=='text'}))(entry):{...entry};
  return normalizeItem({...item,stable_key:presetKey(item.section,item.label,!Array.isArray(entry)),sort_order:index});
 });}
-// Every visit type that has starter items, in display order, for the editor's "Load starter items".
-export function starterSets(){return [...VISIT_TYPES].filter(type=>(PRESET_ITEMS[type]||[]).length).map(visit_type=>({visit_type,label:VISIT_TYPE_LABELS[visit_type],items:presetItems(visit_type)}));}
+// The built-in standard checklist (inspection-template.json) as an editable "Routine visit" starter. It is the
+// same checklist a visit falls back to when the company has no published template for the visit type. Item keys
+// are the built-in keys (and condition / readiness / fixtures for the per-room checks), so a template made from it
+// lines up with past built-in visits ("Last visit" hints, follow-ups). Pass / Fail / N/A replaces the built-in
+// Pass / Monitor / Attention / N/A scale.
+const BUILT_IN_CHECKLIST=JSON.parse(readFileSync(new URL('./inspection-template.json',import.meta.url),'utf8'));
+const ROOM_CHECKS=[['condition','Overall condition'],['readiness','Cleanliness and readiness'],['fixtures','Fixtures and equipment']];
+export function standardRoutineItems(){
+ const items=BUILT_IN_CHECKLIST.map(a=>({stable_key:a.key,section:a.section,label:a.label,help_text:'',response_type:'pass_fail_na',photo_rule:'optional',required:true,alert_on_fail:false,scope:'property'}));
+ items.push(...ROOM_CHECKS.map(([stable_key,label])=>({stable_key,section:'Rooms & spaces',label,help_text:'Checked once for every room on the residence profile.',response_type:'pass_fail_na',photo_rule:'optional',required:true,alert_on_fail:false,scope:'room'})));
+ return items.map((item,index)=>normalizeItem({...item,sort_order:index}));
+}
+// Starter sets for the editor's "Load starter items", in display order: the standard Routine visit checklist first,
+// then every visit type that has starter items. `key` identifies a set; `visit_type` is the type it suits.
+export function starterSets(){return [{key:'routine_standard',visit_type:'routine',label:'Routine visit',description:'The standard built-in checklist',items:standardRoutineItems()},...[...VISIT_TYPES].filter(type=>(PRESET_ITEMS[type]||[]).length).map(visit_type=>({key:visit_type,visit_type,label:visit_type==='routine'?'Routine (short)':VISIT_TYPE_LABELS[visit_type],items:presetItems(visit_type)}))];}
 
 
 export function normalizeItem(input, index=0){

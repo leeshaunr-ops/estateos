@@ -11,12 +11,10 @@ When a field visit is completed with failed checklist items that are set to **Al
 
 ## Which failed items alert
 
-Field visits are not linked to checklist templates yet: `inspections.template_id` is never set, and every visit uses the built-in 28-item checklist plus room checks. To decide whether an item alerts:
+Field visits started from a published template are linked to it (see [visits-use-templates.md](visits-use-templates.md)). To decide whether an item alerts:
 
-1. **Linked visit** (`template_id` and `template_version` are set, ready for when visits are started from templates): the item in that exact template version, matched by `stable_key`, then by wording.
-2. **Unlinked visit** (every visit today): the latest **published** version of each active company template with the same visit type (`routine` today). A failed item alerts when a template item with the same key or the same wording (ignoring case, spacing and punctuation) has alert-on-fail switched on. Drafts and archived templates are ignored.
-
-To get alerts today, an admin adds the field checklist item to a Routine template using the same wording (for example "Check under sinks for leaks"), switches on **Alert the office on fail**, and publishes.
+1. **Linked visit** (`template_version_id`, or `template_id` + `template_version`, is set): the item in that exact template version, matched **only by `stable_key`**. If that version row is missing, the visit's own `checklist_snapshot` is used. There is no wording fallback, so renaming an item never changes which item alerts.
+2. **Unlinked visit** (built-in checklist, and every visit created before templates were linked): the latest **published** version of each active company template with the same visit type. A failed item alerts when a template item with the same key or the same wording (ignoring case, spacing and punctuation) has alert-on-fail switched on. Drafts and archived templates are ignored.
 
 ## Recipients
 
