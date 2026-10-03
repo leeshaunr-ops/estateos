@@ -28,17 +28,21 @@ const password='Test-only-strong-password-928!';
 async function start(){const env={...process.env,PORT:'0',ESTATEOS_DATA_DIR:dir,ESTATEOS_VAULT_KEY:randomBytes(32).toString('base64')};delete env.DATABASE_URL;delete env.RENDER;delete env.ESTATEOS_SECURE_COOKIES;
  proc=spawn(process.execPath,['server.mjs'],{cwd:root,env,windowsHide:true});proc.stderr.on('data',c=>{log+=c;});
  base=await new Promise((resolve,reject)=>{proc.stdout.on('data',c=>{const m=String(c).match(/http:\/\/127\.0\.0\.1:\d+/);if(m)resolve(m[0]);});proc.once('exit',code=>reject(Error('Server exited: '+code+' '+log)));setTimeout(()=>reject(Error('Startup timeout')),10000).unref();});}
-function client(){let cookie='';return async(endpoint,b,expected=200)=>{const res=await fetch(base+'/api/'+endpoint,{method:b===undefined?'GET':'POST',headers:{Origin:base,'Content-Type':'application/json',Cookie:cookie},body:b===undefined?undefined:JSON.stringify(b)});const set=res.headers.get('set-cookie');if(set)cookie=set.split(';')[0];const result=await res.json();assert.equal(res.status,expected,endpoint+': '+JSON.stringify(result));return result;};}
+function client(){let cookie='';const call=async(endpoint,b,expected=200)=>{const res=await fetch(base+'/api/'+endpoint,{method:b===undefined?'GET':'POST',headers:{Origin:base,'Content-Type':'application/json',Cookie:cookie},body:b===undefined?undefined:JSON.stringify(b)});const set=res.headers.get('set-cookie');if(set)cookie=set.split(';')[0];const result=await res.json();assert.equal(res.status,expected,endpoint+': '+JSON.stringify(result));return result;};call.cookie=()=>cookie;return call;}
 const tokenOf=inv=>new URL('http://x'+inv.invitePath).searchParams.get('invite');
 const day=n=>{const d=new Date();d.setDate(d.getDate()+n);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
 let draftId;
+// Sessions from setup / accept-invite, reused by the app-page checks so the suite stays under the sign-in rate limit
+// (20 sign-ins per 10 minutes per address); the full sign-in flow is covered by the journey test.
+const sessions={};
 before(async()=>{if(skip)return;await start();const admin=client();
  await admin('setup',{company:'Smoke Test Home Watch',name:'Avery Admin',email:'admin@example.test',password},201);
  const fam=await admin('clients',{name:'Rivera Family'},201);const ven=await admin('vendors',{name:'Bluewater Pools'},201);
  const home=await admin('properties',{clientId:fam.id,name:'Ocean House',streetAddress:'1 Ocean Dr',city:'Stuart',state:'FL',postalCode:'34994',country:'United States'},201);
  draftId=(await admin('inspections',{propertyId:home.id,date:'2026-10-01'},201)).id;
  const accept=async(role,email,extra={})=>{const c=client();await c('accept-invite',{token:tokenOf(await admin('invitations',{role,email,...extra},201)),name:email.split('@')[0],password},201);return c;};
- const staff=await accept('employee','staff@example.test');await accept('vendor','vendor@example.test',{vendorId:ven.id});const family=await accept('client','client@example.test',{clientId:fam.id});
+ const staff=await accept('employee','staff@example.test');const vendor=await accept('vendor','vendor@example.test',{vendorId:ven.id});const family=await accept('client','client@example.test',{clientId:fam.id});
+ Object.assign(sessions,{'admin@example.test':admin.cookie(),'staff@example.test':staff.cookie(),'vendor@example.test':vendor.cookie(),'client@example.test':family.cookie()});
  // Something for the Overview to show: the staff member looks after Ocean House, an overdue work order, a message.
  const users=(await admin('data')).users;const id=e=>users.find(u=>u.email===e).id;
  await admin('access',{userId:id('staff@example.test'),propertyId:home.id},201);
@@ -259,10 +263,27 @@ const PAGE_CHECKS={
   assert.ok(await more.locator('[data-action="request-priority"]').isVisible(),'admin: Edit priority is in More');
   await page.locator('.content .page-title').click();assert.equal(await more.evaluate(d=>d.open),false,'admin: More closes on an outside click');done.push('more-menu');
   assert.doesNotMatch(await go(page,'profile'),/Account ID/,'admin: no raw account ID');done.push('profile');
+  // Batch 2 wording: one name for Staff, plain audit events and email statuses, no staff jargon.
+  await go(page,'staff');assert.equal(await page.locator('.content .page-title').innerText(),'Staff','admin: Staff page title matches the menu');
+  const audit=await go(page,'audit');assert.match(audit,/Residence created/,'admin: audit events in sentence case');assert.doesNotMatch(audit,/Property Created|Work Created/,'admin: no Title Case codes');
+  const email=await go(page,'email-activity');assert.doesNotMatch(email,/\d+ attempts|submissions to the provider/,'admin: no email jargon');
+  assert.doesNotMatch(await go(page,'automation'),/Recovery backup|encrypted archive|consolidated/,'admin: no automation jargon');done.push('wording');
+ },
+ vendor:async(page,mobile,done)=>{
+  await headerChecks(page,mobile,'vendor',['work','properties','messages'],done);
+  await go(page,'work');assert.equal(await page.locator('.content .page-title').innerText(),'Your jobs','vendor: jobs title');
+  assert.match(await go(page,'messages'),/company that sends you jobs/,'vendor: messages subtitle for vendors');done.push('wording');
  },
  client:async(page,mobile,done)=>{
   await headerChecks(page,mobile,'client',['properties','work','inspections','requests','documents','messages','notifications'],done);
   await emptyCheck(page,'client','documents',/No documents yet/,'');
+  // Batch 2 wording: written for the family, not for staff.
+  const home=await go(page,'dashboard');assert.match(await page.locator('.content .page-title').innerText(),/^Good (morning|afternoon|evening)/,'client: home greets the family');
+  assert.equal(await page.locator('details.action-needed').evaluate(d=>d.open),true,'client: Action needed starts open');assert.doesNotMatch(home,/\b1 work orders\b/,'client: singular work order');
+  assert.doesNotMatch(await go(page,'messages'),/staff, vendors, employees/,'client: messages subtitle for the family');
+  assert.doesNotMatch(await go(page,'inspections'),/correct family/,'client: reports subtitle for the family');
+  const work=await go(page,'work');assert.equal(await page.locator('.content .page-title').innerText(),'Service updates','client: title matches the menu');assert.doesNotMatch(work,/verified completion/,'client: no staff wording');
+  await page.evaluate(()=>action('property',data.properties.find(p=>p.name==='Ocean House').id));await settle(page);assert.doesNotMatch(await mainText(page),/Client access active/,'client: no staff access wording');done.push('wording');
   for(const id of ['arrivals','calendar']){const t=await go(page,id);assert.doesNotMatch(t,MACHINE_DATE,`client: ${id} has no machine dates`);done.push(id);}
   const appr=await go(page,'approvals');assert.match(appr,/\$125\.00/);assert.doesNotMatch(appr,/·\s*$/m,'client: no dangling separator');done.push('approvals');
   assert.doesNotMatch(await go(page,'profile'),/Account ID/,'client: no raw account ID');done.push('profile');
@@ -271,7 +292,8 @@ const PAGE_CHECKS={
 async function pageJourney(launch,contextOptions,role,email){
  const browser=await launch();const ctx=await browser.newContext({...contextOptions,serviceWorkers:'block'});
  const {page,errors,toasts}=await watch(ctx);const done=[];
- try{await page.goto(base+'/login');await signIn(page,email);await settle(page);
+ try{const [name,value]=sessions[email].split('=');await ctx.addCookies([{name,value,url:base}]);
+  await page.goto(base+'/login');await page.waitForSelector('.shell',{timeout:15000});await settle(page);
   await PAGE_CHECKS[role](page,!!contextOptions.isMobile,done);
   await page.waitForTimeout(300);return {errors,shown:await toasts(),done};
  }finally{await browser.close();}
