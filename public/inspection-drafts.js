@@ -96,6 +96,13 @@ async function offlineUpdateDraft(id,fn,seed){
 }
 function offlineStorageError(error){const full=error?.name==='QuotaExceededError';draftStatus(full?'This device is out of storage. Free up space — unsynced work is still kept.':'Could not save on this device. Keep this screen open and reconnect.',true);}
 function offlineNoteRendered(id,answers){OFF.rendered.set(id,answers);}
+/** The stored value of an answer control. Template answers keep every type in `status` (see inspection-checklist.js): a blank box is "unchecked" and ticked choices are a JSON list. */
+function offlineAnswerValue(el){
+ if(el.dataset.answer===undefined)return el.value;
+ if(el.dataset.answerMulti!==undefined){const picked=[...(el.closest('.ck-choices')||el.parentNode).querySelectorAll('input[data-answer-multi]:checked')].map(x=>x.value);return picked.length?JSON.stringify(picked):'unchecked';}
+ if(el.type!=='radio'&&el.tagName!=='SELECT'&&String(el.value).trim()==='')return 'unchecked';
+ return el.value;
+}
 function offlineFieldFor(el){
  if(el.dataset.answer!==undefined)return ['answer:'+el.dataset.answer+':status',{key:el.dataset.answer,field:'status'}];
  if(el.dataset.answerNote!==undefined)return ['answer:'+el.dataset.answerNote+':note',{key:el.dataset.answerNote,field:'note'}];
@@ -110,7 +117,7 @@ function storeDraft(target){
   const field=offlineFieldFor(target);if(!field)return null;
   const [id,info]=field,pending=OFF.pending.get(i.id)||{seed:i,fields:new Map()};
   const template=info.key?(OFF.rendered.get(i.id)||i.answers).find(a=>a.key===info.key):null;
-  pending.fields.set(id,{...info,value:target.value,template});OFF.pending.set(i.id,pending);
+  pending.fields.set(id,{...info,value:offlineAnswerValue(target),template});OFF.pending.set(i.id,pending);
   const d=offlineOverlay(current||offlineNewDraft(i));OFF.drafts.set(i.id,d);
   clearTimeout(OFF.writeTimer);OFF.writeTimer=setTimeout(()=>offlineFlushNow(),250);
  }
@@ -158,7 +165,11 @@ function offlineRefreshItemBadges(){
  document.querySelectorAll('.inspection-screen [data-sync-key]').forEach(el=>el.classList.toggle('sync-pending',!!(ops&&keys.has(el.dataset.syncKey))));
 }
 document.addEventListener('input',e=>{if(!e.target.matches('[data-answer],[data-answer-note],#f-summary,#f-notes,#f-internalNotes')||page!=='inspection')return;storeDraft(e.target);offlineScheduleSync(1200);});
-document.addEventListener('change',e=>{if(e.target.matches('[data-answer]')&&page==='inspection'){const row=e.target.closest('.inspection-item');if(row){row.classList.toggle('status-monitor',e.target.value==='monitor');row.classList.toggle('status-attention',e.target.value==='attention');}}});
+document.addEventListener('change',e=>{if(e.target.matches('[data-answer]')&&page==='inspection'){const row=e.target.closest('.inspection-item');if(row){
+ // Template rows: tone from the answer type (Fail red, Monitor and No amber). Built-in rows: Monitor amber, Attention red.
+ const tone=row.dataset.ckType?window.EAChecklist.tone({response_type:row.dataset.ckType,status:offlineAnswerValue(e.target),required:true}):e.target.value==='monitor'?'monitor':e.target.value==='attention'?'fail':'';
+ row.classList.toggle('status-monitor',tone==='monitor');row.classList.toggle('status-attention',tone==='fail');
+ const note=row.dataset.ckType&&row.querySelector('[data-answer-note]');if(note)note.placeholder=window.EAChecklist.notePrompt(row.dataset.ckType,offlineAnswerValue(e.target));}}});
 window.addEventListener('beforeunload',()=>{if(OFF.pending.size)offlineFlushNow();});
 
 /* ---------- photos ---------- */
@@ -205,16 +216,13 @@ function offlinePhotoDialog(i){
 }
 
 /* ---------- complete / submit ---------- */
-function offlineCompletionProblems(d){
- const problems=[],open=d.answers.filter(a=>a.status==='unchecked').length,na=d.answers.filter(a=>a.status==='na'&&!String(a.note||'').trim()).length;
- if(open)problems.push(`${open} checklist item${open===1?'':'s'} still need a result.`);
- if(na)problems.push(`Add a note to ${na} item${na===1?'':'s'} marked Not applicable.`);
- if(!String(d.summary||'').trim())problems.push('Add an inspection summary.');
- return problems;
+/* Same rules as the server (inspection-checklist.js): built-in visits need every item; template visits need their Required items, and a failed "photo required on fail" item needs a photo on the visit. */
+function offlineCompletionProblems(d,i){
+ return window.EAChecklist.completionProblems(d.answers,{summary:d.summary,photoCount:i?offlineInspectionPhotos(i).length:null});
 }
 async function offlineComplete(i){
  await offlineFlushNow();const d=offlineDraft(i.id)||offlineNewDraft(i);
- const problems=offlineCompletionProblems(d);
+ const problems=offlineCompletionProblems(d,i);
  if(problems.length){$('modalBody').innerHTML=`<h2>Almost done</h2><p>Finish these before marking the inspection complete:</p><ul>${problems.map(p=>`<li>${esc(p)}</li>`).join('')}</ul><div class="dialog-footer">${btn('Keep editing','close','',true)}</div>`;$('modal').showModal();return;}
  const admin=data.user.role==='admin';
  $('modalBody').innerHTML=`<h2>Mark inspection complete?</h2><form id="offlineCompleteForm" class="form"><p class="full">${offlineIsOnline()?'The inspection is submitted for review now.':'You are offline. It is saved on this device and <strong>will submit when you are back online</strong>.'} You can’t edit it after this.</p>${admin?'<label class="check-row full"><input type="checkbox" name="autoPublish"> Publish automatically when synced (sends the report to the family)</label>':'<p class="muted full">An admin publishes the report after review.</p>'}<div class="dialog-footer">${btn('Cancel','close')}<button class="primary" type="submit">Mark complete</button></div></form>`;
@@ -234,7 +242,7 @@ async function offlineDownload(propertyIds,{quiet=false}={}){
  const r=await offlineSend('GET','/api/offline/visits?propertyIds='+encodeURIComponent(ids.join(',')));
  if(r.status!==200){if(!quiet)toast(r.status===0?'You are offline. Connect to download residences.':(r.body.error||'Could not download for offline use.'));return;}
  const s=r.body,savedAt=new Date().toISOString();
- await OFF.store.putMeta('workspace',{user:s.user,company:s.company,companyLogo:s.companyLogo,template:s.template,checklist:{source:s.checklist.source,template_id:s.checklist.template_id,template_version:s.checklist.template_version},savedAt});
+ await OFF.store.putMeta('workspace',{user:s.user,company:s.company,companyLogo:s.companyLogo,template:s.template,checklist:{source:s.checklist.source,template_id:s.checklist.template_id,template_version:s.checklist.template_version},checklists:s.checklists||[],savedAt});
  for(const p of s.properties)await OFF.store.putSnapshot({id:p.id,property:p,inspections:s.inspections.filter(i=>i.property_id===p.id),files:s.files.filter(f=>f.property_id===p.id),savedAt});
  try{await navigator.storage?.persist?.();}catch{}
  await offlineRefreshMirror();
@@ -258,7 +266,7 @@ let offlinePriorCache={source:null,map:new Map()};
 function offlinePriorAnswer(i,key){
  if(offlineDisplayStatus(i)!=='draft')return null;
  if(offlinePriorCache.source!==data.inspections){offlinePriorCache={source:data.inspections,map:new Map()};}
- if(!offlinePriorCache.map.has(i.id)){const prev=data.inspections.filter(x=>x.property_id===i.property_id&&x.status==='published'&&x.id!==i.id).sort((a,b)=>(b.inspection_date||'').localeCompare(a.inspection_date||''))[0];offlinePriorCache.map.set(i.id,new Map((prev?.answers||[]).filter(a=>['monitor','attention'].includes(a.status)).map(a=>[a.key,a])));}
+ if(!offlinePriorCache.map.has(i.id)){const prev=data.inspections.filter(x=>x.property_id===i.property_id&&x.status==='published'&&x.id!==i.id).sort((a,b)=>(b.inspection_date||'').localeCompare(a.inspection_date||''))[0];offlinePriorCache.map.set(i.id,new Map((prev?.answers||[]).filter(a=>['monitor','attention','fail'].includes(a.status)).map(a=>[a.key,a])));}
  return offlinePriorCache.map.get(i.id).get(key)||null;
 }
 
@@ -266,7 +274,7 @@ function offlinePriorAnswer(i,key){
 function offlineData(){
  const ws=OFF.workspace;if(!ws)return null;
  const snaps=[...OFF.snapshots.values()];
- return {offline:true,user:{...ws.user,platformOwner:false,platformAccess:false},company:ws.company,companyLogo:ws.companyLogo,workspaceLogo:ws.companyLogo,template:ws.template,checklist:ws.checklist,properties:snaps.map(s=>s.property),inspections:snaps.flatMap(s=>s.inspections),files:snaps.flatMap(s=>s.files),archivedProperties:[],invitations:[],clients:[],vendors:[],users:[],assets:[],asset_inspections:[],work:[],requests:[],shopping:[],arrivals:[],maintenance:[],notes:[],invoices:[],audit:[],notifications:[],unreadMessages:0,demo:null,messaging:{threads:[],messages:[]},operations:{followups:[],approvals:[],plans:[],email:[],automation:{}},security:{enabled:false},staff:{assignments:[],profiles:[],schedules:[]},checklistTemplates:{templates:[]}};
+ return {offline:true,user:{...ws.user,platformOwner:false,platformAccess:false},company:ws.company,companyLogo:ws.companyLogo,workspaceLogo:ws.companyLogo,template:ws.template,checklist:ws.checklist,checklists:ws.checklists||[],properties:snaps.map(s=>s.property),inspections:snaps.flatMap(s=>s.inspections),files:snaps.flatMap(s=>s.files),archivedProperties:[],invitations:[],clients:[],vendors:[],users:[],assets:[],asset_inspections:[],work:[],requests:[],shopping:[],arrivals:[],maintenance:[],notes:[],invoices:[],audit:[],notifications:[],unreadMessages:0,demo:null,messaging:{threads:[],messages:[]},operations:{followups:[],approvals:[],plans:[],email:[],automation:{}},security:{enabled:false},staff:{assignments:[],profiles:[],schedules:[]},checklistTemplates:{templates:[]}};
 }
 async function offlineBoot(error){
  if(error&&error.status)return false;                 // the server answered: a real error, not "no signal"
@@ -274,6 +282,8 @@ async function offlineBoot(error){
  await offlineRefreshMirror();const next=offlineData();if(!next)return false;
  const wasOffline=!!data?.offline;OFF.reachable=false;data=next;
  if(wasOffline){offlineMergeLocal();if(page==='inspection'&&!data.inspections.some(i=>i.id===activeInspection))page='inspections';render();return true;}   // already offline: keep the screen the user is on
+ offlineMergeLocal();   // visits started on this device (e.g. just now from Start inspection) are part of the offline view
+ if(page==='inspection'&&data.inspections.some(i=>i.id===activeInspection)){render();toast('You are offline. Inspections saved on this device are available.');return true;}   // keep the visit the user is on
  try{const saved=JSON.parse(localStorage.getItem('estateos:last-view')||'null');if(saved?.page==='inspection'&&data.inspections.some(i=>i.id===saved.activeInspection)){page='inspection';activeInspection=saved.activeInspection;}else page='inspections';}catch{page='inspections';}
  render();toast('You are offline. Inspections saved on this device are available.');return true;
 }
@@ -284,14 +294,19 @@ function offlineMergeLocal(){
   if(data.inspections.some(i=>i.id===d.inspectionId))continue;
   if(!d.localOnly&&!OFF.outbox.some(o=>o.inspectionId===d.inspectionId))continue;
   if(!data.properties.some(p=>p.id===d.propertyId))continue;
-  data.inspections.push({id:d.inspectionId,property_id:d.propertyId,inspector_id:OFF.userId,inspector_name:data.user.name,inspection_date:d.inspectionDate,status:'draft',answers:d.answers.map(a=>({...a})),summary:d.summary,notes:d.notes,internal_notes:d.internalNotes,version:d.baseVersion||1,frequency:'One-time',next_due:'',localOnly:!!d.localOnly,created_at:d.createdAt});
+  data.inspections.push({id:d.inspectionId,property_id:d.propertyId,inspector_id:OFF.userId,inspector_name:data.user.name,inspection_date:d.inspectionDate,status:'draft',answers:d.answers.map(a=>({...a})),summary:d.summary,notes:d.notes,internal_notes:d.internalNotes,version:d.baseVersion||1,frequency:'One-time',next_due:'',localOnly:!!d.localOnly,created_at:d.createdAt,visit_type:d.visitType||'routine',checklist:d.checklist||null,template_id:d.checklist?.template_id||null,template_version:d.checklist?.template_version??null});
  }
 }
-async function offlineStartLocal(propertyId,date){
- const ws=OFF.workspace,template=data.template||ws?.template;if(!template)throw Error('Download this residence while online first.');
- const id=offlineCore.uuid(),answers=template.map(a=>({...a}));
- const d={inspectionId:id,userId:OFF.userId,propertyId,inspectionDate:date,baseVersion:1,base:offlineCore.content({answers,summary:'',notes:'',internalNotes:''}),answers,summary:'',notes:'',internalNotes:'',rev:0,dirty:false,status:'draft',photos:[],localOnly:true,createdAt:new Date().toISOString()};
- await OFF.store.putDraft(d);await offlineCore.enqueue(OFF.store,{type:'start_inspection',inspectionId:id,payload:{propertyId,date}});
+/* Start a visit on this device. The chosen published checklist comes from the offline copy (items included), so the
+   visit is filled against that exact version; the server creates it with the same version when the device syncs. */
+async function offlineStartLocal(propertyId,date,{templateId='built-in',visitType='routine'}={}){
+ const ws=OFF.workspace,template=data.template||ws?.template,lists=data.checklists||ws?.checklists||[];
+ let snap=null,type=visitType||'routine';
+ if(templateId&&templateId!=='built-in'){const c=lists.find(x=>x.template_id===templateId);if(!c||!Array.isArray(c.items))throw Error('This checklist is not saved on this device. Connect and use “Make available offline” first.');snap={template_id:c.template_id,template_version_id:c.template_version_id,template_version:c.template_version,name:c.name,visit_type:c.visit_type,published_at:c.published_at||null,items:c.items};type=c.visit_type;}
+ if(!snap&&!template)throw Error('Download this residence while online first.');
+ const id=offlineCore.uuid(),answers=snap?window.EAChecklist.propertyAnswers(snap):template.map(a=>({...a}));
+ const d={inspectionId:id,userId:OFF.userId,propertyId,inspectionDate:date,baseVersion:1,base:offlineCore.content({answers,summary:'',notes:'',internalNotes:''}),answers,summary:'',notes:'',internalNotes:'',rev:0,dirty:false,status:'draft',photos:[],localOnly:true,createdAt:new Date().toISOString(),visitType:type,checklist:snap};
+ await OFF.store.putDraft(d);await offlineCore.enqueue(OFF.store,{type:'start_inspection',inspectionId:id,payload:{propertyId,date,visitType:type,templateId:snap?snap.template_id:'built-in',...(snap?{templateVersionId:snap.template_version_id}:{})}});
  await offlineRefreshMirror();offlineMergeLocal();activeInspection=id;page='inspection';render();offlineRequestBackgroundSync();offlineSync();
  toast(offlineIsOnline()?'Inspection started.':'Inspection started on this device. It will sync when you are back online.');
 }
@@ -425,7 +440,7 @@ action=async function(name,key,button){
  if(name==='inspection-delete'&&inspectionFor(key)?.localOnly){if(!confirm('Delete this inspection from the device? It was never synced.'))return;const start=OFF.outbox.find(o=>o.inspectionId===key&&o.type==='start_inspection');if(start){for(const o of OFF.outbox.filter(o=>o.inspectionId===key)){await OFF.store.deleteOp(o.opId);if(o.type==='upload_photo')await OFF.store.deleteBlob(o.opId);}}await OFF.store.deleteDraft(key);await offlineRefreshMirror();data.inspections=data.inspections.filter(i=>i.id!==key);activeInspection=null;page='inspections';render();return;}
  if(name==='new-inspection'&&(data.offline||!offlineIsOnline())){
   const homes=data.properties.filter(p=>OFF.snapshots.has(p.id));if(!homes.length)throw Error('No residences are saved on this device. Connect and use “Make available offline” first.');
-  return dialog('Start inspection (offline)',select('propertyId','Residence',option(homes,'id','name',key||propertyId))+input('date','Inspection date','date',today())+'<p class="muted full">It is saved on this device and created on the server when you’re back online.</p>','Start',async b=>{await offlineStartLocal(b.propertyId,b.date);});
+  return dialog('Start inspection (offline)',select('propertyId','Residence',option(homes,'id','name',key||propertyId))+input('date','Inspection date','date',today())+checklistPicker()+'<p class="muted full">It is saved on this device and created on the server when you’re back online.</p>','Start',async b=>{await offlineStartLocal(b.propertyId,b.date,{templateId:b.templateId,visitType:b.visitType});});
  }
  if(name==='offline-download'){return offlineDownload(String(key||'').split(','));}
  if(name==='offline-download-route'){return offlineDownload([...document.querySelectorAll('.route-stop:checked')].map(el=>el.value));}

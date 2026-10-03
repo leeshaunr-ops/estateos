@@ -3,7 +3,7 @@
 
 // Existing enum values (see checklist-templates.mjs RESPONSE_TYPES / PHOTO_RULES).
 export const ANSWER_TYPES=[
- {value:'pass_fail_na',label:'Pass / Fail',icon:'checkCircle'},
+ {value:'pass_fail_na',label:'Pass / Monitor / Fail',icon:'checkCircle'},
  {value:'yes_no',label:'Yes / No',icon:'toggle'},
  {value:'number',label:'Number',icon:'hash'},
  {value:'text',label:'Text',icon:'type'},
@@ -179,13 +179,17 @@ export function loadStarterItems(current,starterRows,mode='replace'){
  * then the template's own visit type, then the first set.
  */
 export function suggestStarter(template,sets){
- const has=type=>sets.some(s=>s.visit_type===type);
+ // Returns the set's key (sets without a key are identified by their visit type). Several sets can suit one
+ // visit type (Routine visit and Routine (short)); the first listed wins.
+ const keyFor=type=>{const set=sets.find(s=>s.visit_type===type);return set?starterKey(set):null;};
  const type=template?.visit_type, name=String(template?.name||'');
- if((type==='pre_storm'||type==='post_storm')&&has(type))return type;
- if(/hurric|storm|tropical|cyclone|typhoon/i.test(name)){const post=/post|after|recover|damage/i.test(name)?'post_storm':'pre_storm';if(has(post))return post;}
- if(has(type))return type;
- return sets[0]?.visit_type||null;
+ if((type==='pre_storm'||type==='post_storm')&&keyFor(type))return keyFor(type);
+ if(/hurric|storm|tropical|cyclone|typhoon/i.test(name)){const post=/post|after|recover|damage/i.test(name)?'post_storm':'pre_storm';if(keyFor(post))return keyFor(post);}
+ if(keyFor(type))return keyFor(type);
+ return sets[0]?starterKey(sets[0]):null;
 }
+/** Identifier of a starter set: its key, or its visit type for sets without one. */
+export function starterKey(set){return set?.key||set?.visit_type||null;}
 
 /** API payload: blank-label items are held back (the API requires a label). */
 export function toPayload(items){
@@ -225,7 +229,7 @@ export function sectionSummary(section,max=3){
 /** What the field tech can choose for an answer type (only what the field app supports). */
 export function answerChoices(type,options=[]){
  switch(type){
-  case 'pass_fail_na':return [{label:'Pass',tone:'pass'},{label:'Fail',tone:'fail'},{label:'N/A',tone:'na'}];
+  case 'pass_fail_na':return [{label:'Pass',tone:'pass'},{label:'Monitor',tone:'monitor'},{label:'Fail',tone:'fail'},{label:'N/A',tone:'na'}];
   case 'yes_no':return [{label:'Yes',tone:'pass'},{label:'No',tone:'fail'}];
   case 'number':return [{label:'Any number',tone:'na'}];
   case 'rating':return [{label:'A numeric rating',tone:'na'}];

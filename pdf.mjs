@@ -1,9 +1,21 @@
 import {decodeLogoPng} from './png-logo.mjs';
 import {deflateSync} from 'node:zlib';
+import './public/inspection-checklist.js';
+const EAChecklist=globalThis.EAChecklist;
 export function jpegSize(bytes){if(bytes[0]!==255||bytes[1]!==216)throw Error('JPEG required');let pos=2;while(pos<bytes.length){if(bytes[pos++]!==255)continue;let marker=bytes[pos++];while(marker===255)marker=bytes[pos++];if(marker===217||marker===218)break;const length=bytes.readUInt16BE(pos);if([192,193,194].includes(marker)){const height=bytes.readUInt16BE(pos+3),width=bytes.readUInt16BE(pos+5),channels=bytes[pos+7];if(!width||!height||width*height>40000000||![1,3].includes(channels))throw Error('Unsupported JPEG');return {height,width,channels};}if(length<2)break;pos+=length;}throw Error('Invalid JPEG');}
 const C={ink:[.122,.161,.2],muted:[.373,.42,.463],brand:[.545,.141,.169],gold:[.722,.6,.376],line:[.886,.906,.922],white:[1,1,1],pass:[.12,.38,.29],monitor:[.57,.36,.02],attention:[.66,.12,.15]};
 const backgrounds={pass:[.92,.96,.93],monitor:[1,.95,.72],attention:[1,.88,.88],na:[.95,.95,.94],unchecked:[.95,.95,.94]};
 const statusLabel=s=>({pass:'PASS',monitor:'MONITOR',attention:'ATTENTION',na:'N/A',unchecked:'NOT ASSESSED'}[s]||String(s||'').toUpperCase());
+// Template answers (visits started from a published checklist): colour by tone, short values in the pill, longer
+// answers (text, number, choices) on their own line under the item. Built-in answers never reach this.
+const toneStyle={pass:'pass',fail:'attention',monitor:'monitor',na:'na',open:'unchecked',value:'na'};
+export function templateAnswerPdf(answer){
+ const tone=EAChecklist.tone(answer),value=EAChecklist.displayValue(answer),style=toneStyle[tone]||'na';
+ if(tone==='open')return {style,pill:answer.required?'NOT ASSESSED':'NOT ANSWERED',value:''};
+ if(['pass_fail_na','yes_no','rating'].includes(answer.response_type))return {style,pill:answer.response_type==='rating'?value.replace(' of ','/'):(answer.status==='na'?'N/A':value.toUpperCase()),value:''};
+ if(['number','select'].includes(answer.response_type)&&value.length<=14)return {style,pill:answer.response_type==='select'?value.toUpperCase():value,value:''};
+ return {style,pill:'RECORDED',value};
+}
 function clean(s){return String(s??'').replace(/[–—]/g,'-').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/…/g,'...').replace(/[^\x20-\xff\n]/g,'?');}
 function escape(s){return clean(s).replace(/([\\()])/g,'\\$1').replace(/[\r\n]/g,' ');}
 function lines(s,width,size=10){const max=Math.max(12,Math.floor(width/(size*.64)));return clean(s).split('\n').flatMap(line=>{const out=[];let current='';for(let word of line.split(/\s+/)){while(word.length>max){if(current){out.push(current);current='';}out.push(word.slice(0,max));word=word.slice(max);}if((current+' '+word).trim().length>max){out.push(current);current=word;}else current=(current+' '+word).trim();}out.push(current);return out;});}
@@ -29,7 +41,7 @@ export function inspectionPdf(report,photos=[]){
  function heading(title){need(55);y+=10;text(title,40,y,14,C.brand,true);y+=25;}
  newPage();paragraph(report.property||'Residence inspection',24,C.ink,520,40);y+=8;
  text('INSPECTION REPORT',40,y,10,C.brand,true);y+=22;
- for(const [label,value] of [['Family',report.client||'Not specified'],['Inspected by',report.inspector||'Not recorded'],['Inspection date',report.date||'Not recorded'],['Completed',reportTimestamp(report.completedAt)],['Report reference',report.id||'Not recorded']]){
+ for(const [label,value] of [['Family',report.client||'Not specified'],['Inspected by',report.inspector||'Not recorded'],['Inspection date',report.date||'Not recorded'],['Completed',reportTimestamp(report.completedAt)],...(report.checklist?[['Checklist',`${report.checklist.name} (version ${report.checklist.template_version})`]]:[]),['Report reference',report.id||'Not recorded']]){
   const row=lines(value,390,10);need(row.length*15+9);text(label,40,y,10,C.muted,true);for(const line of row){text(line,162,y,10);y+=15;}y+=5;
  }
  if(report.assetDetails?.length){
@@ -42,18 +54,20 @@ export function inspectionPdf(report,photos=[]){
   y+=8;
  }
  y+=8;need(68);
- for(const [index,status] of ['pass','monitor','attention'].entries()){const x=40+index*180;rect(x,y,172,58,backgrounds[status]);text(String((report.answers||[]).filter(a=>a.status===status).length),x+13,y+8,21,C[status],true);text(statusLabel(status),x+13,y+36,9,C[status],true);}y+=76;
+ if(report.checklist){for(const [index,[status,style,title]] of [['pass','pass','PASS'],['monitor','monitor','MONITOR'],['fail','attention','FAIL'],['na','na','N/A']].entries()){const x=40+index*135,count=EAChecklist.totals(report.answers)[status];rect(x,y,127,58,backgrounds[style]);text(String(count),x+13,y+8,21,C[style]||C.muted,true);text(title,x+13,y+36,9,C[style]||C.muted,true);}}
+ else for(const [index,status] of ['pass','monitor','attention'].entries()){const x=40+index*180;rect(x,y,172,58,backgrounds[status]);text(String((report.answers||[]).filter(a=>a.status===status).length),x+13,y+8,21,C[status],true);text(statusLabel(status),x+13,y+36,9,C[status],true);}y+=76;
  paragraph('Overall condition: '+(report.overall||'Not recorded'),11,C.ink,520,40);
  heading('Walkthrough checklist');let section='';
  for(const answer of report.answers||[]){
-  const content=[...lines(answer.label,386,11).map(value=>({value,bold:true})),...(answer.note?lines(answer.note,488,10).map(value=>({value,bold:false})):[])];
+  const t=EAChecklist.isTemplateAnswer(answer)?templateAnswerPdf(answer):null;
+  const content=[...lines(answer.label,386,11).map(value=>({value,bold:true})),...(t&&t.value?lines('Answer: '+t.value,488,10).map(value=>({value,bold:false,ink:true})):[]),...(answer.note?lines(answer.note,488,10).map(value=>({value,bold:false})):[])];
   if(answer.section&&answer.section!==section){need(105);y+=10;section=answer.section;text(section,40,y,11,C.brand,true);y+=22;}
   let offset=0;
   while(offset<content.length){
    need(60);const count=Math.max(1,Math.floor((730-y-25)/16));const chunk=content.slice(offset,offset+count),height=22+chunk.length*16;
-   const bg=backgrounds[answer.status]||backgrounds.na,fg=C[answer.status]||C.muted;
-   rect(40,y,532,height,bg);rect(40,y,4,height,fg);text(statusLabel(answer.status),466,y+12,9,fg,true);y+=10;
-   for(const item of chunk){text(item.value,52,y,item.bold?11:10,item.bold?C.ink:C.muted,item.bold);y+=16;}
+   const bg=t?backgrounds[t.style]||backgrounds.na:backgrounds[answer.status]||backgrounds.na,fg=t?C[t.style]||C.muted:C[answer.status]||C.muted;
+   rect(40,y,532,height,bg);rect(40,y,4,height,fg);text(t?t.pill:statusLabel(answer.status),466,y+12,9,fg,true);y+=10;
+   for(const item of chunk){text(item.value,52,y,item.bold?11:10,item.bold||item.ink?C.ink:C.muted,item.bold);y+=16;}
    y+=14;offset+=chunk.length;if(offset<content.length)newPage();
   }
  }

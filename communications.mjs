@@ -7,7 +7,7 @@ export function createCommunications({get,all,run,transaction,id,now,fail,text,j
   for(const u of unique.values()){
    const key=createHash('sha256').update(org+':'+event+':'+u.email.toLowerCase()).digest('hex');
    const inserted=await run('INSERT INTO email_outbox(id,organization_id,user_id,email,subject,body,next_attempt_at,created_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING',key,org,u.id||null,u.email,subject,content,now(),now());
-   if(inserted.changes&&u.id)await run('INSERT INTO notifications VALUES(?,?,?,?,?,?)',id(),u.id,subject,entity||'',null,now());
+   if(inserted.changes&&u.id)await run('INSERT INTO notifications(id,user_id,title,entity_id,read_at,created_at) VALUES(?,?,?,?,?,?)',id(),u.id,subject,entity||'',null,now());
   }
  }
  async function work(user,key,event='work'){
@@ -63,7 +63,7 @@ export function createCommunications({get,all,run,transaction,id,now,fail,text,j
   for(const row of rows){
    if(await get('SELECT organization_id FROM demo_workspaces WHERE organization_id=?',row.organization_id)||(await get('SELECT status FROM workspace_settings WHERE organization_id=?',row.organization_id))?.status==='suspended'||row.user_id&&!await get('SELECT id FROM users WHERE id=? AND organization_id=? AND active=1 AND LOWER(email)=?',row.user_id,row.organization_id,row.email.toLowerCase())){await run("UPDATE email_outbox SET status='cancelled' WHERE id=?",row.id);continue;}
    const claim=await run("UPDATE email_outbox SET status='sending',attempts=attempts+1,next_attempt_at=? WHERE id=? AND attempts=? AND next_attempt_at<=?",new Date(Date.now()+120000).toISOString(),row.id,row.attempts,now());if(!claim.changes)continue;
-   let ok=false;try{const base=new URL(env.APP_URL||'https://estateaegis.com');if(base.protocol!=='https:')throw Error();const company=(await get('SELECT name FROM organizations WHERE id=?',row.organization_id))?.name||'Your company';const r=await fetcher('https://api.resend.com/emails',{method:'POST',signal:AbortSignal.timeout(15000),headers:{Authorization:'Bearer '+env.RESEND_API_KEY,'Content-Type':'application/json','Idempotency-Key':row.id},body:JSON.stringify({from:env.EMAIL_FROM||'EstateAegis <notifications@estateaegis.com>',to:[row.email],subject:row.subject,text:company+'\n\n'+row.body+'\n\n'+base.origin+'/\n\nPowered by EstateAegis'})});ok=r.ok&&!!(await r.json()).id;}catch{}
+   let ok=false;try{const base=new URL(env.APP_URL||'https://estateaegis.com');if(base.protocol!=='https:')throw Error();const company=(await get('SELECT name FROM organizations WHERE id=?',row.organization_id))?.name||'Your company';const r=await fetcher('https://api.resend.com/emails',{method:'POST',signal:AbortSignal.timeout(15000),headers:{Authorization:'Bearer '+env.RESEND_API_KEY,'Content-Type':'application/json','Idempotency-Key':row.id},body:JSON.stringify({from:env.EMAIL_FROM||'EstateAegis <notifications@estateaegis.com>',to:[row.email],subject:row.subject,text:company+'\n\n'+row.body+'\n\n'+base.origin+'/\n\nPowered by EstateAegis',...(row.html?{html:row.html}:{})})});ok=r.ok&&!!(await r.json()).id;}catch{}
    await run('UPDATE email_outbox SET status=?,next_attempt_at=? WHERE id=?',ok?'sent':row.attempts>=4?'failed':'retry',new Date(Date.now()+Math.min(3600000,60000*2**row.attempts)).toISOString(),row.id);
   }
  }finally{busy=false;}}

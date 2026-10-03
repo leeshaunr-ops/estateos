@@ -291,7 +291,7 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
  }
 
  function emptyHTML(){
-  const sets=S.starterSets, pick=sets&&sets.length?sets.find(x=>x.visit_type===M.suggestStarter(S.template,sets)):null;
+  const sets=S.starterSets, pick=sets&&sets.length?sets.find(x=>M.starterKey(x)===M.suggestStarter(S.template,sets)):null;
   const sections=pick?M.sectionNames(M.fromApi(pick.items)).length:0;
   const lead=pick?`Start from the <b>${esc(pick.label)}</b> starter checklist (${pick.items.length} items in ${sections} ${sections===1?'section':'sections'}) and adjust it to this residence, or add your own sections.`:'Load a ready-made starter checklist and adjust it, or add a section to build your own.';
   return `<div class="ce-empty ce-empty-start">
@@ -352,7 +352,7 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
      <div class="ce-field-label"><span class="ce-lbl" id="ceTypeLbl">How should it be answered?</span></div>
      <div class="ce-answer-grid" role="radiogroup" aria-labelledby="ceTypeLbl" data-group="type">${M.ANSWER_TYPES.map(tile).join('')}</div>
      <div class="ce-choice-types" role="radiogroup" aria-label="Choice list answers" data-group="type"><span class="ce-choice-k">Or a list of choices</span>${M.CHOICE_TYPES.map(t=>`<button type="button" class="ce-mini-tile${item.response_type===t.value?' is-on':''}" role="radio" aria-checked="${item.response_type===t.value}" data-ce="type" data-id="${t.value}" data-fk="type:${t.value}" tabindex="${item.response_type===t.value?0:-1}">${icon(t.icon,'ce-i-sm')}${esc(t.label)}</button>`).join('')}</div>
-     <div class="ce-choices"><span class="ce-k">Tech can choose</span>${choices.map(c=>`<span class="ce-chip ce-chip-${c.tone}">${c.tone==='pass'?icon('check','ce-i-xs'):c.tone==='fail'?icon('x','ce-i-xs'):''}${esc(c.label)}</span>`).join('')}</div>
+     <div class="ce-choices"><span class="ce-k">Tech can choose</span>${choices.map(c=>`<span class="ce-chip ce-chip-${c.tone}">${c.tone==='pass'?icon('check','ce-i-xs'):c.tone==='fail'?icon('x','ce-i-xs'):c.tone==='monitor'?icon('eye','ce-i-xs'):''}${esc(c.label)}</span>`).join('')}</div>
      ${isChoice?`<div class="ce-field ce-sub-field"><div class="ce-field-label"><label for="ceOptions">Choices</label><span class="ce-opt">One per line</span></div><textarea id="ceOptions" class="ce-ta ce-ta-notes" rows="3" data-autosize data-field="options" data-fk="options" placeholder="Good&#10;Needs attention&#10;Not applicable">${esc(item.options.join('\n'))}</textarea></div>`:''}
     </div>
     <div class="ce-field">
@@ -365,7 +365,7 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
     </div>
     <div class="ce-field ce-switches">
      <div class="ce-switch-row"><div><div class="ce-sw-t" id="ceReqT">Required</div><div class="ce-sw-d" id="ceReqD">The visit can't be submitted until this is answered.</div></div><button type="button" class="ce-switch${item.required?' is-on':''}" role="switch" aria-checked="${item.required}" aria-labelledby="ceReqT" aria-describedby="ceReqD" data-ce="switch" data-id="required" data-fk="sw:required"></button></div>
-     <div class="ce-switch-row"><div><div class="ce-sw-t" id="ceAlertT">Alert the office on fail</div><div class="ce-sw-d" id="ceAlertD">Flags a failed answer on this item so the office can follow up.</div></div><button type="button" class="ce-switch${item.alert_on_fail?' is-on':''}" role="switch" aria-checked="${item.alert_on_fail}" aria-labelledby="ceAlertT" aria-describedby="ceAlertD" data-ce="switch" data-id="alert_on_fail" data-fk="sw:alert"></button></div>
+     <div class="ce-switch-row"><div><div class="ce-sw-t" id="ceAlertT">Alert the office on fail</div><div class="ce-sw-d" id="ceAlertD">When a visit is completed with this item failed, every admin and the residence manager get one in-app and email alert.</div></div><button type="button" class="ce-switch${item.alert_on_fail?' is-on':''}" role="switch" aria-checked="${item.alert_on_fail}" aria-labelledby="ceAlertT" aria-describedby="ceAlertD" data-ce="switch" data-id="alert_on_fail" data-fk="sw:alert"></button></div>
     </div>
     <details class="ce-advanced" ${S.advancedOpen?'open':''}>
      <summary data-fk="adv">${icon('sliders','ce-i-sm')}Advanced<span class="ce-adv-sum">${item.scope==='room'?'Each room'+(item.room_types.length?' · '+esc(item.room_types.join(', ')):''):'Whole property'}</span></summary>
@@ -401,7 +401,7 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
   let answers='';
   if(item){
    const t=item.response_type;
-   if(t==='pass_fail_na')answers=`<div class="ce-p-answers ce-p-3"><span class="ce-p-ans ce-p-pass">${icon('checkCircle')}Pass</span><span class="ce-p-ans ce-p-fail">${icon('xCircle')}Fail</span><span class="ce-p-ans">${icon('minusCircle')}N/A</span></div>`;
+   if(t==='pass_fail_na')answers=`<div class="ce-p-answers ce-p-4"><span class="ce-p-ans ce-p-pass">${icon('checkCircle')}Pass</span><span class="ce-p-ans ce-p-monitor">${icon('eye')}Monitor</span><span class="ce-p-ans ce-p-fail">${icon('xCircle')}Fail</span><span class="ce-p-ans">${icon('minusCircle')}N/A</span></div>`;
    else if(t==='yes_no')answers=`<div class="ce-p-answers ce-p-2"><span class="ce-p-ans ce-p-pass">${icon('check')}Yes</span><span class="ce-p-ans ce-p-fail">${icon('x')}No</span></div>`;
    else if(t==='number'||t==='rating')answers=`<div class="ce-p-input">${icon(t==='rating'?'star':'hash','ce-i-sm')}<span>${t==='rating'?'Enter a rating':'Enter a number'}</span></div>`;
    else if(t==='text')answers=`<div class="ce-p-input ce-p-textarea"><span>Type your answer</span></div>`;
@@ -600,17 +600,17 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
   if(!dialog.open)return;
   if(!sets.length){dialog.querySelector('#ceStarterBody').innerHTML='<p class="ce-error-text">Starter checklists are not available right now. Try again in a moment.</p>';return;}
   const pick=M.suggestStarter(S.template,sets);
-  S.starter={pick,mode:S.items.length?'append':'replace',setType:pick!==S.template.visit_type&&!S.items.length};
+  S.starter={pick,mode:S.items.length?'append':'replace',setType:(sets.find(x=>M.starterKey(x)===pick)?.visit_type)!==S.template.visit_type&&!S.items.length};
   renderStarter();
   dialog.querySelector('.ce-starter-card.is-on')?.focus();
  }
  function renderStarter(){
   const st=S.starter, sets=S.starterSets||[];if(!st||!dialog.open)return;
-  const set=sets.find(x=>x.visit_type===st.pick)||sets[0];
+  const set=sets.find(x=>M.starterKey(x)===st.pick)||sets[0];
   // The suggested set first, then the rest in their usual order.
-  const ordered=[...sets].sort((a,b)=>(b.visit_type===M.suggestStarter(S.template,sets))-(a.visit_type===M.suggestStarter(S.template,sets)));
-  const card=x=>{const on=x.visit_type===set.visit_type, secs=M.sectionNames(M.fromApi(x.items)), vt=M.visitType(x.visit_type);
-   return `<button type="button" class="ce-opt-card ce-starter-card${on?' is-on':''}" role="radio" aria-checked="${on}" tabindex="${on?0:-1}" data-ce="starter-pick" data-id="${esc(x.visit_type)}"><span class="ce-opt-ic">${icon(vt.icon)}</span><span class="ce-starter-text"><span class="ce-opt-t">${esc(x.label)}${x.visit_type===S.template.visit_type?' <span class="ce-starter-match">This template\'s visit type</span>':''}</span><span class="ce-opt-d">${esc(secs.join(' · '))}</span></span><span class="ce-starter-count">${x.items.length} items</span></button>`;};
+  const suggested=M.suggestStarter(S.template,sets),ordered=[...sets].sort((a,b)=>(M.starterKey(b)===suggested)-(M.starterKey(a)===suggested));
+  const card=x=>{const on=M.starterKey(x)===M.starterKey(set), secs=M.sectionNames(M.fromApi(x.items)), vt=M.visitType(x.visit_type);
+   return `<button type="button" class="ce-opt-card ce-starter-card${on?' is-on':''}" role="radio" aria-checked="${on}" tabindex="${on?0:-1}" data-ce="starter-pick" data-id="${esc(M.starterKey(x))}"><span class="ce-opt-ic">${icon(vt.icon)}</span><span class="ce-starter-text"><span class="ce-opt-t">${esc(x.label)}${x.visit_type===S.template.visit_type?' <span class="ce-starter-match">This template\'s visit type</span>':''}</span><span class="ce-opt-d">${esc(secs.join(' · '))}</span></span><span class="ce-starter-count">${x.items.length} items</span></button>`;};
   const typeLabel=M.visitType(set.visit_type).label;
   dialog.querySelector('#ceStarterBody').innerHTML=`<p class="ce-muted">Pick a starter checklist. You can edit, reorder or delete any item afterwards. Items are saved to this draft; nothing reaches field staff until you publish.</p>
    <div class="ce-starter-list" role="radiogroup" aria-label="Starter checklists" data-group="starter">${ordered.map(card).join('')}</div>
@@ -619,7 +619,7 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
   dialog.querySelector('#ceStarterFoot').innerHTML=`<button type="button" class="ce-btn" data-ce="dialog-close">Cancel</button><button type="button" class="primary ce-btn" data-ce="starter-confirm">${st.mode==='replace'&&S.items.length?'Replace with':'Load'} ${set.items.length} items</button>`;
  }
  async function confirmStarter(){
-  const st=S.starter, set=(S.starterSets||[]).find(x=>x.visit_type===st?.pick);if(!set)return;
+  const st=S.starter, set=(S.starterSets||[]).find(x=>M.starterKey(x)===st?.pick);if(!set)return;
   const setType=set.visit_type!==S.template.visit_type&&!!dialog.querySelector('#ceStarterType')?.checked;
   const snapshot=S.items, r=M.loadStarterItems(S.items,set.items,st.mode);
   dialog.close();
@@ -708,7 +708,7 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
    case 'publish':return openPublish();
    case 'template-menu':return S.menu&&S.menu.trigger===b?closeMenu():templateMenu(b);
    case 'starter':return openStarter();
-   case 'starter-pick':{if(!S.starter)return;S.starter.pick=id;S.starter.setType=id!==S.template.visit_type&&!S.items.length;renderStarter();dialog.querySelector('.ce-starter-card.is-on')?.focus();return;}
+   case 'starter-pick':{if(!S.starter)return;S.starter.pick=id;S.starter.setType=((S.starterSets||[]).find(x=>M.starterKey(x)===id)?.visit_type)!==S.template.visit_type&&!S.items.length;renderStarter();dialog.querySelector('.ce-starter-card.is-on')?.focus();return;}
    case 'starter-mode':{if(!S.starter)return;S.starter.mode=id;renderStarter();dialog.querySelector(`[data-ce="starter-mode"][data-id="${id}"]`)?.focus();return;}
    case 'starter-confirm':return confirmStarter();
    case 'confirm-publish':return publish(b);
