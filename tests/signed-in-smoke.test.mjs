@@ -210,8 +210,26 @@ for(const [name,launch,options] of browsers.length?browsers:[['browser',null,nul
 const MACHINE_DATE=/\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/;
 const mainText=page=>page.locator('.shell main .content').innerText();
 async function go(page,id){await page.evaluate(id=>action('navigate',id),id);await page.waitForSelector('.shell main .content',{timeout:5000});await settle(page);return mainText(page);}
+// Batch 1: every page header matches the Overview (Georgia title, no company eyebrow; left-aligned with full-width
+// actions on the phone) and shows readable dates.
+async function headerChecks(page,mobile,role,ids,done){
+ for(const id of ids){const t=await go(page,id);assert.doesNotMatch(t,MACHINE_DATE,`${role}: ${id} has no machine dates`);
+  const h=await page.evaluate(()=>{const head=document.querySelector('.content .page-head'),title=head?.querySelector('.page-title'),text=head?.querySelector('.page-head-text'),acts=[...(head?.querySelectorAll('.page-actions button,.page-actions .button')||[])];
+   return head&&{font:getComputedStyle(title).fontFamily,eyebrow:!!head.querySelector('.eyebrow'),textLeft:Math.round(text.getBoundingClientRect().left-head.getBoundingClientRect().left),
+    full:acts.every(b=>b.getBoundingClientRect().width>=head.getBoundingClientRect().width-2)};});
+  assert.ok(h,`${role}: ${id} has the shared page header`);assert.match(h.font,/Georgia/,`${role}: ${id} title uses Georgia`);
+  assert.equal(h.eyebrow,false,`${role}: ${id} has no company eyebrow`);
+  if(mobile){assert.ok(h.textLeft<=1,`${role}: ${id} header is left-aligned on the phone`);assert.ok(h.full,`${role}: ${id} header actions are full width on the phone`);}
+  done.push(id);}
+}
+// Empty lists show a card with a title, one sentence and (where the role can act) the next step.
+async function emptyCheck(page,role,id,title,action){await go(page,id);
+ const e=await page.evaluate(()=>{const c=document.querySelector('.content .empty-state');return c&&{title:c.querySelector('.empty-title')?.textContent,detail:!!c.querySelector('.empty-detail'),action:c.querySelector('.empty-action [data-action]')?.dataset.action||''};});
+ assert.ok(e,`${role}: ${id} shows an empty-state card`);assert.match(e.title,title,`${role}: ${id} empty-state title`);assert.ok(e.detail,`${role}: ${id} empty state explains the next step`);assert.equal(e.action,action,`${role}: ${id} empty-state action`);}
 const PAGE_CHECKS={
  admin:async(page,mobile,done)=>{
+  await headerChecks(page,mobile,'admin',['properties','work','inspections','requests','maintenance','documents','assets','audit','billing','messages','notifications','storm'],done);
+  await emptyCheck(page,'admin','assets',/No assets yet/,'new-asset');await emptyCheck(page,'admin','documents',/No documents yet/,'new-document');await emptyCheck(page,'admin','billing',/No invoices yet/,'');done.push('empty-states');
   assert.equal(await page.locator('aside [data-id="platform"]').count(),0,'admin: no duplicate Platform Administration item');
   for(const id of ['arrivals','calendar']){const t=await go(page,id);assert.doesNotMatch(t,MACHINE_DATE,`admin: ${id} has no machine dates`);done.push(id);}
   assert.match(await go(page,'arrivals'),/Arrival|3:00 PM/,'admin: arrivals list');
@@ -235,9 +253,16 @@ const PAGE_CHECKS={
   const links=await page.evaluate(()=>[...document.querySelectorAll('.content .row')].map(r=>({t:r.innerText,link:!!r.querySelector('[data-action="link-request"]')})));
   assert.equal(links.find(r=>/dock lights/.test(r.t))?.link,false,'admin: no Link work order without work at Bay Cottage');
   assert.equal(links.find(r=>/Stock the fridge/.test(r.t))?.link,true,'admin: Link work order where work exists');done.push('requests');
+  // Secondary request actions sit behind More; it opens, and closes on an outside click.
+  const more=page.locator('.content .row',{hasText:'Stock the fridge'}).locator('details.more-menu');
+  await more.locator('summary').click();assert.equal(await more.evaluate(d=>d.open),true,'admin: More opens');
+  assert.ok(await more.locator('[data-action="request-priority"]').isVisible(),'admin: Edit priority is in More');
+  await page.locator('.content .page-title').click();assert.equal(await more.evaluate(d=>d.open),false,'admin: More closes on an outside click');done.push('more-menu');
   assert.doesNotMatch(await go(page,'profile'),/Account ID/,'admin: no raw account ID');done.push('profile');
  },
  client:async(page,mobile,done)=>{
+  await headerChecks(page,mobile,'client',['properties','work','inspections','requests','documents','messages','notifications'],done);
+  await emptyCheck(page,'client','documents',/No documents yet/,'');
   for(const id of ['arrivals','calendar']){const t=await go(page,id);assert.doesNotMatch(t,MACHINE_DATE,`client: ${id} has no machine dates`);done.push(id);}
   const appr=await go(page,'approvals');assert.match(appr,/\$125\.00/);assert.doesNotMatch(appr,/·\s*$/m,'client: no dangling separator');done.push('approvals');
   assert.doesNotMatch(await go(page,'profile'),/Account ID/,'client: no raw account ID');done.push('profile');
