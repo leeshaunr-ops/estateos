@@ -265,6 +265,26 @@ async function workChecks(page,role,expect,done){
  await page.locator('.content .work-chips .chip',{hasText:'Completed'}).click();await settle(page);assert.equal(await page.locator('.content .work-chips .chip.active').getAttribute('data-id'),'completed',`${role}: Completed filter`);
  await page.locator('.content .work-chips .chip[data-id="open"]').click();await settle(page);done.push('work');
 }
+// Batch 3c: Staff schedules is a real week view. The admin adds a shift through the dialog and sees it in the week
+// (grid on desktop, day list on the phone, never sideways scrolling); the staff member sees their own week, read-only.
+async function scheduleChecks(page,role,mobile,done){
+ await go(page,'staff-schedules');
+ if(role==='admin'&&!await page.evaluate(()=>(data.staff?.schedules||[]).some(s=>s.title==='Smoke shift'))){
+  await click(page,'.content .page-actions [data-action="schedule-new"]');await page.waitForSelector('dialog[open] select[name="staffId"]',{timeout:5000});
+  const staffId=await page.evaluate(()=>[...document.querySelectorAll('dialog[open] select[name="staffId"] option')].find(o=>o.textContent==='staff')?.value);
+  assert.ok(staffId,'admin: the staff member is offered for a shift');await page.selectOption('dialog[open] select[name="staffId"]',staffId);
+  await page.fill('dialog[open] input[name="start"]','09:00');await page.fill('dialog[open] input[name="end"]','15:00');await page.fill('dialog[open] input[name="title"]','Smoke shift');
+  await page.click('dialog[open] button[type="submit"]');await page.waitForFunction(()=>!document.querySelector('dialog[open]'),null,{timeout:5000});await settle(page);
+ }
+ const s=await page.evaluate(()=>{const vis=el=>el&&el.getBoundingClientRect().width>0;const box=[...document.querySelectorAll('.content .sched-grid,.content .sched-days')].find(vis);
+  return {box:box?.className||'',items:box?[...box.querySelectorAll('.sched-item')].map(i=>i.textContent):[],add:document.querySelectorAll('.content [data-action="schedule-new"]').length,
+   rows:document.querySelectorAll('.content .sched-grid .sched-person[role="rowheader"]').length,wide:document.documentElement.scrollWidth>innerWidth+1,lede:document.querySelector('.content .page-lede')?.textContent||''};});
+ assert.equal(s.wide,false,`${role}: schedules fit the screen`);assert.match(s.box,mobile?/sched-days/:/sched-grid/,`${role}: ${mobile?'day list on the phone':'week grid on desktop'}`);
+ assert.ok(s.items.some(t=>/9 AM–3 PM/.test(t)&&/Smoke shift/.test(t)),`${role}: the shift shows in the week (got ${s.items.join(' | ')})`);
+ if(role==='admin'){assert.ok(s.add>1,'admin: can add shifts');assert.match(await mainText(page),/Needs someone/,'admin: unassigned work is listed');}
+ else{assert.equal(s.add,0,`${role}: staff cannot add shifts`);if(!mobile)assert.equal(s.rows,1,`${role}: staff see only their own row`);}
+ done.push('staff-schedules');
+}
 const PAGE_CHECKS={
  admin:async(page,mobile,done)=>{
   await headerChecks(page,mobile,'admin',['properties','work','inspections','requests','maintenance','documents','assets','audit','billing','messages','notifications','storm'],done);
@@ -305,6 +325,10 @@ const PAGE_CHECKS={
   const audit=await go(page,'audit');assert.match(audit,/Residence created/,'admin: audit events in sentence case');assert.doesNotMatch(audit,/Property Created|Work Created/,'admin: no Title Case codes');
   const email=await go(page,'email-activity');assert.doesNotMatch(email,/\d+ attempts|submissions to the provider/,'admin: no email jargon');
   assert.doesNotMatch(await go(page,'automation'),/Recovery backup|encrypted archive|consolidated/,'admin: no automation jargon');done.push('wording');
+  await scheduleChecks(page,'admin',mobile,done);
+ },
+ employee:async(page,mobile,done)=>{
+  await scheduleChecks(page,'employee',mobile,done);
  },
  vendor:async(page,mobile,done)=>{
   await headerChecks(page,mobile,'vendor',['work','properties','messages'],done);
