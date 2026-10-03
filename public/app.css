@@ -187,3 +187,67 @@ body.signed-in,.shell{--muted:#5f6b76;--line:#e2e7eb}
 .shell .res-pad{padding:0 20px 8px}
 .shell .res-pad>.row:first-child{border-top:1px solid #edf0f2}
 @media(max-width:760px){.shell .res-pad{padding:0 14px 6px}}
+
+/* ---------- Work orders (batch 3b) ---------- */
+.shell .work-chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px}
+.shell .work-chips .chip{min-height:40px;padding:6px 14px;border-radius:999px;border:1px solid #e2e7eb;background:#fff;color:#344654;font-size:14px;font-weight:600;box-shadow:none}
+.shell .work-chips .chip span{color:#5f6b76;font-weight:600;margin-left:2px}
+.shell .work-chips .chip.active{background:#f6e9e8;border-color:#e8c9c7;color:#701c23}
+.shell .work-chips .chip.active span{color:#701c23}
+.shell .work-chips .chip:hover{background:#f3f5f7;border-color:#c5ced6}
+.shell .work-chips .chip.active:hover{background:#f6e9e8;border-color:#e8c9c7}
+.shell .work-board{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:20px;align-items:start}
+.shell .work-board.no-detail{grid-template-columns:1fr}
+.shell .work-list{padding:0;margin:0;overflow:hidden}
+.shell .work-list-head,.shell .work-row{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(0,1.2fr) minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 20px}
+.shell .work-list-head{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#7a6847;font-weight:700;padding-top:12px;padding-bottom:10px}
+.shell .work-group{margin:0;padding:10px 20px 6px;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#7a6847;font-weight:700;border-top:1px solid #edf0f2;background:#f7f8fa}
+.shell .work-row{width:100%;text-align:left;border:0;border-top:1px solid #edf0f2;border-left:3px solid transparent;border-radius:0;background:#fff;box-shadow:none;color:#1f2933;font-weight:400;min-height:56px;cursor:pointer}
+.shell .work-group+.work-row{border-top:0}
+.shell .work-row:hover{background:#f7f8fa;border-color:#edf0f2;border-left-color:transparent}
+.shell .work-row.active,.shell .work-row.active:hover{background:#fbf3f3;border-left-color:#8b242b}
+.shell .work-row-main strong{display:block;font-weight:600;font-size:14.5px}
+.shell .work-row-main small{display:block;color:#5f6b76;font-size:13px;margin-top:2px}
+.shell .work-row-who,.shell .work-row-due{font-size:14px;color:#1f2933}
+.shell .work-row-who.unassigned{color:#85631f;font-weight:600}
+.shell .work-row-due.overdue{color:#b4232c;font-weight:600}
+.shell .work-row-label{display:none}
+.shell .work-row-status{justify-self:end}
+.shell .work-list.compact .work-row{grid-template-columns:minmax(0,2.2fr) minmax(0,1fr) auto}
+.shell .work-detail{padding:0;margin:0}
+.shell .work-detail-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:18px 20px 4px}
+.shell .work-detail-title{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:24px;line-height:1.2;margin:0;color:#1f2933}
+.shell .work-detail-meta{margin:0;padding:0 20px 12px;color:#5f6b76;font-size:13.5px}
+.shell .work-fields{display:grid;grid-template-columns:1fr 1fr;margin:0;border-top:1px solid #edf0f2}
+.shell .work-fields>div{padding:12px 20px;border-bottom:1px solid #edf0f2}
+.shell .work-fields>div:nth-child(even){border-left:1px solid #edf0f2}
+.shell .work-fields dt{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#7a6847;font-weight:700;margin-bottom:3px}
+.shell .work-fields dd{margin:0;font-weight:600;color:#1f2933;font-size:14.5px}
+.shell .work-detail-text{margin:14px 20px 0;font-size:14.5px;line-height:1.55}
+.shell .work-notice{margin:14px 20px 0;padding:12px 14px;border:1px solid #ead9b7;background:#fff4dc;border-radius:8px;color:#5c4718;font-size:14px;line-height:1.5}
+.shell .work-actions{display:flex;flex-wrap:wrap;gap:8px;padding:16px 20px;align-items:center}
+.shell .work-files{display:flex;flex-wrap:wrap;gap:8px;padding:0 20px 14px}
+.shell .work-activity{border-top:1px solid #edf0f2;padding:14px 20px 16px}
+.shell .work-sub{margin:0 0 10px;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#7a6847;font-weight:700}
+.shell .work-timeline{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.shell .work-timeline li{position:relative;padding-left:18px}
+.shell .work-timeline li::before{content:"";position:absolute;left:0;top:7px;width:8px;height:8px;border-radius:50%;background:#b89960}
+.shell .work-timeline li.question::before{background:#8b242b}
+.shell .work-timeline p{margin:0;font-size:14px;color:#1f2933;white-space:pre-wrap;overflow-wrap:anywhere}
+.shell .work-timeline small{color:#5f6b76;font-size:12.5px}
+.shell .work-share{font-size:12.5px;margin:12px 0 0}
+@media(max-width:900px){.shell .work-board{grid-template-columns:1fr}.shell .work-detail{scroll-margin-top:80px}}
+@media(max-width:760px){
+ .shell .work-list-head{display:none}
+ .shell .work-row,.shell .work-list.compact .work-row{grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:12px 14px}
+ .shell .work-row-main{grid-column:1;grid-row:1}
+ .shell .work-row-status{grid-column:2;grid-row:1;align-self:start}
+ .shell .work-row-who,.shell .work-row-due{grid-column:1/-1;font-size:13px;color:#5f6b76}
+ .shell .work-row-label{display:inline;margin-right:4px}
+ .shell .work-row-label::after{content:":"}
+ .shell .work-group{padding-left:14px;padding-right:14px}
+ .shell .work-detail-head,.shell .work-detail-meta,.shell .work-actions,.shell .work-files,.shell .work-activity{padding-left:14px;padding-right:14px}
+ .shell .work-fields>div{padding:10px 14px}
+ .shell .work-detail-text,.shell .work-notice{margin-left:14px;margin-right:14px}
+ .shell .work-actions>button,.shell .work-actions>.more-menu{flex:1 1 100%}
+}
