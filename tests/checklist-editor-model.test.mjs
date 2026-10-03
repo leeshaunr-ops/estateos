@@ -223,3 +223,13 @@ test('starter items can be added after or replace existing items without key col
  assert.equal(replaced.items.length,presetItems('post_storm').length);
  assert.ok(!replaced.items.some(x=>current.some(c=>c.uid===x.uid)));
 });
+test('starter sets are identified by key; a Routine template suggests the standard "Routine visit" starter',async()=>{
+ const {starterSets}=await import('../checklist-templates.mjs');
+ const real=starterSets();
+ assert.equal(M.suggestStarter({name:'Weekly',visit_type:'routine'},real),'routine_standard');
+ assert.equal(M.suggestStarter({name:'Mine',visit_type:'custom'},real),'routine_standard');
+ assert.equal(M.suggestStarter({name:'Storm',visit_type:'pre_storm'},real),'pre_storm');
+ assert.equal(M.starterKey(real[1]),'routine');assert.equal(M.starterKey({visit_type:'arrival'}),'arrival');
+ const loaded=M.loadStarterItems([],real[0].items,'replace');
+ assert.equal(loaded.items.length,real[0].items.length);
+});

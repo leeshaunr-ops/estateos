@@ -1,5 +1,6 @@
 import {createChecklistTemplates} from './checklist-templates-api.mjs';
 import {createOfflineInspections,isUuid,captureTime,submissionProblems} from './offline-inspections.mjs';
+import {createVisitChecklists,parseSnapshot,checklistLabel,EAChecklist,BUILT_IN} from './visit-checklists.mjs';
 import {createPlatformGoogle} from './platform-google.mjs';
 import {createPlatformDashboard} from './platform-dashboard.mjs';
 import {createStripeBilling} from './stripe-billing.mjs';
@@ -161,7 +162,7 @@ async function snapshot(user) {
         jobs = jobs.filter(j => j.vendor_id === user.vendor_id);
     if (user.role === 'client')
         jobs = jobs.map(({ description, ...j }) => ({ ...j, description: '', service_notes: j.status === 'completed' ? j.service_notes : '' }));
-    const inspections = user.role === 'vendor' ? [] : await mapAsync((await scoped('inspections')).filter(i=>user.role!=='client'||i.status==='published'),async i=>{const {internal_notes,report_snapshot,report_email,email_status,email_attempted_at,...visible}=i;return {...visible,inspector_name:(await get('SELECT name FROM users WHERE id=?',i.inspector_id))?.name||'Not recorded',answers:JSON.parse(i.answers),...(['admin','employee'].includes(user.role)?{internal_notes,report_email,email_status:(await get('SELECT email_status FROM inspection_email_delivery WHERE inspection_id=?',i.id))?.email_status||'not_requested'}:{})};});
+    const inspections = user.role === 'vendor' ? [] : await mapAsync((await scoped('inspections')).filter(i=>user.role!=='client'||i.status==='published'),async i=>{const {internal_notes,report_snapshot,report_email,email_status,email_attempted_at,checklist_snapshot,...visible}=i;const checklist=parseSnapshot(checklist_snapshot);return {...visible,checklist:checklist?(['admin','employee'].includes(user.role)?checklist:checklistLabel(checklist)):null,inspector_name:(await get('SELECT name FROM users WHERE id=?',i.inspector_id))?.name||'Not recorded',answers:JSON.parse(i.answers),...(['admin','employee'].includes(user.role)?{internal_notes,report_email,email_status:(await get('SELECT email_status FROM inspection_email_delivery WHERE inspection_id=?',i.id))?.email_status||'not_requested'}:{})};});
     const jobIds = new Set(jobs.map(j => j.id));
     for(const job of jobs) job.updates=user.role==='client'?[]:await all('SELECT n.id,n.kind,n.body,n.created_at,u.name author_name FROM work_updates n JOIN users u ON u.id=n.author_id WHERE n.work_order_id=? ORDER BY n.created_at,n.id',job.id);
     const inspectionIds = new Set(inspections.map(i => i.id));
@@ -174,7 +175,7 @@ async function snapshot(user) {
             return { id: p.id, name: p.name, address: p.address, account_manager_name:p.account_manager_name }; if (user.role === 'client') {
             const { manual, ...safe } = p;
             return safe;
-    } return p; }), archivedProperties, invitations: await invitationHistory(all, user), clients: user.role === 'admin' ? (await all('SELECT * FROM clients WHERE organization_id=?', user.organization_id)) : [], vendors: ['admin', 'employee'].includes(user.role) ? (await all('SELECT * FROM vendors WHERE organization_id=?', user.organization_id)) : [], users: user.role === 'admin' ? (await all('SELECT id,name,email,role,client_id,vendor_id,active FROM users WHERE organization_id=?', user.organization_id)) : [], assets, asset_inspections: assetInspections, work: jobs, requests: user.role === 'vendor' ? [] : (await scoped('requests')), inspections, files, shopping: user.role === 'vendor' ? [] : (await scoped('shopping_items')), arrivals: user.role === 'vendor' ? [] : (await scoped('arrivals')).map(a => ({ ...a, items: JSON.parse(a.items), room_status: JSON.parse(a.room_status || '[]'), guests: JSON.parse(a.guests || '[]') })), maintenance: ['admin', 'employee'].includes(user.role) ? (await scoped('maintenance_plans')) : [], notes: ['admin', 'employee'].includes(user.role) ? (await scoped('notes')) : [], invoices: user.role === 'admin' ? (await all('SELECT invoices.*,clients.name client_name,COALESCE((SELECT SUM(amount_minor) FROM payments WHERE invoice_id=invoices.id),0) paid_minor FROM invoices JOIN clients ON clients.id=invoices.client_id WHERE invoices.organization_id=?', user.organization_id)) : [], audit: user.role === 'admin' ? (await all('SELECT audit.*,users.name actor_name FROM audit JOIN users ON users.id=audit.actor_id WHERE audit.organization_id=? ORDER BY audit.created_at DESC LIMIT 100', user.organization_id)) : [], notifications: (await failAlerts.list(user)), template };
+    } return p; }), archivedProperties, invitations: await invitationHistory(all, user), clients: user.role === 'admin' ? (await all('SELECT * FROM clients WHERE organization_id=?', user.organization_id)) : [], vendors: ['admin', 'employee'].includes(user.role) ? (await all('SELECT * FROM vendors WHERE organization_id=?', user.organization_id)) : [], users: user.role === 'admin' ? (await all('SELECT id,name,email,role,client_id,vendor_id,active FROM users WHERE organization_id=?', user.organization_id)) : [], assets, asset_inspections: assetInspections, work: jobs, requests: user.role === 'vendor' ? [] : (await scoped('requests')), inspections, files, shopping: user.role === 'vendor' ? [] : (await scoped('shopping_items')), arrivals: user.role === 'vendor' ? [] : (await scoped('arrivals')).map(a => ({ ...a, items: JSON.parse(a.items), room_status: JSON.parse(a.room_status || '[]'), guests: JSON.parse(a.guests || '[]') })), maintenance: ['admin', 'employee'].includes(user.role) ? (await scoped('maintenance_plans')) : [], notes: ['admin', 'employee'].includes(user.role) ? (await scoped('notes')) : [], invoices: user.role === 'admin' ? (await all('SELECT invoices.*,clients.name client_name,COALESCE((SELECT SUM(amount_minor) FROM payments WHERE invoice_id=invoices.id),0) paid_minor FROM invoices JOIN clients ON clients.id=invoices.client_id WHERE invoices.organization_id=?', user.organization_id)) : [], audit: user.role === 'admin' ? (await all('SELECT audit.*,users.name actor_name FROM audit JOIN users ON users.id=audit.actor_id WHERE audit.organization_id=? ORDER BY audit.created_at DESC LIMIT 100', user.organization_id)) : [], notifications: (await failAlerts.list(user)), template, checklists: ['admin','employee'].includes(user.role) ? await visitChecklists.published(user.organization_id, {items: true}) : [] };
 }
 async function fileAllowed(user, f, inspectionIds, jobIds) {
     if (['admin', 'employee'].includes(user.role))
@@ -192,6 +193,7 @@ async function readFile(user, fileId) { const f = (await get('SELECT * FROM file
     fail(404, 'File not found.'); return f; }
 const communications=createCommunications({get,all,run,transaction,id,now,fail,text,json,body,rate,audit});
 const failAlerts=createFailAlerts({get,all,run,id,now,fail,json,body});
+const visitChecklists=createVisitChecklists({get,all,fail,note});
 const security=createSecurity({get,run,transaction,body,json,rate,fail,passwordMatches,audit,now});
 const billing=createStripeBilling({get,all,run,transaction,id,now,fail,json,body,audit});
 const paidSignup=createPaidSignup({get,all,run,transaction,id,now,hash,randomBytes,body,json,fail,rate,parseSubscription:billing.parseSubscription});
@@ -199,13 +201,13 @@ const stripeSandbox=createStripeSandbox({get,run,transaction,id,now,fail,json,bo
 const subscriptions=createSubscriptions({get,all,run,transaction,id,now,fail,json,body,audit,platformOwner,communications});
 const master=createPlatformDashboard({get,all,run,transaction,body,json,fail,id,now,audit,platformOwner,subscriptions});
 const platformGoogle=createPlatformGoogle({get,run,transaction,body,json,fail,audit,platformOwner,permissions:master.permissions});
-const operations=createOperations({get,all,run,transaction,id,now,fail,text,note,date,roles,property,entity,work,audit,body,json,communications,template,readBytes,putBytes,ensureSpace:subscriptions.ensureSpace});
+const operations=createOperations({get,all,run,transaction,id,now,fail,text,note,date,roles,property,entity,work,audit,body,json,communications,template,visitChecklists,readBytes,putBytes,ensureSpace:subscriptions.ensureSpace});
 const demoSignup=createDemoSignup({get,run,transaction,body,json,fail,rate,id,now,hash,randomBytes});
 const demos=createDemos({get,all,run,transaction,id,now,hash,randomBytes,body,json,fail,audit,platformOwner,deleteBytes});
 const saas = createSaas({get,all,run,transaction,fail,text,note,id,hash,now,passwordHash,session,json,body,rate,audit,randomBytes,demos,demoSignup});
 const staff = createStaff({get,all,run,transaction,fail,text,note,id,now,passwordHash,json,body,audit,communications,assertCapacity:billing.assertCapacity});
 const checklistTemplates = createChecklistTemplates({get,all,run,transaction,body,json,fail,roles,property,id,now,audit});
-const offlineInspections = createOfflineInspections({get,all,run,body,json,fail,roles,property,entity,hash,now,template});
+const offlineInspections = createOfflineInspections({get,all,run,body,json,fail,roles,property,entity,hash,now,template,visitChecklists});
 async function assertWorkspaceActive(organizationId){if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',organizationId))?.status==='suspended')fail(403,'This company workspace is suspended. Contact support.');const d=await demos.lookup(organizationId);if(d&&Number(d.expires_at)<=Date.now())fail(403,'Your seven-day demo has ended. Contact sales@estateaegis.com for more time.');}
 const clientErrorWindows = new Map();
 function clientErrorAllowed(req){
@@ -820,11 +822,30 @@ async function api(req, res, url, user) {
         const inspectionDate = date(b.date), frequency = ['One-time', '7 days', '30 days', '60 days'].includes(b.frequency) ? b.frequency : (b.frequency === 'Custom' ? 'Custom' : 'One-time');
         const customDays = frequency === 'Custom' ? Math.max(1, Math.min(3650, Number(b.customDays) || 0)) : ({ '7 days': 7, '30 days': 30, '60 days': 60 }[frequency] || 0);
         const next = customDays ? (() => { const d = new Date(inspectionDate + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + customDays); return d.toISOString().slice(0, 10); })() : '';
-        (await run('INSERT INTO inspections(id,property_id,inspector_id,inspection_date,answers,created_at,frequency,next_due) VALUES(?,?,?,?,?,?,?,?)', key, b.propertyId, user.id, inspectionDate, JSON.stringify(template), now(), frequency, next));
+        // The newest published checklist for the visit type unless the inspector picked one (offline visits send the exact version they were filled against).
+        // A visit queued offline by an older app version sends an id but no checklist: it was filled on the built-in checklist.
+        const chosen = await visitChecklists.resolve(user.organization_id, { templateId: b.templateId ?? (b.id ? BUILT_IN : undefined), templateVersionId: b.templateVersionId, visitType: b.visitType });
+        const snap = chosen.snapshot;
+        (await run('INSERT INTO inspections(id,property_id,inspector_id,inspection_date,answers,created_at,frequency,next_due,visit_type,template_id,template_version,template_version_id,checklist_snapshot) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)', key, b.propertyId, user.id, inspectionDate, JSON.stringify(snap ? EAChecklist.propertyAnswers(snap) : template), now(), frequency, next, chosen.visit_type, snap?.template_id ?? null, snap?.template_version ?? null, snap?.template_version_id ?? null, snap ? JSON.stringify(snap) : null));
         const defaultEmail=inspectionProperty.inspection_report_email||'';
         await run('UPDATE inspections SET report_email=? WHERE id=?',defaultEmail,key);
         (await audit(user, 'inspection.started', key));
-        result = { id: key };
+        result = { id: key, checklist: checklistLabel(snap) };
+    }
+    else if (p === '/api/inspections/checklist') {
+        // Choose a different checklist for a scheduled visit before any result is recorded on it.
+        roles(user, 'admin', 'employee');
+        const row = (await entity(user, 'inspections', b.id, 'operate'));
+        if (row.status !== 'draft') fail(409, 'Only a draft visit can change its checklist.');
+        assertVersion(row, b);
+        const recorded = JSON.parse(row.answers || '[]').some(a => a.status !== 'unchecked' || String(a.note || '').trim()) || String(row.summary || '').trim() || String(row.notes || '').trim() || String(row.internal_notes || '').trim();
+        if (recorded) fail(409, 'Results are already recorded on this visit, so its checklist can no longer change.');
+        const chosen = await visitChecklists.resolve(user.organization_id, { templateId: b.templateId || BUILT_IN, visitType: b.visitType || row.visit_type });
+        const snap = chosen.snapshot;
+        const changed = await run("UPDATE inspections SET answers=?,visit_type=?,template_id=?,template_version=?,template_version_id=?,checklist_snapshot=?,version=version+1 WHERE id=? AND status='draft' AND version=?", JSON.stringify(snap ? EAChecklist.propertyAnswers(snap) : template), chosen.visit_type, snap?.template_id ?? null, snap?.template_version ?? null, snap?.template_version_id ?? null, snap ? JSON.stringify(snap) : null, row.id, row.version);
+        if (changed.changes !== 1) fail(409, 'This inspection changed. Refresh before changing its checklist.');
+        (await audit(user, 'inspection.checklist_changed', row.id));
+        result = { id: row.id, version: row.version + 1, checklist: checklistLabel(snap) };
     }
     else if (p === '/api/inspections/schedule') {
         roles(user, 'admin', 'employee');
@@ -868,7 +889,8 @@ async function api(req, res, url, user) {
         assertVersion(row, b);
         if (row.status !== 'draft')
             fail(409, 'Published reports cannot be edited.');
-        const answers = validateAnswers(b.answers);
+        const linked = parseSnapshot(row.checklist_snapshot);
+        const answers = linked ? visitChecklists.validateAnswers(b.answers, linked) : validateAnswers(b.answers);
         const changed=await run("UPDATE inspections SET answers=?,summary=?,notes=?,internal_notes=?,version=version+1 WHERE id=? AND status='draft' AND version=?",JSON.stringify(answers),note(b.summary),note(b.notes),note(b.internalNotes),row.id,row.version);
         if(changed.changes!==1)fail(409,'This inspection changed. Refresh before saving.');
         (await audit(user, 'inspection.saved', row.id));
@@ -888,7 +910,7 @@ async function api(req, res, url, user) {
         if (row.status === 'submitted' || row.status === 'published') result = { id: row.id, status: row.status, version: row.version, alreadyCompleted: true };
         else {
             assertVersion(row, b);
-            const problems = submissionProblems(row);
+            const problems = submissionProblems(row, { photoCount: Number((await get('SELECT COUNT(*) total FROM files WHERE inspection_id=?', row.id))?.total || 0) });
             if (problems.length) fail(422, problems.join(' '));
             const submittedAt = now();
             await transaction(async () => {
@@ -1217,7 +1239,7 @@ const server = http.createServer(async (req, res) => {
             return res.end(url.pathname === '/sw.js' ? content.replace('__SHELL_VERSION__', shellVersion()) : content);
         }
         const appHome = url.pathname === '/' && (url.searchParams.has('invite') || url.searchParams.has('workspaceInvite') || await actor(req));
-        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/security':'security.html' };
+        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/security':'security.html' };
         const file = names[url.pathname] || (url.pathname === '/client-login' || /^\/client\/[a-z0-9-]+$/i.test(url.pathname) ? 'live.html' : null);
         if (!file)
             fail(404, 'Page not found.');
@@ -1239,7 +1261,7 @@ const server = http.createServer(async (req, res) => {
         json(res, status, { error: status === 500 ? 'The action could not be saved. Check the server log.' : error.message });
     }
 });
-const SHELL_FILES = ['live.html','live.js','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png'];
+const SHELL_FILES = ['live.html','live.js','inspection-checklist.js','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png'];
 let cachedShellVersion = null;
 function shellVersion() { if (!cachedShellVersion) { const digest = createHash('sha256'); for (const name of SHELL_FILES) { try { digest.update(name).update(fs.readFileSync(path.join(root, 'public', name))); } catch { digest.update(name + ':missing'); } } cachedShellVersion = digest.digest('hex').slice(0, 12); } return cachedShellVersion; }
 setInterval(() => offlineInspections.purge().catch(e => console.error('Idempotency cleanup:', e.message)), 3600000).unref();
@@ -1252,12 +1274,15 @@ process.on('SIGTERM', () => server.close(async () => { await db.close(); process
 async function publishInspection(user,row,{key,route,requestHash}){
  if(!['draft','submitted'].includes(row.status))fail(409,'Already published.');
  const answers=JSON.parse(row.answers);
- if(answers.some(a=>a.status==='unchecked'))fail(422,'Complete every checklist item before publishing.');
+ // Built-in visits: every item. Template visits: every item the template marks Required.
+ if(EAChecklist.stillOpen(answers).length)fail(422,'Complete every checklist item before publishing.');
+ const linked=parseSnapshot(row.checklist_snapshot);
+ if(linked&&EAChecklist.photoRequired(answers).length&&!(await get('SELECT id FROM files WHERE inspection_id=? LIMIT 1',row.id)))fail(422,'Add a photo for the failed items that require one before publishing.');
  if(!row.summary.trim())fail(422,'Add an inspection summary.');
  const pRow=await property(user,row.property_id);
  const fileIds=(await all('SELECT id FROM files WHERE inspection_id=? ORDER BY created_at',row.id)).map(f=>f.id);
  const completedAt=now();
- const report={id:row.id,completedAt,timezone:pRow.timezone||'UTC',company:(await get('SELECT name FROM organizations WHERE id=?',user.organization_id)).name,companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'',property:pRow.name,client:(await get('SELECT name FROM clients WHERE id=?',pRow.client_id)).name,date:row.inspection_date,inspector:(await get('SELECT name FROM users WHERE id=?',row.inspector_id)).name,overall:answers.some(a=>a.status==='attention')?'Action needed':answers.some(a=>a.status==='monitor')?'Monitor':answers.every(a=>a.status==='na')?'Not assessed':'Passed',answers,summary:row.summary,notes:row.notes,fileIds};
+ const report={id:row.id,completedAt,timezone:pRow.timezone||'UTC',company:(await get('SELECT name FROM organizations WHERE id=?',user.organization_id)).name,companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'',property:pRow.name,client:(await get('SELECT name FROM clients WHERE id=?',pRow.client_id)).name,date:row.inspection_date,inspector:(await get('SELECT name FROM users WHERE id=?',row.inspector_id)).name,overall:answers.some(a=>a.status==='attention'||a.status==='fail')?'Action needed':answers.some(a=>a.status==='monitor')?'Monitor':answers.every(a=>a.status==='na')?'Not assessed':'Passed',answers,summary:row.summary,notes:row.notes,fileIds,...(linked?{checklist:checklistLabel(linked)}:{})};
  let result={id:row.id,published:true};
  await transaction(async()=>{
   const updated=await run("UPDATE inspections SET status='published',published_at=?,report_snapshot=?,report_email=?,version=version+1 WHERE id=? AND status IN ('draft','submitted') AND version=?",completedAt,JSON.stringify(report),pRow.inspection_report_email||'',row.id,row.version);

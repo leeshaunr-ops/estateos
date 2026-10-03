@@ -1,5 +1,6 @@
 // Offline mobile inspections: replay-safe writes (Idempotency-Key) and the per-user offline visit snapshot.
 // Everything here is scoped to the caller's company and the residences their role can operate.
+import {EAChecklist, parseSnapshot, defaultChecklist} from './visit-checklists.mjs';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export const isUuid = value => typeof value === 'string' && UUID.test(value);
 export const IDEMPOTENT_ROUTES = new Set(['/api/inspections', '/api/inspections/save', '/api/inspections/submit', '/api/inspections/publish', '/api/files']);
@@ -13,18 +14,16 @@ export function captureTime(value, reference = Date.now()) {
  return new Date(t).toISOString();
 }
 
-/** Validation used when a field tech marks a visit complete (stricter than drafts: N/A needs a reason). */
-export function submissionProblems(row) {
- const answers = JSON.parse(row.answers || '[]'), problems = [];
- const open = answers.filter(a => a.status === 'unchecked').length;
- if (open) problems.push(`${open} checklist item${open === 1 ? '' : 's'} still need a result.`);
- const naWithoutNote = answers.filter(a => a.status === 'na' && !String(a.note || '').trim()).length;
- if (naWithoutNote) problems.push(`Add a note to ${naWithoutNote} item${naWithoutNote === 1 ? '' : 's'} marked Not applicable.`);
- if (!String(row.summary || '').trim()) problems.push('Add an inspection summary.');
- return problems;
+/**
+ * Validation used when a field tech marks a visit complete (stricter than drafts: N/A needs a reason).
+ * Built-in visits: every item needs a result. Template visits follow the template: Required items need an answer,
+ * and a failed item set to "Photo required on fail" needs a photo on the visit (pass photoCount to check it).
+ */
+export function submissionProblems(row, { photoCount = null } = {}) {
+ return EAChecklist.completionProblems(JSON.parse(row.answers || '[]'), { summary: row.summary, photoCount });
 }
 
-export function createOfflineInspections({ get, all, run, body, json, fail, roles, property, entity, hash, now, template }) {
+export function createOfflineInspections({ get, all, run, body, json, fail, roles, property, entity, hash, now, template, visitChecklists }) {
  /** Wrap a mutating handler so a repeated Idempotency-Key replays the first successful response instead of writing twice. */
  async function idempotent(req, res, url, user, handler) {
   const key = req.headers['idempotency-key'];
@@ -57,7 +56,7 @@ export function createOfflineInspections({ get, all, run, body, json, fail, role
  }
  const purge = () => run('DELETE FROM idempotency_keys WHERE created_at<?', new Date(Date.now() - KEY_TTL_MS).toISOString());
 
- const inspectionFields = (i, names) => ({ id: i.id, property_id: i.property_id, inspector_id: i.inspector_id, inspector_name: names.get(i.inspector_id) || 'Not recorded', inspection_date: i.inspection_date, status: i.status, answers: JSON.parse(i.answers || '[]'), summary: i.summary, notes: i.notes, internal_notes: i.internal_notes, version: i.version, frequency: i.frequency, next_due: i.next_due, report_email: i.report_email, published_at: i.published_at, submitted_at: i.submitted_at, template_id: i.template_id ?? null, template_version: i.template_version ?? null, visit_type: i.visit_type || 'routine', created_at: i.created_at });
+ const inspectionFields = (i, names) => ({ id: i.id, property_id: i.property_id, inspector_id: i.inspector_id, inspector_name: names.get(i.inspector_id) || 'Not recorded', inspection_date: i.inspection_date, status: i.status, answers: JSON.parse(i.answers || '[]'), summary: i.summary, notes: i.notes, internal_notes: i.internal_notes, version: i.version, frequency: i.frequency, next_due: i.next_due, report_email: i.report_email, published_at: i.published_at, submitted_at: i.submitted_at, template_id: i.template_id ?? null, template_version: i.template_version ?? null, template_version_id: i.template_version_id ?? null, checklist: parseSnapshot(i.checklist_snapshot), visit_type: i.visit_type || 'routine', created_at: i.created_at });
 
  /** GET routes. Returns true when handled. */
  async function handle(req, res, url, user) {
@@ -81,13 +80,17 @@ export function createOfflineInspections({ get, all, run, body, json, fail, role
    }
    const client = new Map((await all('SELECT id,name FROM clients WHERE organization_id=?', user.organization_id)).map(c => [c.id, c.name]));
    const settings = await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?', user.organization_id);
+   // Every published company checklist (latest published version, with items) so visits can be started and filled with no signal.
+   const checklists = visitChecklists ? await visitChecklists.published(user.organization_id, { items: true }) : [];
+   const routine = defaultChecklist(checklists, 'routine');
    json(res, 200, {
     generatedAt: now(),
     user: { id: user.id, name: user.name, email: user.email, role: user.role },
     company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id))?.name || '',
     companyLogo: settings?.logo_data || '',
-    // Visits are not linked to checklist templates yet (inspections.template_id is never set), so the built-in checklist is what every visit uses.
-    checklist: { source: 'built-in', template_id: null, template_version: null, items: template },
+    // The default for a routine visit: the newest published Routine template, else the built-in checklist.
+    checklist: routine ? { source: 'template', template_id: routine.template_id, template_version: routine.template_version, template_version_id: routine.template_version_id, name: routine.name, items: routine.items } : { source: 'built-in', template_id: null, template_version: null, items: template },
+    checklists,
     template,
     properties: homes.map(h => ({ id: h.id, name: h.name, address: h.address, client_id: h.client_id, client_name: client.get(h.client_id) || '', account_manager_id: h.account_manager_id, account_manager_name: names.get(h.account_manager_id) || '', timezone: h.timezone || '', room_profile: h.room_profile, inspection_report_email: h.inspection_report_email || '' })),
     inspections: visits,

@@ -51,3 +51,43 @@
 .conflict-row .check-row span{min-width:0;overflow-wrap:anywhere}
 .conflict-form .dialog-footer{flex-wrap:wrap}
 .conflict-form .dialog-footer button{flex:1 1 auto}
+/* Template checklist answers (visits started from a published checklist) */
+.visit-checklist{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;margin:10px 0 4px;font-size:14px}
+.visit-checklist .muted{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.visit-checklist strong{color:var(--refresh-wine,#7e202b);font-weight:600}
+.visit-checklist button{margin-left:auto}
+.checklist-pick-note{margin:-6px 0 0;font-size:13px}
+.inspection-item.ck-item{grid-template-columns:minmax(0,1.2fr) 292px minmax(0,1fr)}
+.ck-item>select,.ck-item>.ck-input{width:100%}
+.ck-help{font-size:13px;line-height:1.45;margin-top:4px}
+.ck-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.ck-meta span{font-size:11px;font-weight:600;letter-spacing:.02em;border-radius:4px;padding:2px 7px;background:#eef1f3;color:#4f5d68}
+.ck-meta .ck-req{background:#f6e7e4;color:#7e202b}
+.ck-choices{display:flex;flex-wrap:wrap;gap:6px}
+.ck-chip{position:relative;display:inline-flex}
+.ck-chip input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
+.ck-chip span{display:inline-flex;align-items:center;justify-content:center;min-width:52px;min-height:40px;padding:0 12px;border:1px solid #d8e0e6;border-radius:8px;background:#fcfbf8;color:#344654;font-size:14px;font-weight:600;transition:background .12s,border-color .12s,color .12s}
+.ck-chip input:hover+span{border-color:#b9a4a6}
+.ck-chip input:focus-visible+span{outline:2px solid #7e202b;outline-offset:2px}
+.ck-chip-pass input:checked+span{background:#e3f1e8;border-color:#2f7a52;color:#1f5c3c}
+.ck-chip-fail input:checked+span{background:#7e202b;border-color:#7e202b;color:#fff}
+.ck-chip-na input:checked+span{background:#ece9e2;border-color:#8a8170;color:#4d473c}
+.ck-chip-monitor input:checked+span{background:#fff3bc;border-color:#c49116;color:#6b4f0b}
+.ck-chip-value input:checked+span{background:#f6e7e4;border-color:#7e202b;color:#7e202b}
+.ck-item .ck-input{width:100%;background:#fcfbf8}
+.ck-item textarea.ck-input{min-height:44px;resize:vertical;font-size:14px}
+.ck-item .badge.ck-value{justify-self:start}
+.badge.ck-pass{background:#e3f1e8;color:#1f5c3c}
+.badge.ck-fail{background:#f6e7e4;color:#913c36}
+.badge.ck-monitor{background:#f2e6ce;color:#74541c}
+.ck-answer-text{white-space:pre-wrap;font-size:14px;color:#1f2933}
+@media(max-width:1100px){.inspection-item.ck-item{grid-template-columns:1fr 292px}.inspection-item.ck-item>input{grid-column:1/-1}}
+@media(max-width:820px){
+ .inspection-item.ck-item{grid-template-columns:1fr}
+ .inspection-item.ck-item>input{grid-column:1}
+ .visit-checklist button{margin-left:0}
+ .ck-choices{width:100%}
+ .ck-choices:not(.ck-multi) .ck-chip{flex:1 1 0}
+ .ck-choices:not(.ck-multi) .ck-chip span{width:100%}
+ .ck-chip span{min-height:44px;font-size:15px}
+}

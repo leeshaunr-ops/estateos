@@ -12,14 +12,16 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;'
 export const wording = value => String(value || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 
 /**
- * Which failed answers should alert the office. A failed answer is matched to checklist template items by
- * stable key first, then by item wording. It alerts when a matched template item has alert_on_fail.
+ * Which failed answers should alert the office. It alerts when the matching template item has alert_on_fail.
+ * Linked visits (started from a template version) match only by the item's stable key, so the flag comes straight
+ * from that version. Legacy unlinked visits match by stable key first, then by item wording.
  */
-export function alertItems(answers, templateItems) {
+export function alertItems(answers, templateItems, {linked = false} = {}) {
  const byKey = new Map(), byLabel = new Map();
  const add = (map, key, item) => { if (!key) return; map.set(key, (map.get(key) || false) || !!Number(item.alert_on_fail)); };
  for (const item of templateItems || []) { add(byKey, String(item.stable_key || ''), item); add(byLabel, wording(item.label), item); }
- return (answers || []).filter(a => a && FAILED_STATUSES.has(a.status)).filter(a => byKey.has(a.key) ? byKey.get(a.key) : !!byLabel.get(wording(a.label)))
+ const itemKey = a => String(a.item_key || a.key);
+ return (answers || []).filter(a => a && FAILED_STATUSES.has(a.status)).filter(a => linked ? !!byKey.get(itemKey(a)) : byKey.has(a.key) ? byKey.get(a.key) : !!byLabel.get(wording(a.label)))
   .map(a => ({key: a.key, section: String(a.section || ''), label: String(a.label || ''), note: String(a.note || '').trim(), status: a.status}));
 }
 
@@ -76,12 +78,17 @@ export function createFailAlerts({get, all, run, id, now, fail, json, body}, {en
  /** Template items that decide alert_on_fail for this inspection. */
  async function templateItems(row, org) {
   const columns = 'stable_key,label,alert_on_fail';
-  if (row.template_id && row.template_version != null) {
+  if (row.template_id && (row.template_version_id || row.template_version != null)) {
    // Linked visit: the exact template version it was started from (published versions are never edited in place).
-   const version = await get('SELECT v.id FROM checklist_template_versions v JOIN checklist_templates t ON t.id=v.template_id WHERE v.template_id=? AND v.version=? AND t.organization_id=?', row.template_id, row.template_version, org);
-   if (version) return {source: 'linked-template', items: await all(`SELECT ${columns} FROM checklist_template_items WHERE template_version_id=?`, version.id)};
+   const version = row.template_version_id
+    ? await get('SELECT v.id FROM checklist_template_versions v JOIN checklist_templates t ON t.id=v.template_id WHERE v.id=? AND v.template_id=? AND t.organization_id=?', row.template_version_id, row.template_id, org)
+    : await get('SELECT v.id FROM checklist_template_versions v JOIN checklist_templates t ON t.id=v.template_id WHERE v.template_id=? AND v.version=? AND t.organization_id=?', row.template_id, row.template_version, org);
+   if (version) return {source: 'linked-template', linked: true, items: await all(`SELECT ${columns} FROM checklist_template_items WHERE template_version_id=?`, version.id)};
+   // The version row is gone: the snapshot stored on the visit carries the same flags.
+   let snapshot = null; try { snapshot = JSON.parse(row.checklist_snapshot || 'null'); } catch {}
+   if (Array.isArray(snapshot?.items)) return {source: 'linked-template', linked: true, items: snapshot.items};
   }
-  // Visits are not linked to templates yet (they use the built-in checklist): use the latest published
+  // Legacy unlinked visits (built-in checklist): fall back to wording/key matching against the latest published
   // version of every active company template for the same visit type.
   const items = [];
   for (const t of await all('SELECT id FROM checklist_templates WHERE organization_id=? AND visit_type=? AND archived_at IS NULL', org, row.visit_type || 'routine')) {
@@ -103,7 +110,7 @@ export function createFailAlerts({get, all, run, id, now, fail, json, body}, {en
   const property = await get('SELECT * FROM properties WHERE id=?', row.property_id), org = property.organization_id;
   const failed = JSON.parse(row.answers || '[]').filter(a => FAILED_STATUSES.has(a?.status));
   if (!failed.length) return {alerted: false};
-  const resolved = await templateItems(row, org), items = alertItems(failed, resolved.items);
+  const resolved = await templateItems(row, org), items = alertItems(failed, resolved.items, {linked: !!resolved.linked});
   if (!items.length) return {alerted: false};
   const people = await recipients(org, property);
   const timezone = property.timezone || FALLBACK_TIMEZONE;

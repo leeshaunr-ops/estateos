@@ -291,7 +291,7 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
  }
 
  function emptyHTML(){
-  const sets=S.starterSets, pick=sets&&sets.length?sets.find(x=>x.visit_type===M.suggestStarter(S.template,sets)):null;
+  const sets=S.starterSets, pick=sets&&sets.length?sets.find(x=>M.starterKey(x)===M.suggestStarter(S.template,sets)):null;
   const sections=pick?M.sectionNames(M.fromApi(pick.items)).length:0;
   const lead=pick?`Start from the <b>${esc(pick.label)}</b> starter checklist (${pick.items.length} items in ${sections} ${sections===1?'section':'sections'}) and adjust it to this residence, or add your own sections.`:'Load a ready-made starter checklist and adjust it, or add a section to build your own.';
   return `<div class="ce-empty ce-empty-start">
@@ -600,17 +600,17 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
   if(!dialog.open)return;
   if(!sets.length){dialog.querySelector('#ceStarterBody').innerHTML='<p class="ce-error-text">Starter checklists are not available right now. Try again in a moment.</p>';return;}
   const pick=M.suggestStarter(S.template,sets);
-  S.starter={pick,mode:S.items.length?'append':'replace',setType:pick!==S.template.visit_type&&!S.items.length};
+  S.starter={pick,mode:S.items.length?'append':'replace',setType:(sets.find(x=>M.starterKey(x)===pick)?.visit_type)!==S.template.visit_type&&!S.items.length};
   renderStarter();
   dialog.querySelector('.ce-starter-card.is-on')?.focus();
  }
  function renderStarter(){
   const st=S.starter, sets=S.starterSets||[];if(!st||!dialog.open)return;
-  const set=sets.find(x=>x.visit_type===st.pick)||sets[0];
+  const set=sets.find(x=>M.starterKey(x)===st.pick)||sets[0];
   // The suggested set first, then the rest in their usual order.
-  const ordered=[...sets].sort((a,b)=>(b.visit_type===M.suggestStarter(S.template,sets))-(a.visit_type===M.suggestStarter(S.template,sets)));
-  const card=x=>{const on=x.visit_type===set.visit_type, secs=M.sectionNames(M.fromApi(x.items)), vt=M.visitType(x.visit_type);
-   return `<button type="button" class="ce-opt-card ce-starter-card${on?' is-on':''}" role="radio" aria-checked="${on}" tabindex="${on?0:-1}" data-ce="starter-pick" data-id="${esc(x.visit_type)}"><span class="ce-opt-ic">${icon(vt.icon)}</span><span class="ce-starter-text"><span class="ce-opt-t">${esc(x.label)}${x.visit_type===S.template.visit_type?' <span class="ce-starter-match">This template\'s visit type</span>':''}</span><span class="ce-opt-d">${esc(secs.join(' · '))}</span></span><span class="ce-starter-count">${x.items.length} items</span></button>`;};
+  const suggested=M.suggestStarter(S.template,sets),ordered=[...sets].sort((a,b)=>(M.starterKey(b)===suggested)-(M.starterKey(a)===suggested));
+  const card=x=>{const on=M.starterKey(x)===M.starterKey(set), secs=M.sectionNames(M.fromApi(x.items)), vt=M.visitType(x.visit_type);
+   return `<button type="button" class="ce-opt-card ce-starter-card${on?' is-on':''}" role="radio" aria-checked="${on}" tabindex="${on?0:-1}" data-ce="starter-pick" data-id="${esc(M.starterKey(x))}"><span class="ce-opt-ic">${icon(vt.icon)}</span><span class="ce-starter-text"><span class="ce-opt-t">${esc(x.label)}${x.visit_type===S.template.visit_type?' <span class="ce-starter-match">This template\'s visit type</span>':''}</span><span class="ce-opt-d">${esc(secs.join(' · '))}</span></span><span class="ce-starter-count">${x.items.length} items</span></button>`;};
   const typeLabel=M.visitType(set.visit_type).label;
   dialog.querySelector('#ceStarterBody').innerHTML=`<p class="ce-muted">Pick a starter checklist. You can edit, reorder or delete any item afterwards. Items are saved to this draft; nothing reaches field staff until you publish.</p>
    <div class="ce-starter-list" role="radiogroup" aria-label="Starter checklists" data-group="starter">${ordered.map(card).join('')}</div>
@@ -619,7 +619,7 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
   dialog.querySelector('#ceStarterFoot').innerHTML=`<button type="button" class="ce-btn" data-ce="dialog-close">Cancel</button><button type="button" class="primary ce-btn" data-ce="starter-confirm">${st.mode==='replace'&&S.items.length?'Replace with':'Load'} ${set.items.length} items</button>`;
  }
  async function confirmStarter(){
-  const st=S.starter, set=(S.starterSets||[]).find(x=>x.visit_type===st?.pick);if(!set)return;
+  const st=S.starter, set=(S.starterSets||[]).find(x=>M.starterKey(x)===st?.pick);if(!set)return;
   const setType=set.visit_type!==S.template.visit_type&&!!dialog.querySelector('#ceStarterType')?.checked;
   const snapshot=S.items, r=M.loadStarterItems(S.items,set.items,st.mode);
   dialog.close();
@@ -708,7 +708,7 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
    case 'publish':return openPublish();
    case 'template-menu':return S.menu&&S.menu.trigger===b?closeMenu():templateMenu(b);
    case 'starter':return openStarter();
-   case 'starter-pick':{if(!S.starter)return;S.starter.pick=id;S.starter.setType=id!==S.template.visit_type&&!S.items.length;renderStarter();dialog.querySelector('.ce-starter-card.is-on')?.focus();return;}
+   case 'starter-pick':{if(!S.starter)return;S.starter.pick=id;S.starter.setType=((S.starterSets||[]).find(x=>M.starterKey(x)===id)?.visit_type)!==S.template.visit_type&&!S.items.length;renderStarter();dialog.querySelector('.ce-starter-card.is-on')?.focus();return;}
    case 'starter-mode':{if(!S.starter)return;S.starter.mode=id;renderStarter();dialog.querySelector(`[data-ce="starter-mode"][data-id="${id}"]`)?.focus();return;}
    case 'starter-confirm':return confirmStarter();
    case 'confirm-publish':return publish(b);

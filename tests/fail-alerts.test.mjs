@@ -82,11 +82,16 @@ test('fail alert email is queued once per recipient and sent as HTML through the
   // A visit linked to a template version uses exactly that version, not the company's latest published one.
   await ins("INSERT INTO checklist_template_versions(id,template_id,version,status,created_at) VALUES('v2','tpl',2,'published',?)",t);
   await ins("INSERT INTO checklist_template_items(id,template_version_id,section,label,stable_key,alert_on_fail) VALUES('i2','v2','Water','Check under sinks for leaks','sinks',0)");
-  await ins("INSERT INTO inspections(id,property_id,inspector_id,inspection_date,status,answers,summary,created_at,template_id,template_version) VALUES('linked1','home','mgr','2026-10-02','submitted',?,'x',?,'tpl',1)",JSON.stringify(answers),t);
-  await ins("INSERT INTO inspections(id,property_id,inspector_id,inspection_date,status,answers,summary,created_at,template_id,template_version) VALUES('linked2','home','mgr','2026-10-02','submitted',?,'x',?,'tpl',2)",JSON.stringify(answers),t);
+  // Linked visits carry the template's own item keys (they are created from the version's items).
+  const linkedAnswers=[{key:'sinks',item_key:'sinks',section:'Water',label:'Check under sinks for leaks',response_type:'pass_fail_na',status:'fail',note:'Drip under kitchen sink'}];
+  await ins("INSERT INTO inspections(id,property_id,inspector_id,inspection_date,status,answers,summary,created_at,template_id,template_version) VALUES('linked1','home','mgr','2026-10-02','submitted',?,'x',?,'tpl',1)",JSON.stringify(linkedAnswers),t);
+  await ins("INSERT INTO inspections(id,property_id,inspector_id,inspection_date,status,answers,summary,created_at,template_id,template_version) VALUES('linked2','home','mgr','2026-10-02','submitted',?,'x',?,'tpl',2)",JSON.stringify(linkedAnswers),t);
+  // A linked visit never falls back to wording: an answer whose key is not in its version does not alert, even with matching words.
+  await ins("INSERT INTO inspections(id,property_id,inspector_id,inspection_date,status,answers,summary,created_at,template_id,template_version) VALUES('linked3','home','mgr','2026-10-02','submitted',?,'x',?,'tpl',1)",JSON.stringify(answers),t);
   await ins("INSERT INTO inspections(id,property_id,inspector_id,inspection_date,status,answers,summary,created_at) VALUES('unlinked','home','mgr','2026-10-02','submitted',?,'x',?)",JSON.stringify(answers),t);
   assert.equal((await alerts.inspectionCompleted('linked1')).alerted,true,'linked to v1, where the item alerts');
   assert.equal((await alerts.inspectionCompleted('linked2')).alerted,false,'linked to v2, where the item does not alert');
+  assert.equal((await alerts.inspectionCompleted('linked3')).alerted,false,'linked visits match by item key only (no wording fallback)');
   assert.equal((await alerts.inspectionCompleted('unlinked')).alerted,false,'unlinked visits follow the latest published version (v2)');
   assert.equal((await db.get("SELECT source FROM inspection_fail_alerts WHERE inspection_id='linked1'")).source,'submit');
   assert.equal(JSON.parse((await db.get("SELECT details FROM inspection_fail_alerts WHERE inspection_id='linked1'")).details).source,'linked-template');
