@@ -22,6 +22,7 @@ import {createSaas,platformOwner} from './saas.mjs';
 import {createDemos} from './demos.mjs';
 import {createDemoSignup} from './demo-signup.mjs';
 import {createStaff} from './staff.mjs';
+import {createWorkExtras} from './work-extras.mjs';
 import {seal,unseal} from './vault.mjs';
 import { openDatabase } from './database.mjs';
 import { openStorage } from './storage.mjs';
@@ -215,6 +216,7 @@ const demoSignup=createDemoSignup({get,run,transaction,body,json,fail,rate,id,no
 const demos=createDemos({get,all,run,transaction,id,now,hash,randomBytes,body,json,fail,audit,platformOwner,deleteBytes});
 const saas = createSaas({get,all,run,transaction,fail,text,note,id,hash,now,passwordHash,session,json,body,rate,audit,randomBytes,demos,demoSignup});
 const staff = createStaff({get,all,run,transaction,fail,text,note,id,now,passwordHash,json,body,audit,communications,assertCapacity:billing.assertCapacity});
+const workExtras = createWorkExtras({get,all,run,transaction,id,now,fail,roles,work,property,audit,body,communications});
 const checklistTemplates = createChecklistTemplates({get,all,run,transaction,body,json,fail,roles,property,id,now,audit});
 const visitVerification = createVisitVerification({get,all,run,transaction,id,now,fail,json,body,roles,property,entity,audit,captureTime});
 const storm = createStorm({get,all,run,transaction,id,now,fail,text,note,date,json,body,roles,property,audit,visitChecklists,visitVerification,readFile,readBytes,checklistLabel});
@@ -252,6 +254,7 @@ async function api(req, res, url, user) {
     if(await subscriptions.handle(req,res,url,user))return;
     if(await saas(req,res,url,user))return;
     if(await staff.handle(req,res,url,user))return;
+    if(await workExtras.handle(req,res,url,user))return;
     if(await checklistTemplates.handle(req,res,url,user))return;
     if(await offlineInspections.handle(req,res,url,user))return;
     if(await failAlerts.handle(req,res,url,user))return;
