@@ -31,6 +31,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inspectionPdf, jpegSize } from './pdf.mjs';
 import { createVisitVerification } from './visit-verification.mjs';
+import { createStorm } from './storm.mjs';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const db = await openDatabase(root);
 let storage;
@@ -109,6 +110,9 @@ async function property(user, propertyId, operation = 'read') {
     if (user.role === 'client' && p.client_id === user.client_id && operation !== 'operate')
         return p;
     if (user.role === 'employee' && p.account_manager_id === user.id)
+        return p;
+    // Storm assignments (round robin or a chosen team member) open the residence while the storm is not closed.
+    if (user.role === 'employee' && await storm.assigned(user, p.id))
         return p;
     if (user.role === 'vendor' && operation === 'job' && (await get("SELECT 1 FROM work_orders WHERE property_id=? AND vendor_id=? AND status NOT IN ('cancelled')", p.id, user.vendor_id)))
         return p;
@@ -209,6 +213,7 @@ const saas = createSaas({get,all,run,transaction,fail,text,note,id,hash,now,pass
 const staff = createStaff({get,all,run,transaction,fail,text,note,id,now,passwordHash,json,body,audit,communications,assertCapacity:billing.assertCapacity});
 const checklistTemplates = createChecklistTemplates({get,all,run,transaction,body,json,fail,roles,property,id,now,audit});
 const visitVerification = createVisitVerification({get,all,run,transaction,id,now,fail,json,body,roles,property,entity,audit,captureTime});
+const storm = createStorm({get,all,run,transaction,id,now,fail,text,note,date,json,body,roles,property,audit,visitChecklists,visitVerification,readFile,readBytes,checklistLabel});
 const offlineInspections = createOfflineInspections({get,all,run,body,json,fail,roles,property,entity,hash,now,template,visitChecklists,visitVerification});
 async function assertWorkspaceActive(organizationId){if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',organizationId))?.status==='suspended')fail(403,'This company workspace is suspended. Contact support.');const d=await demos.lookup(organizationId);if(d&&Number(d.expires_at)<=Date.now())fail(403,'Your seven-day demo has ended. Contact sales@estateaegis.com for more time.');}
 const clientErrorWindows = new Map();
@@ -247,6 +252,7 @@ async function api(req, res, url, user) {
     if(await offlineInspections.handle(req,res,url,user))return;
     if(await failAlerts.handle(req,res,url,user))return;
     if(await visitVerification.handle(req,res,url,user))return;
+    if(await storm.handle(req,res,url,user))return;
     if(await communications.handle(req,res,url,user))return;
     if(await operations.handle(req,res,url,user))return;
     if(await security.handle(req,res,url,user))return;
@@ -882,6 +888,7 @@ async function api(req, res, url, user) {
             await run('DELETE FROM inspection_email_delivery WHERE inspection_id=?',row.id);
             await run('DELETE FROM inspection_fail_alerts WHERE inspection_id=?',row.id);
             await run('DELETE FROM inspection_occurrences WHERE inspection_id=?',row.id);
+            await storm.inspectionDeleted(row);
             await run('DELETE FROM inspections WHERE id=?',row.id);
             await audit(user,'inspection.draft_deleted',row.id);
         });
@@ -900,6 +907,7 @@ async function api(req, res, url, user) {
         const changed=await run("UPDATE inspections SET answers=?,summary=?,notes=?,internal_notes=?,version=version+1 WHERE id=? AND status='draft' AND version=?",JSON.stringify(answers),note(b.summary),note(b.notes),note(b.internalNotes),row.id,row.version);
         if(changed.changes!==1)fail(409,'This inspection changed. Refresh before saving.');
         (await audit(user, 'inspection.saved', row.id));
+        await storm.inspectionChanged(row.id, 'save');
         if (b.conflictResolution) (await audit(user, 'inspection.conflict_resolved', row.id));
         result = { id: row.id, version: row.version + 1 };
     }
@@ -928,6 +936,7 @@ async function api(req, res, url, user) {
                 await notifyProperty(pRow, 'Inspection submitted for review: ' + pRow.name, row.id);
                 // "Alert the office on fail": one alert per inspection, committed with the status change.
                 await failAlerts.inspectionCompleted(row.id, { source: 'submit', completedAt: submittedAt });
+                await storm.inspectionChanged(row.id, 'submit');
             });
             result = { id: row.id, status: 'submitted', version: row.version + 1, submitted_at: submittedAt };
             if (b.autoPublish === true && user.role === 'admin') {
@@ -945,6 +954,7 @@ async function api(req, res, url, user) {
         const changed = await run("UPDATE inspections SET status='draft',version=version+1 WHERE id=? AND status='submitted' AND version=?", row.id, row.version);
         if (changed.changes !== 1) fail(409, 'This inspection changed. Refresh and try again.');
         await audit(user, 'inspection.reopened', row.id);
+        await storm.inspectionChanged(row.id, 'reopen');
         result = { id: row.id, status: 'draft', version: row.version + 1 };
     }
     else if (p === '/api/inspections/publish') {
@@ -1249,7 +1259,7 @@ const server = http.createServer(async (req, res) => {
             return res.end(url.pathname === '/sw.js' ? content.replace('__SHELL_VERSION__', shellVersion()) : content);
         }
         const appHome = url.pathname === '/' && (url.searchParams.has('invite') || url.searchParams.has('workspaceInvite') || await actor(req));
-        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js','/visit-verification.js':'visit-verification.js','/visit-card.js':'visit-card.js','/view-route.js':'view-route.js', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/security':'security.html' };
+        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js','/visit-verification.js':'visit-verification.js','/visit-card.js':'visit-card.js','/storm-core.js':'storm-core.js','/storm.js':'storm.js','/storm.css':'storm.css','/view-route.js':'view-route.js', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/security':'security.html' };
         const file = names[url.pathname] || (url.pathname === '/client-login' || /^\/client\/[a-z0-9-]+$/i.test(url.pathname) ? 'live.html' : null);
         if (!file)
             fail(404, 'Page not found.');
@@ -1271,7 +1281,7 @@ const server = http.createServer(async (req, res) => {
         json(res, status, { error: status === 500 ? 'The action could not be saved. Check the server log.' : error.message });
     }
 });
-const SHELL_FILES = ['live.html','live.js','inspection-checklist.js','visit-verification.js','visit-card.js','view-route.js','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png'];
+const SHELL_FILES = ['live.html','live.js','inspection-checklist.js','visit-verification.js','visit-card.js','view-route.js','storm-core.js','storm.js','storm.css','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png'];
 let cachedShellVersion = null;
 function shellVersion() { if (!cachedShellVersion) { const digest = createHash('sha256'); for (const name of SHELL_FILES) { try { digest.update(name).update(fs.readFileSync(path.join(root, 'public', name))); } catch { digest.update(name + ':missing'); } } cachedShellVersion = digest.digest('hex').slice(0, 12); } return cachedShellVersion; }
 setInterval(() => offlineInspections.purge().catch(e => console.error('Idempotency cleanup:', e.message)), 3600000).unref();
@@ -1303,6 +1313,7 @@ async function publishInspection(user,row,{key,route,requestHash}){
   if(updated.changes!==1)fail(409,'This report changed or was already published.');
   // Publishing straight from a draft also completes the visit; a visit already alerted on submit is not alerted twice.
   await failAlerts.inspectionCompleted(row.id,{source:'publish',completedAt});
+  await storm.inspectionChanged(row.id,'publish');
   await notifyProperty(pRow,'Inspection report available: '+pRow.name,row.id,'client');
   await audit(user,'inspection.published',row.id);
   await run('INSERT INTO idempotency VALUES(?,?,?,?,?)',user.id,key,route,requestHash,JSON.stringify(result));
