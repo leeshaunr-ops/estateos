@@ -1,4 +1,6 @@
 'use strict';
+// A signed-out refresh of an app screen (/#/residence/...) lands here: send it to sign-in, which returns to that screen.
+if (/^#\/./.test(location.hash)) location.replace('/login' + location.hash);
 const chapter = document.getElementById('chapter');
 const player = document.getElementById('tutorial-player');
 chapter.addEventListener('change', () => {
