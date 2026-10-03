@@ -251,3 +251,65 @@ body.signed-in,.shell{--muted:#5f6b76;--line:#e2e7eb}
  .shell .work-detail-text,.shell .work-notice{margin-left:14px;margin-right:14px}
  .shell .work-actions>button,.shell .work-actions>.more-menu{flex:1 1 100%}
 }
+
+/* ---------- Staff schedules (batch 3c) ---------- */
+.shell .sched-nav{display:flex;align-items:center;gap:8px}
+.shell .sched-nav>button:not(.ov-head-link){min-width:40px;min-height:40px;padding:0 12px;font-size:18px;line-height:1;background:#fff;border:1px solid #e2e7eb;color:#1f2933;box-shadow:none}
+.shell .sched-range{min-width:120px;text-align:center;font-weight:600;font-size:14.5px;color:#1f2933}
+.shell .sched-grid{padding:0;overflow:hidden}
+.shell .sched-row{display:grid;grid-template-columns:minmax(150px,1.3fr) repeat(7,minmax(0,1fr));border-top:1px solid #edf0f2}
+.shell .sched-row.sched-head{border-top:0}
+.shell .sched-head>div{padding:12px 10px 10px;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#7a6847;font-weight:700}
+.shell .sched-day span{display:block}
+.shell .sched-day b{display:block;font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:18px;letter-spacing:0;color:#1f2933;text-transform:none;margin-top:2px}
+.shell .sched-day.today{background:#fbf3f3;color:#8b242b}
+.shell .sched-day.today b{color:#8b242b}
+.shell .sched-person{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;min-width:0}
+.shell .sched-person strong{display:block;font-weight:600;font-size:14px;color:#1f2933}
+.shell .sched-person small{display:block;color:#5f6b76;font-size:12.5px;margin-top:2px}
+.shell .sched-cell{display:flex;flex-direction:column;gap:6px;padding:8px 6px;border-left:1px solid #edf0f2;min-width:0;min-height:72px}
+.shell .sched-cell.today{background:#fffafa}
+.shell .sched-item{display:block;width:100%;text-align:left;padding:5px 7px;border-radius:6px;border:1px solid #e2d6bd;border-left:3px solid #b89960;background:#f8f3e9;color:#1f2933;font-size:12px;line-height:1.35;font-weight:400;box-shadow:none;min-height:0;cursor:default;overflow-wrap:anywhere}
+.shell button.sched-item{cursor:pointer}
+.shell button.sched-item:hover{filter:brightness(.97)}
+.shell .sched-item .sched-time{display:block;font-weight:700}
+.shell .sched-item .sched-text{display:block;color:#4a5560}
+.shell .sched-item.visit{background:#eef2f5;border-color:#d5dde3;border-left-color:#7d8e9c}
+.shell .sched-item.storm{background:#f8e7e7;border-color:#e5c3c3;border-left-color:#8b242b}
+.shell .sched-item.storm .sched-time{color:#701c23}
+.shell .sched-item.work{background:#ebf4ef;border-color:#cfe3d7;border-left-color:#3f7d5c}
+.shell .sched-add{align-self:flex-start;min-height:28px;min-width:28px;padding:0 8px;border:1px dashed #cbd3da;background:transparent;color:#7a8794;border-radius:6px;font-size:15px;line-height:1;box-shadow:none;opacity:.7}
+.shell .sched-add:hover,.shell .sched-add:focus-visible{opacity:1;color:#8b242b;border-color:#8b242b;background:#fff}
+.shell .sched-empty{padding:8px 20px}
+.shell .sched-legend{display:flex;flex-wrap:wrap;gap:16px;padding:12px 16px;border-top:1px solid #edf0f2;font-size:12.5px;color:#5f6b76}
+.shell .sched-legend span::before{content:"";display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;background:#b89960;vertical-align:-1px}
+.shell .sched-legend .visit::before{background:#7d8e9c}
+.shell .sched-legend .storm::before{background:#8b242b}
+.shell .sched-legend .work::before{background:#3f7d5c}
+.shell .sched-days{display:none}
+.shell .sched-bottom{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:20px;align-items:start;margin-top:20px}
+.shell .sched-bottom.single{grid-template-columns:1fr}
+.shell .sched-load{align-items:flex-start}
+.shell .sched-bar{display:block;height:6px;border-radius:3px;background:#edf0f2;margin-top:6px;overflow:hidden;max-width:260px}
+.shell .sched-bar-fill{display:block;height:100%;background:#b89960;border-radius:3px;width:0}
+.shell .sched-bar-fill.w1{width:10%}.shell .sched-bar-fill.w2{width:20%}.shell .sched-bar-fill.w3{width:30%}.shell .sched-bar-fill.w4{width:40%}.shell .sched-bar-fill.w5{width:50%}
+.shell .sched-bar-fill.w6{width:60%}.shell .sched-bar-fill.w7{width:70%}.shell .sched-bar-fill.w8{width:80%}.shell .sched-bar-fill.w9{width:90%}.shell .sched-bar-fill.w10{width:100%;background:#8b242b}
+.shell .danger-link{background:transparent;border:0;box-shadow:none;color:#b4232c;font-weight:600;padding:8px 0;min-height:44px}
+.shell .danger-link:hover{text-decoration:underline;background:transparent}
+@media(max-width:1100px){.shell .sched-bottom{grid-template-columns:1fr}}
+@media(max-width:900px){
+ .shell .sched-grid{display:none}
+ .shell .sched-days{display:grid;gap:12px}
+ .shell .sched-daycard{margin:0;padding:14px 16px}
+ .shell .sched-daycard h2{margin:0 0 10px;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#7a6847;font-weight:700;font-family:inherit}
+ .shell .sched-daycard.today h2{color:#8b242b}
+ .shell .sched-dayitem{display:flex;flex-direction:column;gap:2px;margin-bottom:8px}
+ .shell .sched-dayitem small{color:#5f6b76;font-size:12.5px;padding-left:4px}
+ .shell .sched-dayitem .sched-item{font-size:13.5px;padding:8px 10px}
+ .shell .sched-daycard>button{margin-top:4px}
+}
+@media(max-width:760px){
+ .shell .sched-nav{width:100%;justify-content:space-between}
+ .shell .sched-range{flex:1}
+ .shell .sched-daycard>button{width:100%}
+}
