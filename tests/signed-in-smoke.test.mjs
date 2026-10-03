@@ -249,6 +249,22 @@ async function residenceChecks(page,role,name,expect,done){
   assert.equal(await page.locator('.content .res-tabs button.active').getAttribute('data-id'),expect.alias[1],`${role}: old tab ${expect.alias[0]} opens ${expect.alias[1]}`);}
  done.push('residence');
 }
+// Batch 3b: work orders are a filtered list grouped by due date with one open work order and a single next step.
+async function workChecks(page,role,expect,done){
+ await go(page,'work');
+ const w=await page.evaluate(()=>({chips:[...document.querySelectorAll('.content .work-chips .chip')].map(c=>c.textContent.replace(/\s+\d+$/,'').trim()),groups:[...document.querySelectorAll('.content .work-group')].map(g=>g.textContent),
+  rows:[...document.querySelectorAll('.content .work-row')].map(r=>r.querySelector('strong').textContent),title:document.querySelector('.content .work-detail-title')?.textContent,
+  primary:document.querySelectorAll('.content .work-actions > button.primary').length,cards:document.querySelectorAll('.content details.work-card').length,wide:document.documentElement.scrollWidth>innerWidth+1}));
+ assert.equal(w.cards,0,`${role}: no fold-out work cards`);assert.equal(w.wide,false,`${role}: work page fits the screen`);
+ for(const c of expect.chips)assert.ok(w.chips.includes(c),`${role}: filter chip ${c} (got ${w.chips.join(', ')})`);
+ for(const r of expect.rows)assert.ok(w.rows.includes(r),`${role}: work list shows ${r}`);
+ assert.equal(w.title,w.rows[0],`${role}: the first work order is open beside the list`);
+ assert.ok(w.primary<=1,`${role}: at most one primary next step`);if(expect.primary)assert.equal(await page.locator('.content .work-actions > button.primary').innerText(),expect.primary,`${role}: next step`);
+ if(expect.groups)for(const g of expect.groups)assert.ok(w.groups.includes(g),`${role}: group ${g}`);
+ if(w.rows.length>1){await page.locator('.content .work-row').nth(1).click();await settle(page);assert.equal(await page.locator('.content .work-detail-title').innerText(),w.rows[1],`${role}: choosing a row opens it`);}
+ await page.locator('.content .work-chips .chip',{hasText:'Completed'}).click();await settle(page);assert.equal(await page.locator('.content .work-chips .chip.active').getAttribute('data-id'),'completed',`${role}: Completed filter`);
+ await page.locator('.content .work-chips .chip[data-id="open"]').click();await settle(page);done.push('work');
+}
 const PAGE_CHECKS={
  admin:async(page,mobile,done)=>{
   await headerChecks(page,mobile,'admin',['properties','work','inspections','requests','maintenance','documents','assets','audit','billing','messages','notifications','storm'],done);
@@ -272,6 +288,7 @@ const PAGE_CHECKS={
   await page.evaluate(()=>document.querySelector('dialog[open]').close());done.push('work-assignment');
   // Approvals: amount on its own line, no dangling separator.
   const appr=await go(page,'approvals');assert.match(appr,/\$125\.00/);assert.doesNotMatch(appr,/·\s*$/m,'admin: no dangling separator');done.push('approvals');
+  await workChecks(page,'admin',{chips:['Open','Overdue','Waiting on client','Vendors','Completed'],rows:['Replace pool light','Service the pool pump'],groups:['Overdue','Due this week']},done);
   // Requests: "Link work order" only where there is work to link.
   await go(page,'requests');
   const links=await page.evaluate(()=>[...document.querySelectorAll('.content .row')].map(r=>({t:r.innerText,link:!!r.querySelector('[data-action="link-request"]')})));
@@ -293,11 +310,13 @@ const PAGE_CHECKS={
   await headerChecks(page,mobile,'vendor',['work','properties','messages'],done);
   await go(page,'work');assert.equal(await page.locator('.content .page-title').innerText(),'Your jobs','vendor: jobs title');
   await residenceChecks(page,'vendor','Harbor Loft',{tabs:null},done);
+  await workChecks(page,'vendor',{chips:['Open','Completed'],rows:['Service the pool pump'],primary:'Start work'},done);
   assert.match(await go(page,'messages'),/company that sends you jobs/,'vendor: messages subtitle for vendors');done.push('wording');
  },
  client:async(page,mobile,done)=>{
   await headerChecks(page,mobile,'client',['properties','work','inspections','requests','documents','messages','notifications'],done);
   await emptyCheck(page,'client','documents',/No documents yet/,'');
+  await workChecks(page,'client',{chips:['Open','Needs your approval','Completed'],rows:['Replace pool light'],primary:'Review the estimate'},done);
   await residenceChecks(page,'client','Ocean House',{tabs:['overview','inspections','services','arrivals','records','people'],panels:['Needs attention here','Visits','Service updates','Owners & family','Next arrival','Home records'],alias:['shopping','arrivals']},done);
   // Batch 2 wording: written for the family, not for staff.
   const home=await go(page,'dashboard');assert.match(await page.locator('.content .page-title').innerText(),/^Good (morning|afternoon|evening)/,'client: home greets the family');
