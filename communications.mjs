@@ -20,11 +20,17 @@ export function createCommunications({get,all,run,transaction,id,now,fail,text,j
  async function schedule(user,key){const s=await get('SELECT * FROM staff_schedules WHERE id=? AND organization_id=?',key,user.organization_id);if(!s)return;await enqueue(user.organization_id,'schedule:'+key+':'+id(),[await primary(user.organization_id),await get('SELECT id,email FROM users WHERE id=? AND organization_id=? AND active=1',s.user_id,user.organization_id)],'Schedule: '+s.title,'A schedule has been created or updated for you or your team. Sign in to review the dates, times and assigned work.',key);}
  async function membership(user,key){const t=await get('SELECT t.* FROM message_threads t JOIN message_members m ON m.thread_id=t.id WHERE t.id=? AND t.organization_id=? AND m.user_id=?',key,user.organization_id,user.id);if(!t)fail(404,'Conversation not found.');return t;}
  async function unread(user){return Number((await get('SELECT COUNT(*) total FROM messages x JOIN message_members m ON m.thread_id=x.thread_id JOIN message_threads t ON t.id=x.thread_id WHERE m.user_id=? AND t.organization_id=? AND x.sender_id<>? AND (m.read_at IS NULL OR x.created_at>m.read_at)',user.id,user.organization_id,user.id))?.total||0);}
+ const snippet=v=>{const s=String(v||'').replace(/\s+/g,' ').trim();return s.length>160?s.slice(0,159)+'…':s;};
  async function handle(req,res,url,user){
   if(!url.pathname.startsWith('/api/messages'))return false;if(!user)fail(401,'Please sign in.');
   if(url.pathname==='/api/messages'&&req.method==='GET'){
    const threads=await all('SELECT t.*, (SELECT MAX(x.created_at) FROM messages x WHERE x.thread_id=t.id) updated_at,(SELECT COUNT(*) FROM messages x WHERE x.thread_id=t.id AND x.sender_id<>? AND (m.read_at IS NULL OR x.created_at>m.read_at)) unread FROM message_threads t JOIN message_members m ON m.thread_id=t.id WHERE m.user_id=? AND t.organization_id=? ORDER BY updated_at DESC',user.id,user.id,user.organization_id);
-   for(const t of threads)t.people=await all('SELECT u.id,u.name FROM users u JOIN message_members m ON m.user_id=u.id WHERE m.thread_id=?',t.id);
+   for(const t of threads){
+    t.people=await all('SELECT u.id,u.name FROM users u JOIN message_members m ON m.user_id=u.id WHERE m.thread_id=?',t.id);
+    // Last-message preview for the Overview. Only threads this user belongs to are listed above, so the snippet never leaks.
+    const last=await get('SELECT x.body,x.sender_id,x.created_at,u.name sender_name FROM messages x JOIN users u ON u.id=x.sender_id WHERE x.thread_id=? ORDER BY x.created_at DESC,x.id DESC LIMIT 1',t.id);
+    t.last=last?{body:snippet(last.body),sender_id:last.sender_id,sender_name:last.sender_name,created_at:last.created_at}:null;
+   }
    json(res,200,{threads,people:await all('SELECT id,name,role FROM users WHERE organization_id=? AND active=1 AND id<>? ORDER BY name',user.organization_id,user.id)});return true;
   }
   if(url.pathname==='/api/messages/thread'&&req.method==='GET'){
