@@ -319,6 +319,21 @@ async function polishChecks(page,mobile,done){
  await page.locator('.content .asset-line summary',{hasText:'Pool heater'}).click();await settle(page);
  assert.ok(await page.locator('.content .asset-line[open] [data-action="asset-inspection"]').isVisible(),'admin: opening an asset shows its actions');done.push('assets');
 }
+// Batch 4b: the inbox shows who, subject, the last line and a readable time; notifications are grouped by day and a
+// row opens/marks itself read (one "Mark all read" instead of a button per item).
+async function inboxChecks(page,role,expect,done){
+ await go(page,'messages');
+ const rows=await page.evaluate(()=>[...document.querySelectorAll('.content .message-inbox .msg-row')].map(r=>r.innerText.replace(/\s+/g,' ')));
+ assert.ok(rows.some(r=>r.includes(expect.subject)&&r.includes(expect.preview)&&/\d:\d\d [AP]M|[A-Z][a-z]{2}, [A-Z][a-z]{2} \d/.test(r)),`${role}: inbox row shows subject, last line and time (got ${rows.join(' | ')})`);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${role}: inbox fits the screen`);done.push('inbox');
+ await go(page,'notifications');
+ const n=await page.evaluate(()=>({rows:document.querySelectorAll('.content .note-row').length,unread:document.querySelectorAll('.content .note-row.unread').length,perRow:document.querySelectorAll('.content .note-row [data-action="read-notification"], .content .note-list [data-action="read-notification"]').length,heads:[...document.querySelectorAll('.content .note-list .ov-day')].map(h=>h.textContent)}));
+ assert.equal(n.perRow,0,`${role}: no Mark read button on every notification`);
+ if(n.rows){assert.ok(n.heads.length>0,`${role}: notifications grouped by day`);}
+ if(n.unread){await page.locator('.content .note-row.unread').first().click();await page.waitForTimeout(1200);await go(page,'notifications');
+  assert.equal(await page.locator('.content .note-row.unread').count(),n.unread-1,`${role}: opening a notification marks it read`);}
+ done.push('notifications');
+}
 const PAGE_CHECKS={
  admin:async(page,mobile,done)=>{
   await headerChecks(page,mobile,'admin',['properties','work','inspections','requests','maintenance','documents','assets','audit','billing','messages','notifications','storm'],done);
@@ -361,6 +376,7 @@ const PAGE_CHECKS={
   assert.doesNotMatch(await go(page,'automation'),/Recovery backup|encrypted archive|consolidated/,'admin: no automation jargon');done.push('wording');
   await scheduleChecks(page,'admin',mobile,done);
   await polishChecks(page,mobile,done);
+  await inboxChecks(page,'admin',{subject:'Ocean House gate',preview:'side gate latch'},done);
   await calendarChecks(page,'admin',{arrival:'Owners arrive',chips:['Everything','Visits','Arrivals','Work','Shifts']},done);
  },
  employee:async(page,mobile,done)=>{
