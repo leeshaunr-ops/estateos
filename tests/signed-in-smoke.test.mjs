@@ -1,4 +1,4 @@
-// Signed-in browser smoke test: every role logs in, opens every menu section, starts an inspection, goes offline
+// Signed-in browser smoke test: every role logs in, opens every menu item (and none that was reachable before is missing), starts an inspection, goes offline
 // and back, signs out and in again, and reloads, with zero page errors and zero error toasts. It would have
 // caught the Oct 3 sign-out regression (auth is not defined, then data.offline on a null session).
 // Runs against a local server with a temporary database (never a real one). Needs playwright-core and a browser:
@@ -55,6 +55,13 @@ async function watch(ctx){
  page.on('dialog',d=>d.accept());
  return {page,errors,toasts:()=>page.evaluate(()=>window.__toasts||[])};
 }
+// Screens the menu reached before the sidebar refresh (stability-baseline 75b4901), per role.
+const MENU_BEFORE={
+ admin:['dashboard','messages','properties','clients','arrivals','work','requests','inspections','storm','calendar','routes','staff','staff-schedules','vendors','users','assets','maintenance','documents','platform','workspace','billing','audit','checklist-templates','profile','notifications'],
+ employee:['dashboard','messages','properties','arrivals','work','requests','inspections','storm','calendar','routes','staff-schedules','assets','maintenance','documents','profile','notifications'],
+ client:['dashboard','messages','properties','arrivals','shopping','work','requests','inspections','calendar','documents','approvals','profile','notifications'],
+ vendor:['dashboard','messages','properties','work','profile','notifications']
+};
 const ERROR_TOAST=/not defined|can't find variable|is not an object|is not a function|cannot read|undefined|null|TypeError|ReferenceError/i;
 async function signIn(page,email){await page.waitForSelector('#f-email',{timeout:15000});await page.fill('#f-email',email);await page.fill('#f-password',password);await page.click('#authForm [type=submit]');await page.waitForSelector('.shell',{timeout:15000});}
 const click=(page,selector)=>page.evaluate(s=>{const el=document.querySelector(s);if(!el)throw Error('missing '+s);el.click();},selector);
@@ -92,7 +99,19 @@ async function journey(browserName,launch,contextOptions,role,email){
   // Every left-menu section, as listed in the sidebar for this role.
   const pages=await page.evaluate(()=>[...document.querySelectorAll('aside [data-action="navigate"]')].map(b=>b.dataset.id));
   assert.ok(pages.length>=4,`${role}: menu has sections`);
-  for(const id of pages){await click(page,`aside [data-action="navigate"][data-id="${id}"]`);await settle(page);visited.push(id);assert.equal(await page.locator('.shell').count(),1,`${role}: ${id} renders`);}
+  // The flat menu: no collapsible groups, every screen this role may open is listed once, nothing that was
+  // reachable before the refresh is missing.
+  assert.equal(await page.locator('aside details, aside .nav-chevron').count(),0,`${role}: no collapsible groups`);
+  const allowed=await page.evaluate(()=>window.EASidebar.navFor(data.user).map(n=>n[0]));
+  assert.deepEqual([...pages].sort(),[...allowed].sort(),`${role}: menu lists exactly the screens this role may open`);
+  for(const id of MENU_BEFORE[role])assert.ok(pages.includes(id),`${role}: ${id} is still in the menu`);
+  for(const id of pages){
+   await click(page,`aside [data-action="navigate"][data-id="${id}"]`);await settle(page);visited.push(id);
+   assert.equal(await page.locator('.shell').count(),1,`${role}: ${id} renders`);
+   assert.equal(await page.evaluate(()=>page),id,`${role}: ${id} opens`);
+   assert.equal(await page.locator(`aside [data-id="${id}"][aria-current="page"]`).count(),1,`${role}: ${id} is highlighted`);
+  }
+  assert.deepEqual(errors,[],`${role}: no page errors while opening every menu item`);
   if(['admin','employee'].includes(role)){
    await page.evaluate(id=>action('inspection',id),draftId);await page.waitForSelector('.shell main',{timeout:5000});await settle(page);visited.push('inspection');
    await ctx.setOffline(true);await page.evaluate(()=>window.dispatchEvent(new Event('offline')));await page.waitForTimeout(600);
