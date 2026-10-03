@@ -58,6 +58,11 @@ before(async()=>{if(skip)return;await start();const admin=client();
  // Batch 3a: a third home where the vendor has a job, so the vendor can open a residence.
  const loft=await admin('properties',{clientId:fam.id,name:'Harbor Loft',streetAddress:'3 Harbor Way',city:'Stuart',state:'FL',postalCode:'34994',country:'United States'},201);
  await admin('work',{propertyId:loft.id,title:'Service the pool pump',priority:'Normal',dueDate:day(4),vendorId:ven.id},201);
+ // Batch 5: a storm-prep shift (tomorrow, so it never overlaps the smoke shift) and two unassigned jobs for Assign all
+ // (the pool light gets assigned by the batch 0 Assign check).
+ await admin('staff/schedule',{staffId:id('staff@example.test'),title:'Storm shutters up',startsAt:new Date(day(1)+'T09:00').toISOString(),endsAt:new Date(day(1)+'T11:00').toISOString(),propertyId:home.id},200);
+ await admin('work',{propertyId:loft.id,title:'Clear the dock drains',priority:'Normal',dueDate:day(2)},201);
+ await admin('work',{propertyId:loft.id,title:'Rinse the pool deck',priority:'Normal',dueDate:day(3)},201);
 });
 after(async()=>{if(proc&&!proc.killed){proc.kill();await new Promise(r=>proc.once('exit',r));}rmSync(dir,{recursive:true,force:true});});
 
@@ -285,6 +290,34 @@ async function scheduleChecks(page,role,mobile,done){
  else{assert.equal(s.add,0,`${role}: staff cannot add shifts`);if(!mobile)assert.equal(s.rows,1,`${role}: staff see only their own row`);}
  done.push('staff-schedules');
 }
+// Batch 5: Export CSV downloads the jobs shown; Remind client nudges the family once and then shows when; the
+// Storm prep only chip narrows the week; Assign all lists the unassigned jobs and sends them in one request.
+async function extrasChecks(page,mobile,done){
+ await go(page,'work');
+ let status=0,csv='';await page.route('**/api/work-orders/export',async r=>{const resp=await r.fetch();status=resp.status();csv=await resp.text();await r.fulfill({response:resp});});
+ await click(page,'.content .page-actions [data-action="work-export"]');await page.waitForFunction(()=>(window.__toasts||[]).some(t=>/^Exported/.test(t)),null,{timeout:8000}).catch(()=>{});await page.unroute('**/api/work-orders/export');
+ assert.equal(status,200,'admin: export succeeds');
+ assert.match(csv,/"Title","Residence","Status","Priority","Assigned to","Due","Created","Completed"/,'admin: CSV header');assert.match(csv,/"Replace pool light","Ocean House","Waiting on client","High"/,'admin: CSV row');
+ await settle(page);
+ assert.ok((await page.evaluate(()=>window.__toasts||[])).some(t=>/^Exported \d+ work orders?\.$/.test(t)),'admin: export toast');done.push('work-export');
+ await page.evaluate(()=>action('work-open',data.work.find(w=>w.title==='Replace pool light').id));await settle(page);
+ if(await page.locator('.content .work-actions [data-action="work-remind"]').count()){await click(page,'.content .work-actions [data-action="work-remind"]');await page.waitForSelector('.content .work-reminded',{timeout:8000});}
+ assert.match(await page.locator('.content .work-reminded').innerText(),/^Reminded /,'admin: Remind client turns into "Reminded <time>"');
+ assert.equal(await page.locator('.content .work-actions [data-action="work-remind"]').count(),0,'admin: no second reminder within 24 hours');done.push('work-remind');
+ await go(page,'staff-schedules');const vis='.content .sched-grid .sched-item:visible,.content .sched-days .sched-item:visible';
+ await click(page,'.content [data-action="schedule-storm"]');await settle(page);
+ assert.equal(await page.locator('.content [data-action="schedule-storm"]').getAttribute('aria-pressed'),'true','admin: Storm prep only is on');
+ const storm=await page.locator(vis).allInnerTexts();assert.ok(storm.some(t=>/Storm shutters up/.test(t)),`admin: storm shift shown (got ${storm.join(' | ')})`);assert.ok(!storm.some(t=>/Smoke shift/.test(t)),'admin: ordinary shifts hidden');
+ await click(page,'.content [data-action="schedule-storm"]');await settle(page);assert.ok((await page.locator(vis).allInnerTexts()).some(t=>/Smoke shift/.test(t)),'admin: everything back');done.push('schedule-storm');
+ let sent=null;await page.route('**/api/staff/assign-all',r=>{sent=r.request().postDataJSON();r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({assigned:sent.workIds.length,skipped:0,assignee:'staff'})});});
+ const need=await page.evaluate(()=>schedNeed().map(w=>w.id));assert.ok(need.length>=2,'admin: at least two jobs need someone');
+ await click(page,'.content [data-action="schedule-assign-all"]');await page.waitForSelector('dialog[open] .assign-all-list',{timeout:5000});
+ assert.equal(await page.locator('dialog[open] .assign-all-list li').count(),need.length,'admin: the dialog lists every job');
+ const staffOpt=await page.evaluate(()=>[...document.querySelectorAll('dialog[open] select[name="assignee"] option')].find(o=>o.textContent==='staff')?.value);assert.ok(staffOpt,'admin: staff offered');
+ await page.selectOption('dialog[open] select[name="assignee"]',staffOpt);await page.click('dialog[open] button[type="submit"]');await page.waitForFunction(()=>!document.querySelector('dialog[open]'),null,{timeout:5000});await settle(page);
+ assert.deepEqual(sent?.workIds,need,'admin: one request with all the listed jobs');assert.ok(sent.staffId&&!sent.vendorId);await page.unroute('**/api/staff/assign-all');
+ assert.ok((await page.evaluate(()=>window.__toasts||[])).some(t=>t===`${need.length} jobs assigned to staff.`),'admin: assign-all toast');done.push('assign-all');
+}
 // Batch 3d: Calendar is an agenda grouped by day that starts today (overdue first for staff), marked by kind.
 async function calendarChecks(page,role,expect,done){
  await go(page,'calendar');
@@ -390,6 +423,7 @@ const PAGE_CHECKS={
   const email=await go(page,'email-activity');assert.doesNotMatch(email,/\d+ attempts|submissions to the provider/,'admin: no email jargon');
   assert.doesNotMatch(await go(page,'automation'),/Recovery backup|encrypted archive|consolidated/,'admin: no automation jargon');done.push('wording');
   await scheduleChecks(page,'admin',mobile,done);
+  await extrasChecks(page,mobile,done);
   await polishChecks(page,mobile,done);
   await inboxChecks(page,'admin',{subject:'Ocean House gate',preview:'side gate latch'},done);
   await inspectionChecks(page,'admin',mobile,done);

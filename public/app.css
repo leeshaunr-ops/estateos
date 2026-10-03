@@ -437,3 +437,12 @@ body.signed-in,.shell{--muted:#5f6b76;--line:#e2e7eb}
 .shell .insp-summary{margin:0 0 16px;padding:14px 16px;border:1px solid #edf0f2;border-left:3px solid #b89960;border-radius:8px;background:#fff}
 .shell .insp-summary h2{margin:0 0 6px;font-size:15px}
 .shell .insp-summary p{margin:0;font-size:14.5px;line-height:1.55}
+
+/* Batch 5: Remind client state, Assign all list, Storm prep chip */
+.shell .work-reminded{display:inline-flex;align-items:center;min-height:40px;padding:6px 12px;border-radius:8px;background:#f3f5f7;color:#3d4b57;font-size:14px;font-weight:600}
+.assign-all-list{list-style:none;margin:10px 0 0;padding:0;border:1px solid #e2e7eb;border-radius:8px;background:#fff}
+.assign-all-list li{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-top:1px solid #eef1f3}
+.assign-all-list li:first-child{border-top:0}
+.assign-all-list small{color:#5f6b76;font-size:13px}
+.shell .work-chips .chip.chip-storm.active{background:#fff4dc;border-color:#ead9b7;color:#5c4718}
+.assign-all-lede{margin:0;color:#5f6b76;font-size:14px;line-height:1.5}
