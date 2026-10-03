@@ -1211,6 +1211,9 @@ const server = http.createServer(async (req, res) => {
         res.setHeader('X-Content-Type-Options', 'nosniff');
         res.setHeader('Referrer-Policy', 'same-origin');
         res.setHeader('X-Frame-Options', 'DENY');
+        // Production always runs behind HTTPS with secure cookies (enforced at startup), so tell browsers to stay on HTTPS.
+        // includeSubDomains/preload are intentionally left off until every subdomain is confirmed HTTPS-only.
+        if (process.env.ESTATEOS_SECURE_COOKIES === '1') res.setHeader('Strict-Transport-Security', 'max-age=31536000');
         const localHost = process.env.ESTATEOS_HOST || '127.0.0.1';
         if (localHost === '127.0.0.1' && !/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host))
             fail(403, 'Invalid host.');
@@ -1229,10 +1232,10 @@ const server = http.createServer(async (req, res) => {
             res.writeHead(200, {'Content-Type': sitemap ? 'application/xml; charset=utf-8' : 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600'});
             return res.end(req.method === 'HEAD' ? undefined : content);
         }
-        if (['/demo-quickstart.mp4','/demo-quickstart.vtt','/demo-quickstart.png','/ea-shield.png', '/apple-touch-icon.png', '/share-preview.jpg', '/waterfront.mp4', '/waterfront.jpg', '/tutorial.mp4', '/product.png', '/report.png', '/overview.pdf', '/tutorial.vtt','/home-watch-checklist.txt','/arrival-preparation-checklist.txt','/sample-inspection-report.pdf','/icon-192.png','/icon-512.png','/icon-maskable-512.png'].includes(url.pathname)) {
+        if (['/demo-quickstart.mp4','/demo-quickstart.vtt','/demo-quickstart.png','/ea-shield.png', '/apple-touch-icon.png', '/share-preview.jpg', '/waterfront.mp4', '/waterfront.jpg', '/tutorial.mp4', '/product.png', '/report.png', '/overview.pdf', '/tutorial.vtt','/home-watch-checklist.txt','/arrival-preparation-checklist.txt','/sample-inspection-report.pdf','/icon-192.png','/icon-512.png','/icon-maskable-512.png','/ea-shield-80.png','/ea-shield-120.png','/favicon-32.png','/favicon.ico','/fonts/inter-latin-var.woff2'].includes(url.pathname)) {
             const mediaPath = path.join(root, 'public', url.pathname.slice(1));
             const size = fs.statSync(mediaPath).size;
-            const type = {'.mp4':'video/mp4','.jpg':'image/jpeg','.png':'image/png','.pdf':'application/pdf','.vtt':'text/vtt; charset=utf-8','.txt':'text/plain; charset=utf-8','.txt':'text/plain; charset=utf-8'}[path.extname(mediaPath)];
+            const type = {'.mp4':'video/mp4','.jpg':'image/jpeg','.png':'image/png','.pdf':'application/pdf','.vtt':'text/vtt; charset=utf-8','.txt':'text/plain; charset=utf-8','.ico':'image/x-icon','.woff2':'font/woff2'}[path.extname(mediaPath)];
             const headers = {'Content-Type': type, 'Accept-Ranges':'bytes', 'Cache-Control': 'public, max-age=86400'};
             const range = req.headers.range;
             if (range && req.method === 'GET') {
@@ -1259,10 +1262,16 @@ const server = http.createServer(async (req, res) => {
             return res.end(url.pathname === '/sw.js' ? content.replace('__SHELL_VERSION__', shellVersion()) : content);
         }
         const appHome = url.pathname === '/' && (url.searchParams.has('invite') || url.searchParams.has('workspaceInvite') || await actor(req));
-        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js','/visit-verification.js':'visit-verification.js','/visit-card.js':'visit-card.js','/storm-core.js':'storm-core.js','/storm.js':'storm.js','/storm.css':'storm.css','/view-route.js':'view-route.js', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/security':'security.html' };
+        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js','/visit-verification.js':'visit-verification.js','/visit-card.js':'visit-card.js','/storm-core.js':'storm-core.js','/storm.js':'storm.js','/storm.css':'storm.css','/view-route.js':'view-route.js', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/faq.js':'faq.js','/security':'security.html' };
         const file = names[url.pathname] || (url.pathname === '/client-login' || /^\/client\/[a-z0-9-]+$/i.test(url.pathname) ? 'live.html' : null);
-        if (!file)
-            fail(404, 'Page not found.');
+        if (!file) {
+            // Unknown pages get a friendly HTML 404 with the site navigation; /api/* keeps its JSON errors above.
+            if (req.method !== 'GET' && req.method !== 'HEAD') fail(404, 'Page not found.');
+            res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");
+            res.setHeader('X-Robots-Tag', 'noindex');
+            res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+            return res.end(req.method === 'HEAD' ? undefined : fs.readFileSync(path.join(root, 'public', '404.html')));
+        }
         if (file === 'live.html') res.setHeader('X-Robots-Tag','noindex, nofollow');
         if (url.pathname === '/') res.setHeader('Vary','Cookie');
         res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://nominatim.openstreetmap.org https://photon.komoot.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");
@@ -1281,7 +1290,7 @@ const server = http.createServer(async (req, res) => {
         json(res, status, { error: status === 500 ? 'The action could not be saved. Check the server log.' : error.message });
     }
 });
-const SHELL_FILES = ['live.html','live.js','inspection-checklist.js','visit-verification.js','visit-card.js','view-route.js','storm-core.js','storm.js','storm.css','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png'];
+const SHELL_FILES = ['live.html','live.js','inspection-checklist.js','visit-verification.js','visit-card.js','view-route.js','storm-core.js','storm.js','storm.css','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png','ea-shield-80.png','ea-shield-120.png'];
 let cachedShellVersion = null;
 function shellVersion() { if (!cachedShellVersion) { const digest = createHash('sha256'); for (const name of SHELL_FILES) { try { digest.update(name).update(fs.readFileSync(path.join(root, 'public', name))); } catch { digest.update(name + ':missing'); } } cachedShellVersion = digest.digest('hex').slice(0, 12); } return cachedShellVersion; }
 setInterval(() => offlineInspections.purge().catch(e => console.error('Idempotency cleanup:', e.message)), 3600000).unref();
