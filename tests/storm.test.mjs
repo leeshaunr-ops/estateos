@@ -11,9 +11,23 @@ import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import '../public/storm-core.js';
+import '../public/view-route.js';
 import {renderStormEmail} from '../storm.mjs';
 import {stormReportPdf,stormSummaryPdf,disclaimer} from '../storm-pdf.mjs';
 const S=globalThis.EAStorm;
+const R=globalThis.EARoute;
+
+test('refresh keeps the storm screen: Storms list and a storm board round-trip through the URL', () => {
+ const data={user:{id:'u1',role:'admin'},storm:{events:[{id:'ev1'}]}};
+ assert.equal(R.toHash({...R.blank(),page:'storm'}),'#/storm');
+ assert.equal(R.toHash({...R.blank(),page:'storm',stormEventId:'ev1'}),'#/storm/ev1');
+ assert.equal(R.parse('#/storm/ev1').stormEventId,'ev1');
+ assert.equal(R.resolve(R.parse('#/storm/ev1'),data).state.stormEventId,'ev1');
+ const gone=R.resolve(R.parse('#/storm/missing'),data);assert.equal(gone.state.page,'storm');assert.equal(gone.state.stormEventId,null,'an unknown storm falls back to the Storms list');
+ assert.equal(R.resolve(R.parse('#/storm/ev1'),{...data,user:{id:'c',role:'client'}}).fellBack,true,'clients have no Storms page');
+ const html=readFileSync(path.join(root,'public/live.html'),'utf8');
+ assert.ok(html.indexOf('/storm.js')<html.indexOf('/view-route.js'),'storm.js loads before view-route.js');
+});
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const pw='Test-only-strong-password-928!';
 const fixture=readFileSync(path.join(root,'tests/fixture.jpg'));
