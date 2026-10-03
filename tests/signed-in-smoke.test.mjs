@@ -298,11 +298,62 @@ async function calendarChecks(page,role,expect,done){
  assert.ok(await page.evaluate(()=>[...document.querySelectorAll('.content .cal-agenda .cal-row .ov-pill')].every(p=>p.textContent==='Arrival')),`${role}: Arrivals chip shows only arrivals`);
  await page.locator('.content .work-chips .chip[data-id="all"]').click();await settle(page);done.push('calendar-agenda');
 }
+// Batch 4a: company settings are shown on the page, automation lists its schedules, assets are a compact table.
+async function polishChecks(page,mobile,done){
+ const ws=await go(page,'workspace');assert.ok(await page.locator('.content .set-fields').count()>=2,'admin: settings shown on the page');
+ assert.match(ws,/Smoke Test Home Watch/);assert.match(ws,/Visit verification/);assert.match(ws,/Client portal/);done.push('company-settings');
+ const auto=await go(page,'automation');for(const t of ['Recurring visits','Maintenance schedules','Status'])assert.match(auto,new RegExp(t),`admin: automation shows ${t}`);
+ assert.doesNotMatch(auto,/Recovery backup|encrypted archive/,'admin: no backup engineering card');done.push('automation');
+ await go(page,'assets');
+ if(!await page.evaluate(()=>data.assets.some(a=>a.name==='Pool heater'))){
+  await click(page,'.content .page-actions [data-action="new-asset"]');await page.waitForSelector('dialog[open] input[name="name"]',{timeout:5000});
+  await page.fill('dialog[open] input[name="name"]','Pool heater');await page.selectOption('dialog[open] select[name="category"]','Pool equipment');
+  await page.fill('dialog[open] input[name="location"]','Pool pad');await page.fill('dialog[open] input[name="warranty"]','2030-05-01');
+  await page.click('dialog[open] button[type="submit"]');await page.waitForFunction(()=>!document.querySelector('dialog[open]'),null,{timeout:5000});
+  // load() skips a refetch within 1.5 s of the previous one, so wait and refresh before reading the list.
+  await page.waitForTimeout(1600);await page.evaluate(()=>load());await go(page,'assets');
+ }
+ const a=await page.evaluate(()=>({lines:[...document.querySelectorAll('.content .asset-table .asset-line')].map(l=>l.querySelector('summary').innerText.replace(/\s+/g,' ')),cards:document.querySelectorAll('.content .asset-card').length,wide:document.documentElement.scrollWidth>innerWidth+1}));
+ assert.equal(a.cards,0,'admin: no big asset cards');assert.equal(a.wide,false,'admin: assets fit the screen');
+ assert.ok(a.lines.some(l=>/Pool heater/.test(l)&&/Until May 1, 2030/.test(l)&&/Never/.test(l)),`admin: asset row with readable warranty (got ${a.lines.join(' | ')})`);
+ await page.locator('.content .asset-line summary',{hasText:'Pool heater'}).click();await settle(page);
+ assert.ok(await page.locator('.content .asset-line[open] [data-action="asset-inspection"]').isVisible(),'admin: opening an asset shows its actions');done.push('assets');
+}
+// Batch 4b: the inbox shows who, subject, the last line and a readable time; notifications are grouped by day and a
+// row opens/marks itself read (one "Mark all read" instead of a button per item).
+async function inboxChecks(page,role,expect,done){
+ await go(page,'messages');
+ const rows=await page.evaluate(()=>[...document.querySelectorAll('.content .message-inbox .msg-row')].map(r=>r.innerText.replace(/\s+/g,' ')));
+ assert.ok(rows.some(r=>r.includes(expect.subject)&&r.includes(expect.preview)&&/\d:\d\d [AP]M|[A-Z][a-z]{2}, [A-Z][a-z]{2} \d/.test(r)),`${role}: inbox row shows subject, last line and time (got ${rows.join(' | ')})`);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${role}: inbox fits the screen`);done.push('inbox');
+ await go(page,'notifications');
+ const n=await page.evaluate(()=>({rows:document.querySelectorAll('.content .note-row').length,unread:document.querySelectorAll('.content .note-row.unread').length,perRow:document.querySelectorAll('.content .note-row [data-action="read-notification"], .content .note-list [data-action="read-notification"]').length,heads:[...document.querySelectorAll('.content .note-list .ov-day')].map(h=>h.textContent)}));
+ assert.equal(n.perRow,0,`${role}: no Mark read button on every notification`);
+ if(n.rows){assert.ok(n.heads.length>0,`${role}: notifications grouped by day`);}
+ if(n.unread){await page.locator('.content .note-row.unread').first().click();await page.waitForTimeout(1200);await go(page,'notifications');
+  assert.equal(await page.locator('.content .note-row.unread').count(),n.unread-1,`${role}: opening a notification marks it read`);}
+ done.push('notifications');
+}
+// Batch 4c: the inspection fill-in shows a readable date, the checklist before the report recipient, a left-aligned
+// "Room-by-room checks" heading and no "Optional" tag on every item.
+async function inspectionChecks(page,role,mobile,done){
+ await page.evaluate(id=>action('inspection',id),draftId);await settle(page);
+ const r=await page.evaluate(()=>{const scr=document.querySelector('.content .inspection-screen');const hs=[...scr.querySelectorAll('h2')];const walk=hs.find(h=>h.textContent==='Walkthrough checklist');
+  const rec=[...scr.querySelectorAll('.panel')].find(p=>/report recipient/i.test(p.textContent));const rooms=scr.querySelector('.insp-rooms-head h2');
+  return {lede:document.querySelector('.content .page-lede')?.textContent||'',walkFirst:!!walk&&(!rec||!!(walk.compareDocumentPosition(rec)&Node.DOCUMENT_POSITION_FOLLOWING)),
+   optional:[...scr.querySelectorAll('.ck-meta')].filter(m=>/Optional/.test(m.textContent)).length,facts:scr.querySelectorAll('.set-fields dt').length,
+   roomsLeft:rooms?Math.round(rooms.getBoundingClientRect().left-scr.getBoundingClientRect().left):null,align:rooms?getComputedStyle(rooms).textAlign:'',wide:document.documentElement.scrollWidth>innerWidth+1};});
+ assert.doesNotMatch(r.lede,/\d{4}-\d{2}-\d{2}/,`${role}: inspection date is readable (${r.lede})`);
+ assert.ok(r.walkFirst,`${role}: checklist comes before the report recipient`);assert.equal(r.optional,0,`${role}: no Optional tags`);
+ assert.ok(r.facts>=3,`${role}: report header facts`);assert.equal(r.wide,false,`${role}: inspection fits the screen`);
+ if(r.roomsLeft!==null){assert.ok(r.roomsLeft<40,`${role}: Room-by-room checks heading is left-aligned (${r.roomsLeft}px)`);assert.notEqual(r.align,'right');assert.notEqual(r.align,'center');}
+ done.push('inspection-fill-in');
+}
 const PAGE_CHECKS={
  admin:async(page,mobile,done)=>{
   await headerChecks(page,mobile,'admin',['properties','work','inspections','requests','maintenance','documents','assets','audit','billing','messages','notifications','storm'],done);
   await residenceChecks(page,'admin','Ocean House',{tabs:['overview','inspections','services','arrivals','records','people','notes'],panels:['Needs attention here','Visits','Work orders','Owners & family','Next arrival','Home records','Latest note'],alias:['assets','records']},done);
-  await emptyCheck(page,'admin','assets',/No assets yet/,'new-asset');await emptyCheck(page,'admin','documents',/No documents yet/,'new-document');await emptyCheck(page,'admin','billing',/No invoices yet/,'');done.push('empty-states');
+  if(!await page.evaluate(()=>data.assets.length))await emptyCheck(page,'admin','assets',/No assets yet/,'new-asset');await emptyCheck(page,'admin','documents',/No documents yet/,'new-document');await emptyCheck(page,'admin','billing',/No invoices yet/,'');done.push('empty-states');
   assert.equal(await page.locator('aside [data-id="platform"]').count(),0,'admin: no duplicate Platform Administration item');
   for(const id of ['arrivals','calendar']){const t=await go(page,id);assert.doesNotMatch(t,MACHINE_DATE,`admin: ${id} has no machine dates`);done.push(id);}
   assert.match(await go(page,'arrivals'),/Arrival|3:00 PM/,'admin: arrivals list');
@@ -339,6 +390,9 @@ const PAGE_CHECKS={
   const email=await go(page,'email-activity');assert.doesNotMatch(email,/\d+ attempts|submissions to the provider/,'admin: no email jargon');
   assert.doesNotMatch(await go(page,'automation'),/Recovery backup|encrypted archive|consolidated/,'admin: no automation jargon');done.push('wording');
   await scheduleChecks(page,'admin',mobile,done);
+  await polishChecks(page,mobile,done);
+  await inboxChecks(page,'admin',{subject:'Ocean House gate',preview:'side gate latch'},done);
+  await inspectionChecks(page,'admin',mobile,done);
   await calendarChecks(page,'admin',{arrival:'Owners arrive',chips:['Everything','Visits','Arrivals','Work','Shifts']},done);
  },
  employee:async(page,mobile,done)=>{
