@@ -37,9 +37,12 @@ const MARKETING_PAGES = {
   '/home-watch-checklist': 'home-watch-checklist.html', '/arrival-preparation-checklist': 'arrival-preparation-checklist.html',
   '/example-workflow': 'example-workflow.html', '/login': 'live.html'
 };
+// Legal and policy pages: same header, logo, favicon and footer as the marketing pages, but they keep their own wording
+// (terms.html names Florida for governing law, so they stay out of the marketing copy checks).
+const LEGAL_PAGES = {'/terms': 'terms.html', '/privacy': 'privacy.html', '/refunds': 'refunds.html', '/security': 'security.html'};
 
 test('marketing pages contain nothing the CSP blocks (inline scripts, <style>, style="")', () => {
-  for (const file of [...Object.values(MARKETING_PAGES), '404.html']) {
+  for (const file of [...Object.values(MARKETING_PAGES), ...Object.values(LEGAL_PAGES), '404.html']) {
     const html = read('public/' + file);
     const inlineScripts = [...html.matchAll(/<script(?![^>]*\bsrc=)([^>]*)>/g)].filter(m => !/type="application\/ld\+json"/.test(m[1]));
     assert.equal(inlineScripts.length, 0, file + ' has an inline script');
@@ -81,7 +84,7 @@ test('logo and favicon files are small, served, and the 519 KB original is not u
     const size = (await res.arrayBuffer()).byteLength;
     assert.ok(size > 0 && size <= maxBytes, `${url} is ${size} bytes`);
   }
-  for (const file of [...Object.values(MARKETING_PAGES), '404.html', 'share.html', 'demo-guide.html']) {
+  for (const file of [...Object.values(MARKETING_PAGES), ...Object.values(LEGAL_PAGES), '404.html', 'share.html', 'demo-guide.html']) {
     const html = read('public/' + file);
     assert.doesNotMatch(html, /\/ea-shield\.png|apple-touch-icon\.png\?v=ea-shield|https:\/\/estateaegis\.com\/apple-touch-icon/, file + ' still loads the full-size logo');
   }
@@ -91,7 +94,7 @@ test('logo and favicon files are small, served, and the 519 KB original is not u
 test('every local asset linked from the marketing pages exists', async () => {
   const base = await start();
   const urls = new Set();
-  for (const file of [...Object.values(MARKETING_PAGES), '404.html'])
+  for (const file of [...Object.values(MARKETING_PAGES), ...Object.values(LEGAL_PAGES), '404.html'])
     for (const [, url] of read('public/' + file).matchAll(/(?:href|src)="(\/[^"#?]*)/g)) urls.add(url);
   for (const url of urls) {
     const res = await fetch(base + url, {method: 'HEAD'});
@@ -228,7 +231,8 @@ test('storm report image uses credited real photos', () => {
 
 // Pages that share the marketing header and get the one-row phone header with a menu button (marketing.css + site-menu.js).
 const MENU_PAGES = ['marketing.html', 'about.html', 'faq.html', 'resources.html', 'signup.html', 'home-watch-software.html', 'inspection-report-software.html',
-  'private-residence-management.html', 'home-watch-checklist.html', 'arrival-preparation-checklist.html', 'example-workflow.html', '404.html'];
+  'private-residence-management.html', 'home-watch-checklist.html', 'arrival-preparation-checklist.html', 'example-workflow.html', '404.html',
+  ...Object.values(LEGAL_PAGES)];
 
 test('phone header: compact Log in / Free demo / menu button markup, an external menu script and no inline script', async () => {
   for (const file of MENU_PAGES) {
@@ -321,4 +325,46 @@ test('compact phone homepage: phone-only CSS, an external tap-to-expand script, 
   const res = await fetch(base + '/home-compact.js');
   assert.equal(res.status, 200);
   assert.match(res.headers.get('content-type'), /javascript/);
+});
+
+test('legal pages: shared header with the shield logo, favicons, the homepage footer, and their legal wording unchanged', async () => {
+  const home = read('public/marketing.html');
+  const footer = home.match(/<footer class="site-footer wrap" aria-label="EstateAegis footer">[\s\S]*?<\/footer>/)[0];
+  const logo = '<a class="brand" href="/" aria-label="EstateAegis home"><img class="ea-brand-icon" src="/ea-shield-80.png" srcset="/ea-shield-80.png 2x, /ea-shield-120.png 3x" alt="" width="40" height="40">EstateAegis</a>';
+  const headings = {'terms.html': ['LEGAL', 'Terms of Service'], 'privacy.html': ['LEGAL', 'Privacy Policy'], 'refunds.html': ['BILLING', 'Refund &amp; Cancellation Policy'], 'security.html': ['TRUST', 'Security']};
+  for (const [route, file] of Object.entries(LEGAL_PAGES)) {
+    const html = read('public/' + file);
+    const head = html.slice(0, html.indexOf('</head>'));
+    for (const icon of ['<link rel="icon" href="/favicon.ico" sizes="48x48">', '<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">', '<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=2">'])
+      assert.ok(head.includes(icon), file + ' is missing ' + icon);
+    assert.match(head, /<link rel="stylesheet" href="\/marketing\.css"><link rel="stylesheet" href="\/refresh\.css">/, file + ' uses the marketing styles');
+    assert.ok(head.includes(`<link rel="canonical" href="https://estateaegis.com${route}">`), file + ' canonical');
+    const header = html.match(/<header class="site-header has-menu">[\s\S]*?<\/header>/)[0];
+    assert.ok(header.startsWith('<header class="site-header has-menu">' + logo), file + ' header starts with the shield logo');
+    assert.equal(html.split('<header').length, 2, file + ' has one header');
+    assert.doesNotMatch(html, /brand-mark|>EA</, file + ' still has the old EA text logo');
+    assert.equal([...html.matchAll(/<footer\b/g)].length, 1, file + ' has one footer');
+    assert.ok(html.includes(footer), file + ' uses the homepage footer');
+    assert.match(html, /<a class="skip" href="#main">Skip to content<\/a>/);
+    const main = html.match(/<main id="main" class="wrap section resource-content">([\s\S]*?)<\/main>/)?.[1];
+    assert.ok(main, file + ' keeps its content in <main id="main">');
+    assert.ok(main.startsWith(`<p class="eyebrow">${headings[file][0]}</p><h1>${headings[file][1]}</h1>`), file + ' heading');
+    assert.ok(html.indexOf('</header>') < html.indexOf('<main') && html.indexOf('</main>') < html.indexOf('<footer'), file + ' order: header, main, footer');
+  }
+  // The legal wording itself is unchanged (spot checks of each page).
+  assert.match(read('public/terms.html'), /These Terms govern the EstateAegis website and private residence management software operated by EstateAegis, LLC/);
+  assert.match(read('public/privacy.html'), /<h2>Information we handle<\/h2>/);
+  assert.match(read('public/refunds.html'), /An authorized workspace administrator may cancel in the billing portal/);
+  assert.match(read('public/security.html'), /EstateAegis, LLC is committed to protecting the residence and household information entrusted to the service\./);
+  for (const file of ['terms.html', 'privacy.html', 'refunds.html']) assert.match(read('public/' + file), /<p>Effective September 14, 2026<\/p>/, file);
+  // The footer links every legal page, and each one is served as HTML under the site CSP.
+  for (const route of Object.keys(LEGAL_PAGES)) assert.ok(footer.includes(`<a href="${route}">`), 'footer links ' + route);
+  const base = await start();
+  for (const route of Object.keys(LEGAL_PAGES)) {
+    const res = await fetch(base + route);
+    assert.equal(res.status, 200, route);
+    assert.match(res.headers.get('content-type'), /^text\/html/, route);
+    assert.match(res.headers.get('content-security-policy'), /script-src 'self'/, route);
+    assert.match(await res.text(), /<script src="\/site-menu\.js" defer><\/script>/, route);
+  }
 });
