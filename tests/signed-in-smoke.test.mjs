@@ -334,6 +334,21 @@ async function inboxChecks(page,role,expect,done){
   assert.equal(await page.locator('.content .note-row.unread').count(),n.unread-1,`${role}: opening a notification marks it read`);}
  done.push('notifications');
 }
+// Batch 4c: the inspection fill-in shows a readable date, the checklist before the report recipient, a left-aligned
+// "Room-by-room checks" heading and no "Optional" tag on every item.
+async function inspectionChecks(page,role,mobile,done){
+ await page.evaluate(id=>action('inspection',id),draftId);await settle(page);
+ const r=await page.evaluate(()=>{const scr=document.querySelector('.content .inspection-screen');const hs=[...scr.querySelectorAll('h2')];const walk=hs.find(h=>h.textContent==='Walkthrough checklist');
+  const rec=[...scr.querySelectorAll('.panel')].find(p=>/report recipient/i.test(p.textContent));const rooms=scr.querySelector('.insp-rooms-head h2');
+  return {lede:document.querySelector('.content .page-lede')?.textContent||'',walkFirst:!!walk&&(!rec||!!(walk.compareDocumentPosition(rec)&Node.DOCUMENT_POSITION_FOLLOWING)),
+   optional:[...scr.querySelectorAll('.ck-meta')].filter(m=>/Optional/.test(m.textContent)).length,facts:scr.querySelectorAll('.set-fields dt').length,
+   roomsLeft:rooms?Math.round(rooms.getBoundingClientRect().left-scr.getBoundingClientRect().left):null,align:rooms?getComputedStyle(rooms).textAlign:'',wide:document.documentElement.scrollWidth>innerWidth+1};});
+ assert.doesNotMatch(r.lede,/\d{4}-\d{2}-\d{2}/,`${role}: inspection date is readable (${r.lede})`);
+ assert.ok(r.walkFirst,`${role}: checklist comes before the report recipient`);assert.equal(r.optional,0,`${role}: no Optional tags`);
+ assert.ok(r.facts>=3,`${role}: report header facts`);assert.equal(r.wide,false,`${role}: inspection fits the screen`);
+ if(r.roomsLeft!==null){assert.ok(r.roomsLeft<40,`${role}: Room-by-room checks heading is left-aligned (${r.roomsLeft}px)`);assert.notEqual(r.align,'right');assert.notEqual(r.align,'center');}
+ done.push('inspection-fill-in');
+}
 const PAGE_CHECKS={
  admin:async(page,mobile,done)=>{
   await headerChecks(page,mobile,'admin',['properties','work','inspections','requests','maintenance','documents','assets','audit','billing','messages','notifications','storm'],done);
@@ -377,6 +392,7 @@ const PAGE_CHECKS={
   await scheduleChecks(page,'admin',mobile,done);
   await polishChecks(page,mobile,done);
   await inboxChecks(page,'admin',{subject:'Ocean House gate',preview:'side gate latch'},done);
+  await inspectionChecks(page,'admin',mobile,done);
   await calendarChecks(page,'admin',{arrival:'Owners arrive',chips:['Everything','Visits','Arrivals','Work','Shifts']},done);
  },
  employee:async(page,mobile,done)=>{
