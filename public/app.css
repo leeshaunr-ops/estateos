@@ -315,15 +315,17 @@ body.signed-in,.shell{--muted:#5f6b76;--line:#e2e7eb}
 
 /* ---------- Calendar agenda (batch 3d) ---------- */
 .shell .cal-agenda{padding-bottom:6px}
+.shell .cal-agenda h2.ov-day{margin:0;font-family:inherit;font-size:11.5px;line-height:1.4}
 .shell .cal-agenda>.ov-day:first-child{border-top:0;padding-top:16px}
 .shell .ov-day.cal-today{color:#8b242b}
 .shell .ov-day.cal-overdue{color:#b4232c}
-.shell .cal-row{display:grid;grid-template-columns:110px auto minmax(0,1fr) auto;gap:12px;align-items:center;width:100%;padding:10px 20px;border:0;border-top:1px solid #f1f4f6;border-radius:0;background:#fff;box-shadow:none;color:#1f2933;text-align:left;font-weight:400;min-height:52px}
+.shell .cal-row{display:grid;grid-template-columns:132px 96px minmax(0,1fr) auto;gap:12px;align-items:center;width:100%;padding:10px 20px;border:0;border-top:1px solid #f1f4f6;border-radius:0;background:#fff;box-shadow:none;color:#1f2933;text-align:left;font-weight:400;min-height:52px}
 .shell .ov-day+.cal-row{border-top:0}
 .shell button.cal-row{cursor:pointer}
 .shell button.cal-row:hover:not(:disabled){background:#f7f8fa;transform:none;box-shadow:none}
 .shell .cal-when{font-size:13.5px;font-weight:600;color:#1f2933;white-space:nowrap}
 .shell .cal-row.overdue .cal-when{color:#b4232c}
+.shell .cal-row>.ov-pill{justify-self:start;min-width:0}
 .shell .cal-text{min-width:0}
 .shell .cal-text .ov-row-title,.shell .cal-text .ov-row-detail{display:block}
 .shell .cal-status{justify-self:end}

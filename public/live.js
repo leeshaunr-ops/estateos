@@ -348,14 +348,14 @@ function view(){
    Visit, Arrival, Work or Shift. Reuses the Overview's day headings and pills; filter chips narrow it by kind. */
 let calFilter='all',calDays=30;
 function calEvents(){const staff=isStaff(),out=[];
- for(const i of data.inspections)if(i.inspection_date)out.push({kind:'visit',day:i.inspection_date,title:(VISIT_TYPE_NAMES[i.visit_type]||'Visit'),property_id:i.property_id,status:i.status,open:['inspection',i.id],done:i.status!=='draft'});
+ for(const i of data.inspections)if(i.inspection_date){const n=VISIT_TYPE_NAMES[i.visit_type]||'';out.push({kind:'visit',day:i.inspection_date,title:n?(/visit/i.test(n)?n:n+' visit'):'Visit',who:staff&&i.inspector_name?i.inspector_name:'',property_id:i.property_id,status:i.status==='draft'?'scheduled':i.status,open:['inspection',i.id],done:i.status!=='draft'});}
  for(const a of data.arrivals)if(a.arrival_at)out.push({kind:'arrival',day:EAFormat.dayKey(a.arrival_at),time:EAFormat.time(a.arrival_at),sort:a.arrival_at,title:staff?'Owners arrive':'You arrive',property_id:a.property_id,status:a.status,open:['arrival-open',a.id],done:['completed','cancelled'].includes(a.status)});
  for(const w of data.work)if(w.due_date)out.push({kind:'work',day:w.due_date,title:w.title,property_id:w.property_id,status:w.status,open:['work-open',w.id],done:WORK_DONE.includes(w.status)});
  if(staff&&data.staff)for(const s of data.staff.schedules)out.push({kind:/storm/i.test(s.title||'')?'storm':'shift',day:EAFormat.dayKey(s.starts_at),time:schedRange(s.starts_at,s.ends_at),sort:s.starts_at,title:s.title+(data.user.role==='admin'&&s.staff_name?' · '+s.staff_name:''),property_id:s.property_id,status:'',open:data.user.role==='admin'?['schedule-edit',s.id]:null,done:false});
  return out;}
 const CAL_KINDS={visit:['Visit','info'],arrival:['Arrival','monitor'],work:['Work','sign'],shift:['Shift','info'],storm:['Storm prep','storm']};
-function calRow(e){const [pill,tone]=CAL_KINDS[e.kind];const when=e.time||(e.kind==='work'?(e.done?'Done':'Due'):e.kind==='visit'?'Visit':'');
- const place=e.property_id?propertyName(e.property_id):'';const main=`<span class="cal-when">${esc(when)}</span><span class="ov-pill ${tone}">${esc(pill)}</span><span class="cal-text"><span class="ov-row-title">${esc(e.title)}</span>${place?`<span class="ov-row-detail">${esc(place)}</span>`:''}</span>${e.status?`<span class="cal-status">${badge(e.status)}</span>`:''}`;
+function calRow(e){const [pill,tone]=CAL_KINDS[e.kind];const when=e.time||(e.kind==='work'?(e.done?'Done':'Due'):'');
+ const place=[e.property_id?propertyName(e.property_id):'',e.who].filter(Boolean).join(' · ');const main=`<span class="cal-when">${esc(when)}</span><span class="ov-pill ${tone}">${esc(pill)}</span><span class="cal-text"><span class="ov-row-title">${esc(e.title)}</span>${place?`<span class="ov-row-detail">${esc(place)}</span>`:''}</span>${e.status?`<span class="cal-status">${badge(e.status)}</span>`:''}`;
  return e.open?`<button type="button" class="cal-row ${e.overdue?'overdue':''}" data-action="${esc(e.open[0])}" data-id="${esc(e.open[1])}">${main}</button>`:`<div class="cal-row">${main}</div>`;}
 function calendarView(){const today=EAFormat.todayKey(),staff=isStaff(),all=calEvents();const last=schedAddDays(today,calDays-1);
  const kinds=[['all','Everything'],['visit','Visits'],['arrival','Arrivals'],['work',data.user.role==='client'?'Service':'Work'],...(staff&&data.staff?[['shift','Shifts']]:[])];

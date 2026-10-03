@@ -285,6 +285,19 @@ async function scheduleChecks(page,role,mobile,done){
  else{assert.equal(s.add,0,`${role}: staff cannot add shifts`);if(!mobile)assert.equal(s.rows,1,`${role}: staff see only their own row`);}
  done.push('staff-schedules');
 }
+// Batch 3d: Calendar is an agenda grouped by day that starts today (overdue first for staff), marked by kind.
+async function calendarChecks(page,role,expect,done){
+ await go(page,'calendar');
+ const c=await page.evaluate(()=>({heads:[...document.querySelectorAll('.content .cal-agenda .ov-day')].map(h=>h.textContent),rows:[...document.querySelectorAll('.content .cal-agenda .cal-row')].map(r=>r.innerText.replace(/\s+/g,' ')),
+  chips:[...document.querySelectorAll('.content .work-chips .chip')].map(c=>c.textContent),wide:document.documentElement.scrollWidth>innerWidth+1}));
+ assert.equal(c.wide,false,`${role}: calendar fits the screen`);
+ const firstDay=c.heads.findIndex(h=>!/^Overdue/i.test(h));assert.match(c.heads[firstDay]||'',/^Today/i,`${role}: agenda starts today (got ${c.heads.join(' | ')})`);
+ assert.ok(c.rows.some(r=>/3:00 PM/.test(r)&&/Arrival/.test(r)&&r.includes(expect.arrival)),`${role}: arrival marked with a readable time (got ${c.rows.join(' | ')})`);
+ for(const ch of expect.chips)assert.ok(c.chips.includes(ch),`${role}: calendar chip ${ch}`);
+ await page.locator('.content .work-chips .chip[data-id="arrival"]').click();await settle(page);
+ assert.ok(await page.evaluate(()=>[...document.querySelectorAll('.content .cal-agenda .cal-row .ov-pill')].every(p=>p.textContent==='Arrival')),`${role}: Arrivals chip shows only arrivals`);
+ await page.locator('.content .work-chips .chip[data-id="all"]').click();await settle(page);done.push('calendar-agenda');
+}
 const PAGE_CHECKS={
  admin:async(page,mobile,done)=>{
   await headerChecks(page,mobile,'admin',['properties','work','inspections','requests','maintenance','documents','assets','audit','billing','messages','notifications','storm'],done);
@@ -326,6 +339,7 @@ const PAGE_CHECKS={
   const email=await go(page,'email-activity');assert.doesNotMatch(email,/\d+ attempts|submissions to the provider/,'admin: no email jargon');
   assert.doesNotMatch(await go(page,'automation'),/Recovery backup|encrypted archive|consolidated/,'admin: no automation jargon');done.push('wording');
   await scheduleChecks(page,'admin',mobile,done);
+  await calendarChecks(page,'admin',{arrival:'Owners arrive',chips:['Everything','Visits','Arrivals','Work','Shifts']},done);
  },
  employee:async(page,mobile,done)=>{
   await scheduleChecks(page,'employee',mobile,done);
@@ -352,6 +366,7 @@ const PAGE_CHECKS={
   for(const id of ['arrivals','calendar']){const t=await go(page,id);assert.doesNotMatch(t,MACHINE_DATE,`client: ${id} has no machine dates`);done.push(id);}
   const appr=await go(page,'approvals');assert.match(appr,/\$125\.00/);assert.doesNotMatch(appr,/·\s*$/m,'client: no dangling separator');done.push('approvals');
   assert.doesNotMatch(await go(page,'profile'),/Account ID/,'client: no raw account ID');done.push('profile');
+  await calendarChecks(page,'client',{arrival:'You arrive',chips:['Everything','Visits','Arrivals','Service']},done);
  }
 };
 async function pageJourney(launch,contextOptions,role,email){
