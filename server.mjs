@@ -50,7 +50,7 @@ async function mapAsync(rows, fn) { const result = []; for (const row of rows)
 async function filterAsync(rows, fn) { const result = []; for (const row of rows)
     if (await fn(row))
         result.push(row); return result; }
-function fail(status, message) { throw Object.assign(new Error(message), { status }); }
+function fail(status, message, extra) { throw Object.assign(new Error(message), { status }, extra ? { extra } : {}); }
 function text(value, label = 'Value', max = 4000) { if (typeof value !== 'string' || !value.trim() || value.length > max)
     fail(422, `${label} is required (maximum ${max} characters).`); return value.trim(); }
 function note(s, max = 4000) { if (s == null || s === '')
@@ -86,6 +86,8 @@ else
     d.setUTCFullYear(d.getUTCFullYear() + 1); return d.toISOString().slice(0, 10); }
 function passwordHash(password) { text(password, 'Password', 200); if (password.length < 12)
     fail(422, 'Use a password with at least 12 characters.'); const salt = randomBytes(16).toString('hex'); return salt + ':' + scryptSync(password, salt, 64).toString('hex'); }
+const LOGIN_FAILED = 'Email or password is incorrect.';
+const LOGIN_DUMMY_HASH = '00000000000000000000000000000000:' + '0'.repeat(128);
 function passwordMatches(password, saved) { try {
     const [salt, key] = saved.split(':');
     return timingSafeEqual(Buffer.from(key, 'hex'), scryptSync(String(password), salt, 64));
@@ -262,8 +264,8 @@ async function api(req, res, url, user) {
         const organizations=await all('SELECT id,name FROM organizations');
         const organization=organizations.find(row=>String(row.name||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')===slug);
         if(!organization) fail(404,'Client portal not found.');
-        const settings=await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',organization.id);
-        return json(res,200,{company:organization.name,logo:settings?.logo_data||'',title:settings?.client_portal_title||'',subtitle:settings?.client_portal_subtitle||'',poweredBy:'EstateAegis'});
+        const settings=await get('SELECT logo_data,client_portal_title,client_portal_subtitle,support_email FROM workspace_settings WHERE organization_id=?',organization.id);
+        return json(res,200,{company:organization.name,logo:settings?.logo_data||'',title:settings?.client_portal_title||'',subtitle:settings?.client_portal_subtitle||'',supportEmail:settings?.support_email||'',poweredBy:'EstateAegis'});
     }
     if (p === '/api/invite-info' && method === 'GET') {
         const token = String(url.searchParams.get('token') || '');
@@ -271,8 +273,8 @@ async function api(req, res, url, user) {
         const invitation = await get('SELECT organization_id,role FROM invitations WHERE token_hash=? AND used_at IS NULL AND expires_at>?', hash(token), Date.now());
         if (!invitation) fail(404, 'Invitation expired, cancelled, or already accepted.');
         const organization = await get('SELECT name FROM organizations WHERE id=?', invitation.organization_id);
-        const settings = await get('SELECT logo_data,client_portal_title,client_portal_subtitle FROM workspace_settings WHERE organization_id=?', invitation.organization_id);
-        return json(res, 200, {company:organization?.name||'EstateAegis', logo:settings?.logo_data||'', title:settings?.client_portal_title||'', subtitle:settings?.client_portal_subtitle||'', poweredBy:'EstateAegis'});
+        const settings = await get('SELECT logo_data,client_portal_title,client_portal_subtitle,support_email FROM workspace_settings WHERE organization_id=?', invitation.organization_id);
+        return json(res, 200, {company:organization?.name||'EstateAegis', logo:settings?.logo_data||'', title:settings?.client_portal_title||'', subtitle:settings?.client_portal_subtitle||'', supportEmail:settings?.support_email||'', role:invitation.role, poweredBy:'EstateAegis'});
     }
     if (p === '/api/status' && method === 'GET')
         return json(res, 200, { configured: !!(await get('SELECT id FROM users LIMIT 1')), user: safeUser(user) });
@@ -311,13 +313,16 @@ async function api(req, res, url, user) {
     if (p === '/api/login' && method === 'POST') {
         rate(req, 'login');
         const b = await body(req);
-        const u = (await get('SELECT * FROM users WHERE email=? AND active=1', String(b.email).toLowerCase()));
-        if (u && b.role && b.role !== u.role)
-            fail(403, 'Choose the portal assigned to this account.');
-        if (!u || !passwordMatches(b.password, u.password_hash))
-            fail(401, 'Email or password is incorrect.');
+        // One sign-in form for every role. Any `role` sent by older clients is ignored: the account's own
+        // role decides which portal opens. Unknown email, wrong password and inactive accounts share one
+        // message, and the password is always hashed so response timing does not reveal accounts.
+        const u = (await get('SELECT * FROM users WHERE LOWER(email)=? AND active=1', String(b.email || '').trim().toLowerCase()));
+        const passwordOk = passwordMatches(b.password, u ? u.password_hash : LOGIN_DUMMY_HASH);
+        if (!u || !passwordOk)
+            fail(401, LOGIN_FAILED);
         await assertWorkspaceActive(u.organization_id);
-        if(!await security.verify(u,b.code))fail(401,'Enter your authenticator code or a recovery code.');
+        if (!await security.verify(u, b.code))
+            fail(401, String(b.code || '').trim() ? 'That code didn’t work. Enter the current code from your authenticator app, or use a recovery code.' : 'Enter the 6-digit code from your authenticator app.', { mfaRequired: true });
         (await session(res, req, u));
         return json(res, 200, { user: safeUser(u) });
     }
@@ -1262,7 +1267,7 @@ const server = http.createServer(async (req, res) => {
             return res.end(url.pathname === '/sw.js' ? content.replace('__SHELL_VERSION__', shellVersion()) : content);
         }
         const appHome = url.pathname === '/' && (url.searchParams.has('invite') || url.searchParams.has('workspaceInvite') || await actor(req));
-        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/home-refresh.css':'home-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js','/visit-verification.js':'visit-verification.js','/visit-card.js':'visit-card.js','/storm-core.js':'storm-core.js','/storm.js':'storm.js','/storm.css':'storm.css','/view-route.js':'view-route.js', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/faq.js':'faq.js','/security':'security.html' };
+        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/home-refresh.css':'home-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js','/visit-verification.js':'visit-verification.js','/visit-card.js':'visit-card.js','/storm-core.js':'storm-core.js','/storm.js':'storm.js','/storm.css':'storm.css','/view-route.js':'view-route.js', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/login.js':'login.js','/login.css':'login.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/faq.js':'faq.js','/security':'security.html' };
         const file = names[url.pathname] || (url.pathname === '/client-login' || /^\/client\/[a-z0-9-]+$/i.test(url.pathname) ? 'live.html' : null);
         if (!file) {
             // Unknown pages get a friendly HTML 404 with the site navigation; /api/* keeps its JSON errors above.
@@ -1287,10 +1292,10 @@ const server = http.createServer(async (req, res) => {
         const status = error.status || 500;
         if (status === 500)
             console.error('Request failed:',JSON.stringify({message:error.message,stack:error.stack,method:req.method,path:req.url}));
-        json(res, status, { error: status === 500 ? 'The action could not be saved. Check the server log.' : error.message });
+        json(res, status, { error: status === 500 ? 'The action could not be saved. Check the server log.' : error.message, ...(status !== 500 && error.extra ? error.extra : {}) });
     }
 });
-const SHELL_FILES = ['live.html','live.js','inspection-checklist.js','visit-verification.js','visit-card.js','view-route.js','storm-core.js','storm.js','storm.css','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png','ea-shield-80.png','ea-shield-120.png'];
+const SHELL_FILES = ['live.html','live.js','login.js','login.css','inspection-checklist.js','visit-verification.js','visit-card.js','view-route.js','storm-core.js','storm.js','storm.css','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png','ea-shield-80.png','ea-shield-120.png'];
 let cachedShellVersion = null;
 function shellVersion() { if (!cachedShellVersion) { const digest = createHash('sha256'); for (const name of SHELL_FILES) { try { digest.update(name).update(fs.readFileSync(path.join(root, 'public', name))); } catch { digest.update(name + ':missing'); } } cachedShellVersion = digest.digest('hex').slice(0, 12); } return cachedShellVersion; }
 setInterval(() => offlineInspections.purge().catch(e => console.error('Idempotency cleanup:', e.message)), 3600000).unref();

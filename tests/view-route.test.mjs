@@ -96,7 +96,7 @@ test('the script ships with the app shell, loads last, and deep links stay intac
  assert.match(read('server.mjs'),/SHELL_FILES = \[[^\]]*'view-route\.js'/);
  const live=read('public/live.js');
  assert.match(live,/pendingInspectionLink=\(\(\)=>\{try\{return new URLSearchParams\(location\.search\)\.get\('inspection'\)/,'?inspection=<id> alert links');
- assert.equal((live.match(/history\.replaceState\(null,'','\/'\+\(\/\^#\\\/\.\/\.test\(location\.hash\)\?location\.hash:''\)\)/g)||[]).length,2,'sign-in keeps the screen hash');
+ assert.equal((read('public/login.js').match(/history\.replaceState\(null,'','\/'\+\(\/\^#\\\/\.\/\.test\(location\.hash\)\?location\.hash:''\)\)/g)||[]).length,1,'sign-in (public/login.js) keeps the screen hash');
  assert.match(read('public/manifest.webmanifest'),/"start_url": "\/login\?source=pwa"/);
  assert.match(read('public/marketing.js'),/location\.replace\('\/login' \+ location\.hash\)/,'signed-out refresh goes to sign-in');
 });
