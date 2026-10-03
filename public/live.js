@@ -124,21 +124,47 @@ function initializeNavigation(){}
 function navigationSnapshot(){return {page,propertyId,tab,activeInspection,activeAssetInspection,activeAssetInspectionRecord,assetInspectionReadOnly,activeArrival,activeClient};}
 function recordNavigation(){if(navigationRestoring)return;const state=navigationSnapshot(),signature=JSON.stringify(state);if(navigationHistory.at(-1)?.signature===signature)return;navigationHistory.push({signature,state});if(navigationHistory.length>50)navigationHistory.shift();}
 function restorePreviousView(){if(!data)return false;if(navigationHistory.length>1){navigationHistory.pop();const previous=navigationHistory.at(-1).state;Object.assign({},{}) ;page=previous.page;propertyId=previous.propertyId;tab=previous.tab;activeInspection=previous.activeInspection;activeAssetInspection=previous.activeAssetInspection;activeAssetInspectionRecord=previous.activeAssetInspectionRecord;assetInspectionReadOnly=previous.assetInspectionReadOnly;activeArrival=previous.activeArrival;activeClient=previous.activeClient;navigationRestoring=true;render();navigationRestoring=false;return true;}if(page!=='dashboard'){page='dashboard';propertyId=null;tab='overview';activeInspection=null;activeAssetInspection=null;activeAssetInspectionRecord=null;assetInspectionReadOnly=false;activeArrival=null;activeClient=null;render();return true;}return false;}
-// Flat sidebar menu (rules in sidebar-core.js): logo badge and company name, Overview / Messages / Notifications,
-// small uppercase section headings, and the user, profile, sign out and Powered by at the bottom.
+// Sidebar menu (rules in sidebar-core.js): logo badge and company name, Overview / Messages / Notifications,
+// uppercase section headings, and the user, profile, sign out and Powered by at the bottom. For admin and staff each
+// heading is a collapsible group button (Daily work open by default; the current page's group always open; the
+// user's choices remembered per user in localStorage). Client and vendor menus stay flat.
 function unreadNotificationCount(){return (data.notifications||[]).filter(n=>!n.read_at).length;}
+let sidebarManual=null;
+function sidebarStorage(){try{return window.localStorage;}catch{return null;}}
+const ICON_CHEVRON='<svg class="side-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 6l6 6-6 6"/></svg>';
 function sideNavigation(nav){
- const S=window.EASidebar,m=S.menu(nav,data.user.role),active=S.activeId(page);
+ const S=window.EASidebar,role=data.user.role,m=S.menu(nav,role),active=S.activeId(page);
  const counts={messages:Number(data.unreadMessages||0),notifications:unreadNotificationCount()};
  const item=({id,label})=>{const on=active===id,n=counts[id]||0;return '<button type="button" data-action="navigate" data-id="'+esc(id)+'" class="side-item'+(on?' active':'')+'"'+(on?' aria-current="page"':'')+'><span>'+esc(label)+'</span>'+(n?'<span class="side-count" aria-label="'+n+' unread">'+n+'</span>':'')+'</button>';};
  const platformLink=data.user.platformOwner?'<a class="side-item" href="/platform">Platform console</a>':'';
- const sections=m.sections.map((sec,i)=>'<div class="side-group" role="group" aria-labelledby="sideGroup'+i+'"><div class="side-heading" id="sideGroup'+i+'">'+esc(sec.title)+'</div>'+sec.items.map(item).join('')+(sec.title==='Company'?platformLink:'')+'</div>').join('');
- const extra=platformLink&&!m.sections.some(sec=>sec.title==='Company')?'<div class="side-group"><div class="side-heading">Company</div>'+platformLink+'</div>':'';
+ const secs=m.sections.slice();
+ if(platformLink&&!secs.some(sec=>sec.title==='Company'))secs.push({title:'Company',items:[]});
+ const body=sec=>sec.items.map(item).join('')+(sec.title==='Company'?platformLink:'');
+ let sections;
+ if(S.collapsible(role)){
+  const states=S.groupStates({...m,sections:secs},{page,saved:S.readSaved(sidebarStorage(),data.user.id),manual:sidebarManual}),current=S.groupOf(m,page);
+  sections=secs.map(sec=>{
+   const key=S.groupKey(sec.title),open=states[key]===true,n=S.groupCount(sec,counts),btnId='sideGroupBtn-'+key,listId='sideGroupItems-'+key;
+   return '<div class="side-group side-collapsible" data-side-group="'+esc(key)+'"'+(key===current?' data-current="true"':'')+'><button type="button" class="side-toggle" id="'+btnId+'" data-side-toggle="'+esc(key)+'" aria-expanded="'+open+'" aria-controls="'+listId+'"><span class="side-toggle-text">'+esc(sec.title)+'</span>'+(n?'<span class="side-count side-group-count" aria-label="'+n+' unread">'+n+'</span>':'')+ICON_CHEVRON+'</button><div class="side-group-items" id="'+listId+'" role="group" aria-labelledby="'+btnId+'"><div class="side-group-inner">'+body(sec)+'</div></div></div>';
+  }).join('');
+ }else{
+  sections=secs.map((sec,i)=>'<div class="side-group" role="group" aria-labelledby="sideGroup'+i+'"><div class="side-heading" id="sideGroup'+i+'">'+esc(sec.title)+'</div>'+body(sec)+'</div>').join('');
+ }
  const logo=workspaceLogoSrc(),initial=(String(data.company||'').trim()[0]||'E').toUpperCase();
  const brand='<div class="side-brand"><div class="side-mark'+(logo?' has-logo':'')+'" aria-hidden="true">'+(logo?'<img src="'+esc(logo)+'" alt="">':esc(initial))+'</div><div class="side-brand-text"><strong class="side-name" title="'+esc(data.company)+'">'+esc(data.company)+'</strong><small>'+esc(m.subtitle)+'</small></div></div>';
  const foot='<div class="side-foot"><div class="side-who">'+esc(data.user.name)+'</div><div class="side-role">'+esc(label(data.user.role))+'</div><div class="side-foot-actions">'+m.footer.map(({id,label:l})=>'<button type="button" data-action="navigate" data-id="'+esc(id)+'" class="side-link'+(active===id?' active':'')+'"'+(active===id?' aria-current="page"':'')+'>'+esc(l)+'</button>').join('')+'<button type="button" data-action="logout" class="side-link">Sign out</button></div><div class="powered-by"><img src="/ea-shield-80.png" alt="" width="16" height="16"><span>Powered by EstateAegis</span></div></div>';
- return brand+'<nav aria-label="Main menu" class="side-nav"><div class="side-group side-top">'+m.top.map(item).join('')+'</div>'+sections+extra+'</nav>'+foot;
+ return brand+'<nav aria-label="Main menu" class="side-nav"><div class="side-group side-top">'+m.top.map(item).join('')+'</div>'+sections+'</nav>'+foot;
 }
+// A group button opens or closes its group in place (no re-render) and remembers the choice for this user. Collapsing
+// the current page's group holds until the user moves to another page.
+document.addEventListener('click',event=>{
+ const button=event.target.closest?.('[data-side-toggle]');if(!button||!data?.user)return;
+ event.preventDefault();
+ const key=button.dataset.sideToggle,open=button.getAttribute('aria-expanded')!=='true';
+ button.setAttribute('aria-expanded',String(open));
+ window.EASidebar.saveChoice(sidebarStorage(),data.user.id,key,open);
+ sidebarManual=button.closest('.side-group')?.dataset.current==='true'?{key,page,open}:null;
+});
 function familyMemberActions(p,m){
  if(data.user.role!=='admin')return '';
  const email=String(m.email||'').trim().toLowerCase();
@@ -378,7 +404,7 @@ async function action(name,key,button){if(await proactiveAction(name,key))return
  if(name==='close'){$('modal').close();return;}
  if(name==='menu'){setMenuOpen(!$('sidebar').classList.contains('open'));return;}
  if(name==='logout'){clearInspectionDrafts();await api('logout',{});data=null;page='dashboard';propertyId=null;tab='overview';activeInspection=null;activeAssetInspection=null;activeAssetInspectionRecord=null;assetInspectionReadOnly=false;activeArrival=null;activeClient=null;showSignIn();return;}
- if(name==='navigate'){activeClient=null;inspectionUpcomingOnly=key==='inspections-upcoming';inspectionSubmittedOnly=key==='inspections-submitted';page=['inspections-upcoming','inspections-submitted'].includes(key)?'inspections':key;search='';activeInspection=null;await load();return;}
+ if(name==='navigate'){sidebarManual=null;activeClient=null;inspectionUpcomingOnly=key==='inspections-upcoming';inspectionSubmittedOnly=key==='inspections-submitted';page=['inspections-upcoming','inspections-submitted'].includes(key)?'inspections':key;search='';activeInspection=null;await load();return;}
  if(name==='arrival-filter'){arrivalFilter=key;activeArrival=null;render();return;}
  if(name==='arrival-open'){activeArrival=key;page='arrivals';render();return;}
  if(name==='arrival-back'){activeArrival=null;render();return;}

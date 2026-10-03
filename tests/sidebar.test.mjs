@@ -1,5 +1,6 @@
-// Sidebar menu refresh: the flat menu (public/sidebar-core.js) keeps every screen each role could open before,
-// shows only the screens that role may open, and the shell renders it without collapsible groups.
+// Sidebar menu: the menu (public/sidebar-core.js) keeps every screen each role could open before, shows only the
+// screens that role may open; admin and staff get collapsible groups (defaults, current-group auto-open, per-user
+// localStorage choices); client and vendor menus stay flat.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -68,15 +69,118 @@ test('menu structure: flat headings in the mockup style, short client and vendor
  assert.equal(S.activeId('property'),'properties');assert.equal(S.activeId('inspection'),'inspections');assert.equal(S.activeId('asset-inspection'),'assets');
 });
 
-test('the shell renders the flat menu, wires the rules and keeps the logo fix',()=>{
+test('the shell renders the menu, wires the rules and keeps the logo fix',()=>{
  const live=read('public/live.js'),html=read('public/live.html'),sw=read('public/sw.js'),server=read('server.mjs'),css=read('public/overview.css');
  assert.match(live,/const nav=window\.EASidebar\.navFor\(data\.user/,'render builds the menu from sidebar-core');
  assert.match(live,/<aside id="sidebar" class="side/);
- assert.doesNotMatch(live,/groupedNavigation|nav-chevron|data-nav-group/,'no collapsible groups or chevrons');
+ assert.doesNotMatch(live,/groupedNavigation|nav-chevron|data-nav-group/,'the old <details> groups are gone');
  assert.match(live,/const logo=workspaceLogoSrc\(\)/,'sidebar badge uses the company logo (companyLogo || workspaceLogo)');
  assert.match(html,/<script src="\/sidebar-core\.js\?v=[^"]+"><\/script>[\s\S]*<script src="\/live\.js/,'menu rules load before live.js');
  assert.ok(sw.includes("'/sidebar-core.js'"),'service worker caches sidebar-core.js');
  assert.match(server,/SHELL_FILES = \[[^\]]*'sidebar-core\.js'/,'shell version covers sidebar-core.js');
  assert.match(css,/\.shell>aside \.side-item\.active\{[^}]*inset 3px 0 0 #8b242b/,'active item has the wine left bar');
  assert.doesNotMatch(read('public/sidebar-core.js')+live,/style=/,'no inline styles (CSP)');
+});
+
+// ---------- Collapsible groups ----------
+const menuFor=(role,platformOwner=false)=>S.menu(S.navFor({role,platformOwner}),role);
+const memory=()=>{const m=new Map();return {getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>m.set(k,String(v)),removeItem:k=>m.delete(k),dump:()=>Object.fromEntries(m)};};
+
+test('collapsible groups: admin and staff only; client and vendor menus stay flat',()=>{
+ assert.equal(S.collapsible('admin'),true);assert.equal(S.collapsible('employee'),true);
+ assert.equal(S.collapsible('client'),false);assert.equal(S.collapsible('vendor'),false);assert.equal(S.collapsible(undefined),false);
+ assert.deepEqual(menuFor('admin').sections.map(s=>S.groupKey(s.title)),['daily-work','residences','team','company']);
+ assert.deepEqual(menuFor('employee').sections.map(s=>S.groupKey(s.title)),['daily-work','residences','team']);
+});
+
+test('defaults: Daily work is open and the other groups are collapsed',()=>{
+ for(const page of ['dashboard','messages','notifications','profile']){
+  assert.deepEqual(S.groupStates(menuFor('admin'),{page}),{'daily-work':true,residences:false,team:false,company:false},`admin on ${page}`);
+  assert.deepEqual(S.groupStates(menuFor('employee'),{page}),{'daily-work':true,residences:false,team:false},`staff on ${page}`);
+ }
+ assert.deepEqual(S.DEFAULT_OPEN,['daily-work']);
+ assert.equal(S.groupOf(menuFor('admin'),'dashboard'),null,'the top block is not in a group');
+ assert.equal(S.groupOf(menuFor('admin'),'profile'),null,'the footer is not in a group');
+});
+
+test('the group holding the current page (or the parent a detail screen highlights) opens automatically',()=>{
+ const m=menuFor('admin',true),cases={
+  inspections:'daily-work',routes:'daily-work',approvals:'daily-work',inspection:'daily-work',
+  properties:'residences',property:'residences',clients:'residences',assets:'residences','asset-inspection':'residences',maintenance:'residences',
+  staff:'team','staff-schedules':'team',users:'team',vendors:'team',
+  workspace:'company',billing:'company',audit:'company',platform:'company','checklist-templates':'company','checklist-editor':'company','email-activity':'company',automation:'company'};
+ for(const [page,group] of Object.entries(cases)){
+  assert.equal(S.groupOf(m,page),group,`${page} lives in ${group}`);
+  const states=S.groupStates(m,{page});
+  assert.equal(states[group],true,`${page}: ${group} is open`);
+  for(const [k,open] of Object.entries(states))if(k!==group)assert.equal(open,k==='daily-work',`${page}: ${k} keeps its default`);
+ }
+ // Every menu item in a group opens that group when it is the current page.
+ for(const role of ['admin','employee'])for(const sec of menuFor(role).sections)for(const it of sec.items)
+  assert.equal(S.groupStates(menuFor(role),{page:it.id,saved:{[S.groupKey(sec.title)]:false}})[S.groupKey(sec.title)],true,`${role}: ${it.id}`);
+ // Even when the user collapsed Daily work, an inspection detail screen keeps it open.
+ assert.equal(S.groupStates(m,{page:'inspection',saved:{'daily-work':false}})['daily-work'],true);
+});
+
+test('choices are remembered per user in localStorage and override the defaults, except for the current group',()=>{
+ const store=memory(),m=menuFor('admin');
+ assert.equal(S.storageKey('u-1'),'estateaegis-sidebar-groups-v2:u-1');
+ assert.deepEqual(S.readSaved(store,'u-1'),{},'nothing saved yet');
+ S.saveChoice(store,'u-1','daily-work',false);S.saveChoice(store,'u-1','team',true);
+ assert.deepEqual(JSON.parse(store.getItem('estateaegis-sidebar-groups-v2:u-1')),{'daily-work':false,team:true});
+ assert.deepEqual(S.readSaved(store,'u-2'),{},'another user on the same device keeps the defaults');
+ assert.deepEqual(S.groupStates(m,{page:'dashboard',saved:S.readSaved(store,'u-2')}),{'daily-work':true,residences:false,team:false,company:false});
+ // A later visit: the saved choices beat the defaults.
+ const saved=S.readSaved(store,'u-1');
+ assert.deepEqual(S.groupStates(m,{page:'dashboard',saved}),{'daily-work':false,residences:false,team:true,company:false});
+ // ...but the current page's group is always open, without changing what was saved.
+ assert.deepEqual(S.groupStates(m,{page:'calendar',saved}),{'daily-work':true,residences:false,team:true,company:false});
+ assert.deepEqual(S.readSaved(store,'u-1'),{'daily-work':false,team:true});
+ // Re-opening is remembered too; the last choice wins.
+ S.saveChoice(store,'u-1','daily-work',true);S.saveChoice(store,'u-1','team',false);
+ assert.deepEqual(S.groupStates(m,{page:'dashboard',saved:S.readSaved(store,'u-1')}),{'daily-work':true,residences:false,team:false,company:false});
+});
+
+test('collapsing the current group holds on that page (background refresh) and reopens on navigation',()=>{
+ const m=menuFor('admin'),manual={key:'team',page:'staff',open:false};
+ assert.equal(S.groupStates(m,{page:'staff',saved:{team:false},manual}).team,false,'stays collapsed on the same page');
+ assert.equal(S.groupStates(m,{page:'vendors',saved:{team:false},manual}).team,true,'another page in the group opens it again');
+ assert.equal(S.groupStates(m,{page:'staff',saved:{team:false}}).team,true,'reload (no manual state) opens it again');
+});
+
+test('storage problems never break the menu',()=>{
+ const broken={getItem:()=>{throw Error('denied');},setItem:()=>{throw Error('quota');}};
+ assert.deepEqual(S.readSaved(broken,'u'),{});
+ assert.deepEqual(S.saveChoice(broken,'u','team',true),{team:true});
+ assert.deepEqual(S.readSaved(null,'u'),{});
+ for(const raw of ['not json','[1,2]','null','"x"','{"team":"yes","company":true}']){
+  const store=memory();store.setItem(S.storageKey('u'),raw);
+  assert.deepEqual(S.readSaved(store,'u'),raw.includes('company')?{company:true}:{},raw);
+ }
+});
+
+test('a collapsed group header shows the total of its items\' badges',()=>{
+ const m=menuFor('admin'),[daily,res]=m.sections;
+ assert.equal(S.groupCount(daily,{}),0);
+ assert.equal(S.groupCount(daily,{requests:2,approvals:3,messages:9}),5,'only items inside the group count');
+ assert.equal(S.groupCount(res,{requests:2}),0);
+ assert.equal(S.groupCount(res,{documents:'4',assets:-1,maintenance:NaN}),4,'bad values are ignored');
+});
+
+test('the shell renders accessible group buttons with quick, motion-safe expand and no inline styles',()=>{
+ const live=read('public/live.js'),css=read('public/overview.css');
+ const fn=live.slice(live.indexOf('function sideNavigation('),live.indexOf('function familyMemberActions('));
+ assert.match(fn,/<button type="button" class="side-toggle" id="'\+btnId\+'" data-side-toggle="'\+esc\(key\)\+'" aria-expanded="'\+open\+'" aria-controls="'\+listId\+'">/,'heading is a button with aria-expanded and aria-controls');
+ assert.match(fn,/class="side-group-items" id="'\+listId\+'" role="group" aria-labelledby="'\+btnId\+'"/,'the controlled list is labelled by its button');
+ assert.match(fn,/if\(S\.collapsible\(role\)\)/,'only admin and staff get groups');
+ assert.match(fn,/S\.groupStates\(\{\.\.\.m,sections:secs\},\{page,saved:S\.readSaved\(sidebarStorage\(\),data\.user\.id\),manual:sidebarManual\}\)/,'states come from the rules, keyed by user id');
+ assert.match(fn,/S\.groupCount\(sec,counts\)/,'group badge');
+ assert.match(live,/saveChoice\(sidebarStorage\(\),data\.user\.id,key,open\)/,'toggling saves the choice for this user');
+ assert.match(live,/if\(name==='navigate'\)\{sidebarManual=null;/,'navigation re-opens the current group');
+ assert.match(css,/\.side-toggle\[aria-expanded="false"\]\+\.side-group-items\{grid-template-rows:0fr;visibility:hidden;/,'collapsed items are hidden from tab order');
+ assert.match(css,/\.side-toggle\[aria-expanded="true"\] \.side-group-count\{display:none\}/,'badge only while collapsed');
+ assert.match(css,/@media\(prefers-reduced-motion:reduce\)\{[^}]*\.side-group-items[^}]*\{transition:none\}/,'respects reduced motion');
+ const dur=[...css.matchAll(/grid-template-rows \.(\d+)s/g)].map(x=>Number('0.'+x[1]));
+ assert.ok(dur.length&&dur.every(d=>d<=0.25),'expand is quick');
+ assert.doesNotMatch(fn,/style=|<script/,'no inline styles or scripts (CSP)');
 });

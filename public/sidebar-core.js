@@ -1,4 +1,4 @@
-// Sidebar menu rules (no DOM): which screens each role can open, and how the flat menu groups them.
+// Sidebar menu rules (no DOM): which screens each role can open, how the menu groups them, and which groups are open.
 // Loaded in the browser as window.EASidebar and in Node tests via import (sets globalThis.EASidebar).
 (function(root){
  'use strict';
@@ -49,7 +49,39 @@
  // Which menu item is highlighted for detail screens.
  const activeId=page=>page==='property'?'properties':page==='inspection'?'inspections':page==='asset-inspection'?'assets':page==='checklist-editor'?'checklist-templates':page;
  const ids=m=>[...m.top,...m.sections.flatMap(s=>s.items),...m.footer].map(i=>i.id);
- const api={navFor,menu,activeId,ids,SECTIONS,TOP};
+
+ // ---- Collapsible groups (admin and staff only; client and vendor menus are short and stay flat) ----
+ // Daily work starts open, the other groups start collapsed. The group holding the current page (or the parent item a
+ // detail screen highlights) is always open. Choices the user makes are remembered per user and beat the defaults.
+ const DEFAULT_OPEN=['daily-work'];
+ const STORAGE_PREFIX='estateaegis-sidebar-groups-v2:';
+ const collapsible=role=>role==='admin'||role==='employee';
+ const groupKey=title=>String(title||'').toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'group';
+ // The key of the section holding the page's highlighted item, or null (top block, footer, unknown page).
+ function groupOf(m,page){const id=activeId(page),sec=m.sections.find(s=>s.items.some(i=>i.id===id));return sec?groupKey(sec.title):null;}
+ const storageKey=userId=>STORAGE_PREFIX+String(userId==null?'':userId);
+ // Saved choices for one user: {groupKey: true|false}. Anything unreadable counts as "no choices yet".
+ function readSaved(storage,userId){
+  try{const raw=storage&&storage.getItem(storageKey(userId));const v=raw?JSON.parse(raw):{};if(!v||typeof v!=='object'||Array.isArray(v))return {};
+   const out={};for(const [k,open] of Object.entries(v))if(typeof open==='boolean')out[k]=open;return out;}catch{return {};}
+ }
+ // Remembers one choice; returns the updated map. Storage failures (private mode, quota) are ignored.
+ function saveChoice(storage,userId,key,open){const saved=readSaved(storage,userId);saved[key]=!!open;try{storage&&storage.setItem(storageKey(userId),JSON.stringify(saved));}catch{}return saved;}
+ // Open or closed for every group. manual = {key,page,open}: the user just toggled the group of the page they are on,
+ // which holds until they move to another page (so a background refresh does not snap it back open).
+ function groupStates(m,{page,saved={},manual=null}={}){
+  const current=groupOf(m,page),states={};
+  for(const sec of m.sections){
+   const key=groupKey(sec.title);
+   let open=Object.prototype.hasOwnProperty.call(saved,key)?!!saved[key]:DEFAULT_OPEN.includes(key);
+   if(key===current)open=manual&&manual.key===key&&manual.page===page?!!manual.open:true;
+   states[key]=open;
+  }
+  return states;
+ }
+ // Badge for a group header: the sum of its items' counts (shown only while the group is collapsed).
+ const groupCount=(sec,counts={})=>sec.items.reduce((n,i)=>n+(Number(counts[i.id])>0?Number(counts[i.id]):0),0);
+ const api={navFor,menu,activeId,ids,SECTIONS,TOP,DEFAULT_OPEN,STORAGE_PREFIX,collapsible,groupKey,groupOf,storageKey,readSaved,saveChoice,groupStates,groupCount};
  root.EASidebar=api;
  if(typeof module==='object'&&module&&module.exports)module.exports=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
