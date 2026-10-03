@@ -2,6 +2,8 @@
 // "Remind client" nudge for an estimate that is still waiting on the family. Both are staff-side only.
 export const REMIND_EVERY_MS=24*3600000;
 export const EXPORT_LIMIT=5000;
+/** Milliseconds until the family may be reminded again (0 = now). */
+export function remindWait(lastIso,nowMs=Date.now()){const t=Date.parse(lastIso||'');return Number.isFinite(t)?Math.max(0,t+REMIND_EVERY_MS-nowMs):0;}
 export const EXPORT_HEAD=['Title','Residence','Status','Priority','Assigned to','Due','Created','Completed'];
 const DONE=['completed','cancelled'];
 
@@ -50,8 +52,9 @@ export function createWorkExtras({get,all,run,transaction,id,now,fail,roles,work
     const w=await work(user,b.workId);if(DONE.includes(w.status))fail(409,'This work order is already finished.');
     const a=await latestApproval(w.id);if(!a||a.status!=='pending')fail(409,'This work order is not waiting on client approval.');
     const last=await lastReminder(user,w.id);
-    if(last&&Date.now()-Date.parse(last)<REMIND_EVERY_MS)fail(429,'The family was already reminded in the last 24 hours.',{remindedAt:last,nextAt:new Date(Date.parse(last)+REMIND_EVERY_MS).toISOString()});
-    const prop=await property(user,w.property_id);
+    if(remindWait(last))fail(429,'The family was already reminded in the last 24 hours.',{remindedAt:last,nextAt:new Date(Date.parse(last)+REMIND_EVERY_MS).toISOString()});
+    // work() already decided this user may see the job (admins, assigned staff, the residence's manager); read the residence directly.
+    const prop=await get('SELECT * FROM properties WHERE id=? AND organization_id=?',w.property_id,user.organization_id);if(!prop)fail(404,'Residence not found.');
     const recipients=await all("SELECT id,email FROM users WHERE organization_id=? AND client_id=? AND role='client' AND active=1",user.organization_id,prop.client_id);
     if(!recipients.length)fail(422,'No one in this family has an account to remind.');
     // Same path as every other email: the outbox (sent by the Resend worker when a key is set) plus an in-app notification that opens Approvals.
