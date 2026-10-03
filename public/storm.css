@@ -95,7 +95,7 @@
  .storm-cards{display:grid;gap:12px}
  .storm-mobile-card{position:relative;border:1px solid #e2e7eb;border-radius:12px;padding:14px;background:#fff}
  .storm-mobile-card.storm-row-issue{border-left:5px solid var(--refresh-wine,#7e202b)}
- .storm-mobile-card h3{margin:0 44px 2px 0;font-size:17px}
+ .storm-mobile-card h3,.storm-mobile-card h2.h3{margin:0 44px 2px 0;font-size:17px}
  .storm-mobile-card>p{margin:0 44px 8px 0;font-size:14px}
  .storm-card-select{position:absolute;top:10px;right:10px;padding:6px}
  .storm-card-select input{width:24px;height:24px}
