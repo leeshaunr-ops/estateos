@@ -11,6 +11,7 @@ import {createOperations,advanceDue} from './operations.mjs';
 import {createSecurity} from './security.mjs';
 import {validateLogo} from './branding.mjs';
 import {createCommunications} from './communications.mjs';
+import {createFailAlerts} from './fail-alerts.mjs';
 import {sendInspectionEmail} from './inspection-email.mjs';
 import {lockFamily, linkAcceptedMember, revokeMemberAccess} from './family-access.mjs';
 import {invitationHistory, cancelInvitation, claimInvitation} from './invitations.mjs';
@@ -117,7 +118,7 @@ async function work(user, workId) { if(user.role==='employee'){const assigned=aw
     fail(404, 'Job not found.'); return row; }
 async function audit(user, action, entityId) { (await run('INSERT INTO audit VALUES(?,?,?,?,?,?)', id(), user.organization_id, user.id, action, entityId, now())); }
 async function notifyProperty(p, title, entityId, audience = 'staff') { const recipients = (await filterAsync((await all('SELECT * FROM users WHERE organization_id=? AND active=1', p.organization_id)), async (u) => audience === 'client' ? u.role === 'client' && u.client_id === p.client_id : u.role === 'admin' || u.role === 'employee' && (await get('SELECT 1 FROM property_access WHERE user_id=? AND property_id=?', u.id, p.id)))); for (const u of recipients)
-    (await run('INSERT INTO notifications VALUES(?,?,?,?,?,?)', id(), u.id, title, entityId, null, now())); }
+    (await run('INSERT INTO notifications(id,user_id,title,entity_id,read_at,created_at) VALUES(?,?,?,?,?,?)', id(), u.id, title, entityId, null, now())); }
 function json(res, status, data, headers = {}) { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers }); res.end(JSON.stringify(data)); }
 async function body(req) { if (req.parsedBody !== undefined) return req.parsedBody; return req.parsedBody = await readBody(req); }
 async function readBody(req) { let length = 0; const chunks = []; for await (const chunk of req) {
@@ -173,7 +174,7 @@ async function snapshot(user) {
             return { id: p.id, name: p.name, address: p.address, account_manager_name:p.account_manager_name }; if (user.role === 'client') {
             const { manual, ...safe } = p;
             return safe;
-    } return p; }), archivedProperties, invitations: await invitationHistory(all, user), clients: user.role === 'admin' ? (await all('SELECT * FROM clients WHERE organization_id=?', user.organization_id)) : [], vendors: ['admin', 'employee'].includes(user.role) ? (await all('SELECT * FROM vendors WHERE organization_id=?', user.organization_id)) : [], users: user.role === 'admin' ? (await all('SELECT id,name,email,role,client_id,vendor_id,active FROM users WHERE organization_id=?', user.organization_id)) : [], assets, asset_inspections: assetInspections, work: jobs, requests: user.role === 'vendor' ? [] : (await scoped('requests')), inspections, files, shopping: user.role === 'vendor' ? [] : (await scoped('shopping_items')), arrivals: user.role === 'vendor' ? [] : (await scoped('arrivals')).map(a => ({ ...a, items: JSON.parse(a.items), room_status: JSON.parse(a.room_status || '[]'), guests: JSON.parse(a.guests || '[]') })), maintenance: ['admin', 'employee'].includes(user.role) ? (await scoped('maintenance_plans')) : [], notes: ['admin', 'employee'].includes(user.role) ? (await scoped('notes')) : [], invoices: user.role === 'admin' ? (await all('SELECT invoices.*,clients.name client_name,COALESCE((SELECT SUM(amount_minor) FROM payments WHERE invoice_id=invoices.id),0) paid_minor FROM invoices JOIN clients ON clients.id=invoices.client_id WHERE invoices.organization_id=?', user.organization_id)) : [], audit: user.role === 'admin' ? (await all('SELECT audit.*,users.name actor_name FROM audit JOIN users ON users.id=audit.actor_id WHERE audit.organization_id=? ORDER BY audit.created_at DESC LIMIT 100', user.organization_id)) : [], notifications: (await all('SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 100', user.id)), template };
+    } return p; }), archivedProperties, invitations: await invitationHistory(all, user), clients: user.role === 'admin' ? (await all('SELECT * FROM clients WHERE organization_id=?', user.organization_id)) : [], vendors: ['admin', 'employee'].includes(user.role) ? (await all('SELECT * FROM vendors WHERE organization_id=?', user.organization_id)) : [], users: user.role === 'admin' ? (await all('SELECT id,name,email,role,client_id,vendor_id,active FROM users WHERE organization_id=?', user.organization_id)) : [], assets, asset_inspections: assetInspections, work: jobs, requests: user.role === 'vendor' ? [] : (await scoped('requests')), inspections, files, shopping: user.role === 'vendor' ? [] : (await scoped('shopping_items')), arrivals: user.role === 'vendor' ? [] : (await scoped('arrivals')).map(a => ({ ...a, items: JSON.parse(a.items), room_status: JSON.parse(a.room_status || '[]'), guests: JSON.parse(a.guests || '[]') })), maintenance: ['admin', 'employee'].includes(user.role) ? (await scoped('maintenance_plans')) : [], notes: ['admin', 'employee'].includes(user.role) ? (await scoped('notes')) : [], invoices: user.role === 'admin' ? (await all('SELECT invoices.*,clients.name client_name,COALESCE((SELECT SUM(amount_minor) FROM payments WHERE invoice_id=invoices.id),0) paid_minor FROM invoices JOIN clients ON clients.id=invoices.client_id WHERE invoices.organization_id=?', user.organization_id)) : [], audit: user.role === 'admin' ? (await all('SELECT audit.*,users.name actor_name FROM audit JOIN users ON users.id=audit.actor_id WHERE audit.organization_id=? ORDER BY audit.created_at DESC LIMIT 100', user.organization_id)) : [], notifications: (await failAlerts.list(user)), template };
 }
 async function fileAllowed(user, f, inspectionIds, jobIds) {
     if (['admin', 'employee'].includes(user.role))
@@ -190,6 +191,7 @@ async function readFile(user, fileId) { const f = (await get('SELECT * FROM file
     fail(404, 'File not found.'); if(user.role==='employee'&&f.work_order_id){await work(user,f.work_order_id);return f;} (await property(user, f.property_id, user.role === 'vendor' ? 'job' : 'read')); const ins = new Set((await all("SELECT id FROM inspections WHERE property_id=? AND status='published'", f.property_id)).map(x => x.id)); const jobs = new Set((await all('SELECT * FROM work_orders WHERE property_id=?', f.property_id)).filter(x => user.role !== 'vendor' || x.vendor_id === user.vendor_id).map(x => x.id)); if (!(await fileAllowed(user, f, ins, jobs)))
     fail(404, 'File not found.'); return f; }
 const communications=createCommunications({get,all,run,transaction,id,now,fail,text,json,body,rate,audit});
+const failAlerts=createFailAlerts({get,all,run,id,now,fail,json,body});
 const security=createSecurity({get,run,transaction,body,json,rate,fail,passwordMatches,audit,now});
 const billing=createStripeBilling({get,all,run,transaction,id,now,fail,json,body,audit});
 const paidSignup=createPaidSignup({get,all,run,transaction,id,now,hash,randomBytes,body,json,fail,rate,parseSubscription:billing.parseSubscription});
@@ -239,6 +241,7 @@ async function api(req, res, url, user) {
     if(await staff.handle(req,res,url,user))return;
     if(await checklistTemplates.handle(req,res,url,user))return;
     if(await offlineInspections.handle(req,res,url,user))return;
+    if(await failAlerts.handle(req,res,url,user))return;
     if(await communications.handle(req,res,url,user))return;
     if(await operations.handle(req,res,url,user))return;
     if(await security.handle(req,res,url,user))return;
@@ -851,6 +854,7 @@ async function api(req, res, url, user) {
             removed=await all('SELECT storage_key FROM files WHERE inspection_id=?',row.id);
             await run('DELETE FROM files WHERE inspection_id=?',row.id);
             await run('DELETE FROM inspection_email_delivery WHERE inspection_id=?',row.id);
+            await run('DELETE FROM inspection_fail_alerts WHERE inspection_id=?',row.id);
             await run('DELETE FROM inspection_occurrences WHERE inspection_id=?',row.id);
             await run('DELETE FROM inspections WHERE id=?',row.id);
             await audit(user,'inspection.draft_deleted',row.id);
@@ -893,6 +897,8 @@ async function api(req, res, url, user) {
                 await audit(user, 'inspection.submitted', row.id);
                 const pRow = await get('SELECT * FROM properties WHERE id=?', row.property_id);
                 await notifyProperty(pRow, 'Inspection submitted for review: ' + pRow.name, row.id);
+                // "Alert the office on fail": one alert per inspection, committed with the status change.
+                await failAlerts.inspectionCompleted(row.id, { source: 'submit', completedAt: submittedAt });
             });
             result = { id: row.id, status: 'submitted', version: row.version + 1, submitted_at: submittedAt };
             if (b.autoPublish === true && user.role === 'admin') {
@@ -1115,10 +1121,6 @@ async function api(req, res, url, user) {
         (await audit(user, 'note.created', key));
         result = { id: key };
     }
-    else if (p === '/api/notifications/read') {
-        (await run('UPDATE notifications SET read_at=? WHERE id=? AND user_id=?', now(), b.id, user.id));
-        result = { ok: true };
-    }
     else
         fail(404, 'Endpoint not found.');
     return json(res, 201, result);
@@ -1260,6 +1262,8 @@ async function publishInspection(user,row,{key,route,requestHash}){
  await transaction(async()=>{
   const updated=await run("UPDATE inspections SET status='published',published_at=?,report_snapshot=?,report_email=?,version=version+1 WHERE id=? AND status IN ('draft','submitted') AND version=?",completedAt,JSON.stringify(report),pRow.inspection_report_email||'',row.id,row.version);
   if(updated.changes!==1)fail(409,'This report changed or was already published.');
+  // Publishing straight from a draft also completes the visit; a visit already alerted on submit is not alerted twice.
+  await failAlerts.inspectionCompleted(row.id,{source:'publish',completedAt});
   await notifyProperty(pRow,'Inspection report available: '+pRow.name,row.id,'client');
   await audit(user,'inspection.published',row.id);
   await run('INSERT INTO idempotency VALUES(?,?,?,?,?)',user.id,key,route,requestHash,JSON.stringify(result));

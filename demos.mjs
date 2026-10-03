@@ -41,7 +41,7 @@ export function createDemos({get,all,run,transaction,id,now,hash,randomBytes,bod
     ['maintenance_occurrences',`plan_id IN (${plans})`],['maintenance_assignments',`plan_id IN (${plans})`],
     ['spending_approvals','organization_id=?'],['work_staff',`work_id IN (${works})`],['scheduled_work_types',`work_id IN (${works})`],
     ['staff_schedules','organization_id=?'],['requests',`property_id IN (${props})`],['work_orders',`property_id IN (${props})`],
-    ['asset_inspections',`asset_id IN (${assets})`],['assets',`property_id IN (${props})`],['inspections',`property_id IN (${props})`],
+    ['asset_inspections',`asset_id IN (${assets})`],['assets',`property_id IN (${props})`],['inspection_fail_alerts','organization_id=?'],['inspections',`property_id IN (${props})`],
     ['maintenance_plans',`property_id IN (${props})`],['shopping_items',`property_id IN (${props})`],['arrivals',`property_id IN (${props})`],
     ['notes',`property_id IN (${props})`],['property_vault',`property_id IN (${props})`],['property_access',`property_id IN (${props})`],
     ['payments','invoice_id IN (SELECT id FROM invoices WHERE organization_id=?)'],['invoices','organization_id=?'],
