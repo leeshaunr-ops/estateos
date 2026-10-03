@@ -288,7 +288,7 @@ async function offlineBoot(error){
  if(wasOffline){offlineMergeLocal();if(page==='inspection'&&!data.inspections.some(i=>i.id===activeInspection))page='inspections';render();return true;}   // already offline: keep the screen the user is on
  offlineMergeLocal();   // visits started on this device (e.g. just now from Start inspection) are part of the offline view
  if(page==='inspection'&&data.inspections.some(i=>i.id===activeInspection)){render();toast('You are offline. Inspections saved on this device are available.');return true;}   // keep the visit the user is on
- try{const saved=JSON.parse(localStorage.getItem('estateos:last-view')||'null');if(saved?.page==='inspection'&&data.inspections.some(i=>i.id===saved.activeInspection)){page='inspection';activeInspection=saved.activeInspection;}else page='inspections';}catch{page='inspections';}
+ try{const saved=JSON.parse(localStorage.getItem('estateos:last-view')||'null');if(saved?.page==='inspection'&&(!saved.userId||saved.userId===OFF.userId)&&data.inspections.some(i=>i.id===saved.activeInspection)){page='inspection';activeInspection=saved.activeInspection;}else page='inspections';}catch{page='inspections';}
  render();toast('You are offline. Inspections saved on this device are available.');return true;
 }
 /* Merge visits started offline (not on the server yet) into the data the views read. */
