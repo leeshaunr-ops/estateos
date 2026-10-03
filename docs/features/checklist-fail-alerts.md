@@ -36,3 +36,11 @@ To get alerts today, an admin adds the field checklist item to a Routine templat
 - adds `notifications.kind` and `notifications.body`
 - adds `email_outbox.html`
 - creates `inspection_fail_alerts`
+
+## Screenshots
+
+![Desktop bell](checklist-fail-alerts/desktop-bell.png)
+![Notifications page](checklist-fail-alerts/desktop-notifications.png)
+![Phone bell](checklist-fail-alerts/phone-bell.png)
+![Residence Manager on phone](checklist-fail-alerts/phone-manager-bell.png)
+![Alert email](checklist-fail-alerts/email.png)
