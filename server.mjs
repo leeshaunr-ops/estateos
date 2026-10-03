@@ -1277,11 +1277,13 @@ const server = http.createServer(async (req, res) => {
             res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
             return res.end(req.method === 'HEAD' ? undefined : fs.readFileSync(path.join(root, 'public', '404.html')));
         }
-        if (file === 'live.html') res.setHeader('X-Robots-Tag','noindex, nofollow');
+        if (file === 'live.html') { res.setHeader('X-Robots-Tag','noindex, nofollow'); res.setHeader('X-EA-Shell', shellVersion()); }
         if (url.pathname === '/') res.setHeader('Vary','Cookie');
         res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://nominatim.openstreetmap.org https://photon.komoot.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");
         res.writeHead(200, { 'Content-Type': file.endsWith('.html') ? 'text/html; charset=utf-8' : file.endsWith('.css') ? 'text/css' : 'text/javascript', 'Cache-Control': 'no-store, max-age=0, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' });
         if (req.method === 'HEAD') return res.end();
+        // The app page and live.js carry the shell version, so a page and scripts from different deploys can be told apart (see login.js).
+        if (file === 'live.html' || file === 'live.js') return res.end(fs.readFileSync(path.join(root, 'public', file), 'utf8').replaceAll('__SHELL_VERSION__', shellVersion()));
         fs.createReadStream(path.join(root, 'public', file)).pipe(res);
     }
     catch (error) {

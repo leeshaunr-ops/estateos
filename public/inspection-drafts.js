@@ -466,7 +466,7 @@ action=async function(name,key,button){
   if(!offlineIsOnline()&&!navigator.onLine)throw Error('Connect to sign out. Your work is saved on this device.');
   await offlineWipe();return offlineBaseAction(name,key,button);
  }
- if(name==='navigate'&&data.offline&&!['inspections','dashboard'].includes(key)){toast('That page needs a connection.');page='inspections';render();return;}
+ if(name==='navigate'&&data?.offline&&!['inspections','dashboard'].includes(key)){toast('That page needs a connection.');page='inspections';render();return;}
  return offlineBaseAction(name,key,button);
 };
 
