@@ -33,3 +33,41 @@ body{overflow:visible}
 .faq-search-empty{margin:18px 0 0;color:var(--refresh-muted,#5f6b76)}
 .not-found{max-width:760px;padding-top:72px;padding-bottom:84px}.not-found h1{margin-bottom:14px}.not-found .actions{margin-top:26px}.not-found ul{margin:28px 0 0;padding-left:18px;line-height:1.9}
 @media(max-width:720px){.site-header nav a{min-height:32px}.hero .actions .button{gap:8px;padding-left:10px;padding-right:10px}.not-found{padding-top:44px;padding-bottom:56px}}
+
+/* Phone header (pages whose header has .has-menu): one compact row with the logo, a Log in link, a Free demo button
+   and a menu button that opens the #site-menu dropdown (site-menu.js). Tablet and desktop keep the full navigation. */
+.site-header .header-actions,.site-header .site-menu{display:none}
+.menu-toggle:focus-visible{outline:3px solid #b89452;outline-offset:2px}
+@media(max-width:760px){
+  html{scroll-padding-top:80px}
+  .site-header.has-menu{position:sticky;top:0;z-index:20;flex-wrap:nowrap;gap:10px;min-height:64px;padding:10px 16px}
+  .site-header.has-menu .brand{flex-shrink:0;gap:8px;font-size:19px;letter-spacing:-.8px}
+  .site-header.has-menu .brand img{width:30px;height:30px}
+  .site-header.has-menu>nav:not(.site-menu),.site-header.has-menu>.nav-cta-sm{display:none!important}
+  .site-header .header-actions{display:flex;align-items:center;gap:6px;margin-left:auto}
+  .site-header .header-login{display:inline-flex;align-items:center;min-height:44px;padding:0 8px;font-size:14px;font-weight:600;color:var(--refresh-ink,#1f2933);text-decoration:none;white-space:nowrap}
+  .site-header .header-login:hover{color:var(--wine)}
+  .site-header .header-actions .nav-cta-phone{min-height:40px;padding:0 15px;gap:0;border-radius:6px;font-size:13.5px;font-weight:650;white-space:nowrap;color:#fff}
+  .site-header .menu-toggle{display:inline-grid;place-items:center;flex-shrink:0;width:44px;height:44px;margin-right:-4px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--refresh-ink,#1f2933);cursor:pointer}
+  .site-header .menu-toggle:hover,.site-header.menu-open .menu-toggle{background:#f1f4f6}
+  .menu-icon,.menu-icon:before,.menu-icon:after{display:block;width:20px;height:2px;border-radius:2px;background:currentColor;transition:transform .2s,background-color .2s}
+  .menu-icon{position:relative}
+  .menu-icon:before,.menu-icon:after{content:"";position:absolute;left:0}
+  .menu-icon:before{top:-6px}
+  .menu-icon:after{top:6px}
+  .menu-open .menu-icon{background:transparent}
+  .menu-open .menu-icon:before{transform:translateY(6px) rotate(45deg)}
+  .menu-open .menu-icon:after{transform:translateY(-6px) rotate(-45deg)}
+  .site-header .site-menu:not([hidden]){display:block;position:absolute;top:100%;left:0;right:0;padding:4px 16px 12px;background:#fff;border-bottom:1px solid var(--refresh-line,#e2e7eb);box-shadow:0 16px 32px rgba(24,39,56,.12)}
+  .site-header .site-menu a{display:flex;align-items:center;min-height:48px;padding:0 4px;border-bottom:1px solid #edf0f2;font-size:16px;font-weight:600;color:var(--refresh-ink,#1f2933);text-decoration:none;white-space:normal}
+  .site-header .site-menu a:hover,.site-header .site-menu a[aria-current="page"]{color:var(--wine)}
+  .site-header .site-menu a.menu-login{border-bottom:0;color:var(--wine)}
+  .site-header .site-menu a:focus-visible{outline-offset:-3px}
+}
+@media(max-width:389px){
+  .site-header .header-login{display:none}
+}
+@media(max-width:340px){
+  .site-header.has-menu{padding-left:12px;padding-right:12px}
+}
+@media(prefers-reduced-motion:reduce){.menu-icon,.menu-icon:before,.menu-icon:after{transition:none}}
