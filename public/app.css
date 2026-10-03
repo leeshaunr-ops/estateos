@@ -13,3 +13,108 @@
 .shell .approval h2.h3{margin:0}
 .shell .table-wrap:focus-visible{outline:2px solid #8b242b;outline-offset:2px}
 .ce .eyebrow,.ce .ce-p-note{color:#5f6b76}
+
+/* ---------- Shared polish (batch 1) ---------- */
+/* Tokens: same muted ink and hairline as the Overview. */
+body.signed-in,.shell{--muted:#5f6b76;--line:#e2e7eb}
+
+/* Page header: Georgia title like the Overview greeting, one plain lede, actions on the right. */
+.shell .page-head{display:flex;justify-content:space-between;align-items:flex-end;gap:14px 24px;flex-wrap:wrap;margin-bottom:24px}
+.shell .page-head-text{min-width:0;flex:1 1 320px}
+.shell .page-head .page-title{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:clamp(28px,3vw,36px);letter-spacing:-.6px;line-height:1.15;margin:0 0 6px;color:#1f2933}
+.shell .page-head .page-lede{margin:0;max-width:62ch;color:#5f6b76;font-size:15px;line-height:1.5}
+.shell .page-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.shell .page-actions .actions{margin:0;display:flex;flex-wrap:wrap;gap:8px}
+@media(max-width:760px){
+ .shell .page-head{flex-direction:column;align-items:stretch;gap:14px;margin-bottom:18px}
+ .shell .page-head-text{flex:none}
+ .shell .page-head .page-title{font-size:28px}
+ .shell .page-actions,.shell .page-actions .actions{display:grid;grid-template-columns:1fr;gap:8px;width:100%}
+ .shell .page-actions button,.shell .page-actions .button,.shell .page-actions select{width:100%}
+}
+
+/* Empty states: a white card with a title, one sentence and the next step. Borderless inside a panel. */
+.shell .empty-state{background:#fff;border:1px solid #e2e7eb;border-radius:8px;padding:32px 24px;text-align:center;color:#5f6b76;line-height:1.55}
+.shell .panel .empty-state,.shell .card .empty-state,.shell .work-card .empty-state{border:0;border-radius:0;background:transparent;padding:24px 12px}
+.shell .empty-state .empty-title{margin:0;font-family:Georgia,"Times New Roman",serif;font-size:20px;color:#1f2933}
+.shell .empty-state .empty-detail{margin:6px auto 0;max-width:52ch;font-size:14px;color:#5f6b76}
+.shell .empty-state .empty-action{margin-top:16px;display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
+.shell .action-needed .empty-state{text-align:left;padding:12px 0}
+.shell .action-needed .empty-state .empty-title{font-family:inherit;font-size:15px;color:#5f6b76}
+
+/* More menu: secondary actions in a small popover (it grows with its items; never a scroll box). */
+.shell .more-menu{position:relative;display:inline-block}
+.shell .more-menu>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;user-select:none}
+.shell .more-menu>summary::-webkit-details-marker{display:none}
+.shell .more-menu>summary::after{content:"";width:6px;height:6px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg) translateY(-2px)}
+.shell .more-menu[open]>summary::after{transform:rotate(-135deg) translateY(-1px)}
+.shell .more-list{position:absolute;right:0;top:calc(100% + 6px);z-index:25;min-width:210px;display:grid;gap:2px;padding:6px;background:#fff;border:1px solid #e2e7eb;border-radius:8px;box-shadow:0 12px 32px rgba(24,39,56,.14)}
+.shell .more-list button,.shell .more-list .button{display:block;width:100%;text-align:left;border:0;background:transparent;box-shadow:none;border-radius:6px;padding:10px 12px;min-height:44px;color:#1f2933;font-weight:500}
+.shell .more-list button:hover:not(:disabled),.shell .more-list .button:hover{background:#f3f5f7;transform:none;box-shadow:none}
+.shell .more-list button.primary{background:transparent;color:#8b242b;border:0}
+.shell .request-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end}
+@media(max-width:760px){
+ .shell .more-menu{display:block;width:100%}
+ .shell .more-menu>summary{width:100%;justify-content:center}
+ .shell .more-list{position:static;margin-top:6px;box-shadow:none}
+ .shell .request-actions{justify-content:flex-start}
+}
+.storm-downloads:empty{display:none}
+
+/* Unified white cards: no cream or gold tints on app pages. */
+.shell .work-card{background:#fff;border:1px solid #e2e7eb;border-left:3px solid #8b242b;border-radius:8px;box-shadow:0 1px 3px rgba(24,39,56,.05)}
+.shell .message-bubble{background:#fff;border-color:#e2e7eb}
+.shell th{background:#f7f8fa;color:#5f6b76}
+.shell td{color:#1f2933}
+.shell .check-row:hover,.shell .custom-room,.shell .address-fields,.shell .room-profile{background:#f7f8fa}
+.shell .address-suggestion:hover{background:#f3f5f7}
+.shell .residence-top{background:#f1f4f6}
+.shell a:not(.button),.shell .link-button{color:#8b242b}
+#modal button.primary,#modal .button.primary{background:#8b242b;border-color:#8b242b;color:#fff}
+
+/* Status badges look like the Overview pills. */
+.shell .badge{display:inline-block;padding:3px 8px;border-radius:5px;font-size:11.5px;font-weight:700;line-height:1.5;white-space:nowrap;background:#edf2f5;color:#49606e}
+.shell .badge.amber{background:#fff4dc;color:#85631f}
+.shell .badge.red{background:#ffeded;color:#b4232c}
+
+/* Install prompt: one compact line on phones. */
+@media(max-width:820px){
+ .install-banner{flex-wrap:nowrap;padding:8px 10px;gap:10px;font-size:13px;line-height:1.35;margin-bottom:12px}
+ .install-banner>span:first-child{flex:1;min-width:0}
+ .install-banner .actions{display:flex;gap:6px;flex:none;width:auto}
+ .install-banner .actions button{width:auto;min-height:44px;padding:6px 10px;font-size:13px}
+}
+
+/* 44px tap targets on touch screens. */
+@media(max-width:760px){
+ .shell .route-planner .check-row{min-height:44px;align-items:center}
+ .shell .route-planner .check-row input[type=checkbox]{width:22px;height:22px;margin:0 4px 0 0;flex:none}
+ .shell .work-updates>summary{min-height:44px;display:flex;align-items:center;cursor:pointer}
+ .ce .ce-iconbtn,.ce .ce-iconbtn-sm{width:44px;height:44px}
+}
+
+/* Tables become stacked cards on phones instead of a sideways-scrolling box. */
+@media(max-width:760px){
+ .shell .stack-table{overflow:visible}
+ .shell .stack-table table,.shell .stack-table tbody,.shell .stack-table tr,.shell .stack-table td{display:block;width:100%}
+ .shell .stack-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+ .shell .stack-table tr{padding:12px 0;border-bottom:1px solid #e2e7eb}
+ .shell .stack-table tr:last-child{border-bottom:0}
+ .shell .stack-table td{border:0;padding:3px 0}
+ .shell .stack-table td[data-label]{display:flex;justify-content:space-between;gap:12px}
+ .shell .stack-table td[data-label]::before{content:attr(data-label);color:#5f6b76;font-size:13px}
+}
+
+/* Residence photo placeholder: neutral, and shorter on phones. */
+.shell .residence-photo{background:#f1f4f6}
+.shell .residence-photo-placeholder{background:#f1f4f6;color:#5f6b76}
+.shell .residence-photo-placeholder svg{stroke:#8a97a2;width:64px}
+@media(max-width:760px){.shell .residence-summary .residence-photo,.shell .residence-photo{height:120px}.shell .residence-photo-placeholder{min-height:120px}.shell .residence-photo-placeholder svg{width:48px}}
+
+/* Neutral hover (the old beige hover also stuck after a tap on iPhone). */
+.shell button:where(:not(.primary,.active,.ov-link,.ov-head-link,.ov-more,.link-button)):hover,.shell .button:where(:not(.primary)):hover{background:#f3f5f7;border-color:#c5ced6}
+.shell .residence-facts>div{background:#f7f8fa;border-color:#e2e7eb}
+.shell .residence-card-actions{border-top-color:#e2e7eb}
+.shell .work-updates{border-top-color:#e2e7eb}
+.shell .work-update{border-left-color:#c5ced6;background:#f7f8fa}
+.shell .draft-status{background:#f7f8fa;border-bottom-color:#e2e7eb}
