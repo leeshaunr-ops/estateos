@@ -133,18 +133,19 @@ test('HSTS is sent only when the server runs with secure cookies (production)', 
 
 test('homepage refresh: new sections, nav links, open FAQ, and no placeholder or real-storm copy', () => {
   const home = read('public/marketing.html');
-  for (const id of ['whats-new', 'hurricane', 'features', 'trust', 'tutorial', 'pricing', 'faq', 'contact'])
+  for (const id of ['whats-new', 'storm-season', 'features', 'trust', 'tutorial', 'pricing', 'faq', 'contact'])
     assert.match(home, new RegExp(`<section[^>]*\\bid="${id}"`), 'missing section #' + id);
   const nav = home.match(/<nav aria-label="Main navigation">([\s\S]*?)<\/nav>/)[1];
   assert.match(nav, /href="#whats-new">What’s new<\/a>/);
-  assert.match(nav, /href="#hurricane">Hurricane season<\/a>/);
+  assert.match(nav, /href="#storm-season">Storm season<\/a>/);
   const header = home.match(/<header class="site-header">([\s\S]*?)<\/header>/)[1];
   const demoButtons = [...header.matchAll(/<a class="button primary nav-cta[^"]*" href="([^"]+)">Start free demo<\/a>/g)];
   assert.ok(demoButtons.length >= 1, 'header has a Start free demo button');
   for (const [, href] of demoButtons) assert.equal(href, '/demo');
   assert.match(home, /<link rel="stylesheet" href="\/refresh\.css"><link rel="stylesheet" href="\/home-refresh\.css">/, 'home-refresh.css loads after refresh.css');
-  assert.match(home, /Built for the way Florida home watch actually works\./);
-  assert.match(home, /When a storm is coming, every home is accounted for\./);
+  assert.match(home, /Built for the way home watch actually works\./);
+  assert.match(home, /When severe weather is coming, every home is accounted for\./);
+  assert.match(home, /Hurricanes, winter storms, floods and severe thunderstorms/);
   assert.match(home, /Your clients trust you with their homes\. We take that seriously\./);
   assert.match(home, /A Visit verification box shows arrival, departure and GPS distance\./);
   // Every FAQ answer is visible: no collapsed <details>, and all five questions from the quick-fix pass remain.
@@ -196,4 +197,30 @@ test('homepage images are optimized, sized, lazy below the fold, and served with
   // Accessibility colours from the quick-fix pass are not regressed.
   assert.doesNotMatch(text, /#8b7754|#7b858d/);
   assert.doesNotMatch(text, /legal-links\{[^}]*justify-content:center/);
+});
+
+test('nationwide positioning: no Florida-only marketing copy, and share tags match the hero', () => {
+  // Legal pages (terms.html: governing law and venue) may name Florida; marketing copy speaks to companies across the US.
+  for (const file of [...Object.values(MARKETING_PAGES), '404.html', 'share.html', 'demo-guide.html', 'faq.js'])
+    assert.doesNotMatch(read('public/' + file), /Florida/i, file + ' has Florida-only marketing copy');
+  const home = read('public/marketing.html');
+  assert.match(home, /<p class="eyebrow">For home watch &amp; estate management companies across the US<\/p>/);
+  assert.doesNotMatch(home, /Hurricane season|id="hurricane"|href="#hurricane"/);
+  const hero = 'Home watch and estate management software, under your brand.';
+  assert.ok(home.includes(`<meta property="og:title" content="${hero}">`), 'og:title uses the hero wording');
+  assert.ok(home.includes(`<meta name="twitter:title" content="${hero} | EstateAegis">`), 'twitter:title uses the hero wording');
+  const og = home.match(/<meta property="og:description" content="([^"]+)"/)[1];
+  assert.equal(home.match(/<meta name="twitter:description" content="([^"]+)"/)[1], og);
+  assert.match(og, /across the US/);
+  assert.match(home.match(/<meta name="description" content="([^"]+)"/)[1], /across the US/);
+  assert.match(home, /"areaServed": \{"@type":"Country","name":"United States"\}/);
+});
+
+test('storm report image uses credited real photos', () => {
+  const credits = read('public/img/CREDITS.md');
+  assert.match(credits, /storm-report-page\.webp/);
+  for (const source of ['https://commons.wikimedia.org/wiki/File:Missing_shingles_(37075099182).jpg', 'https://commons.wikimedia.org/wiki/File:FEMA_-_44325_-_Blue_tarp_on_a_tornado_damaged_home_in_Oklahoma.jpg'])
+    assert.ok(credits.includes(source), 'credit missing for ' + source);
+  assert.match(credits, /Public domain/);
+  assert.match(read('public/marketing.html'), /<div class="storm-shot bottom"><img src="\/img\/storm-report-page\.webp"/);
 });
