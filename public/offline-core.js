@@ -4,7 +4,7 @@
 (function(root){
  'use strict';
  const MAX_BACKOFF_MS=5*60*1000,BASE_BACKOFF_MS=2000,PARALLEL_INSPECTIONS=3;
- const TYPES=['start_inspection','save_draft','upload_photo','complete_inspection'];
+ const TYPES=['start_inspection','save_draft','upload_photo','complete_inspection','visit_check_in','visit_check_out'];
 
  function uuid(){
   if(root.crypto?.randomUUID)return root.crypto.randomUUID();
@@ -104,6 +104,15 @@
    await store.putOp(op);
   }
   async function done(op){await store.deleteOp(op.opId);progress.done++;}
+  async function visitEvent(op,kind){
+   const r=await send('POST','/api/inspections/'+encodeURIComponent(op.inspectionId)+'/'+kind+'?sentAt='+encodeURIComponent(new Date(now()).toISOString()),op.payload,op.opId);
+   if(classify(r.status)!=='ok')return r;
+   // Kept beside (not inside) the inspection draft: checking in never creates or changes a checklist draft.
+   const k='visit:'+op.inspectionId,cur=(await store.getMeta(k))||{local:{}},side=kind==='check-in'?'check_in':'check_out';
+   if(r.body&&r.body.visit)cur.server=r.body.visit;if(cur.local&&cur.local[side])cur.local[side].synced=true;
+   await store.putMeta(k,cur);
+   await done(op);return r;
+  }
   async function serverCopy(id){const r=await send('GET','/api/offline/inspections/'+encodeURIComponent(id));return r.status===200?r.body.inspection:null;}
   const handlers={
    async start_inspection(op){
@@ -145,11 +154,16 @@
    async upload_photo(op){
     const blob=await store.getBlob(op.opId);
     if(!blob){await fail(op,'failed','The photo is missing from this device.',false);return {status:-1};}
-    const r=await send('POST','/api/files',{propertyId:op.payload.propertyId,inspectionId:op.inspectionId,name:op.payload.name,capturedAt:op.payload.capturedAt,clientOpId:op.opId,base64:await encode(blob)},op.opId);
+    const where=op.payload.captureLatitude!=null&&op.payload.captureLongitude!=null?{captureLatitude:op.payload.captureLatitude,captureLongitude:op.payload.captureLongitude,captureAccuracy:op.payload.captureAccuracy??null}:{};
+    const r=await send('POST','/api/files',{propertyId:op.payload.propertyId,inspectionId:op.inspectionId,name:op.payload.name,capturedAt:op.payload.capturedAt,...where,clientOpId:op.opId,base64:await encode(blob)},op.opId);
     if(classify(r.status)!=='ok')return r;
     await store.updateDraft(op.inspectionId,d=>{if(!d)return null;const photo=(d.photos||[]).find(p=>p.opId===op.opId);if(photo){photo.fileId=r.body.id;photo.uploadedAt=new Date(now()).toISOString();}return d;});
     await store.deleteBlob(op.opId);await done(op);return r;
    },
+   // Visit verification: the position and device time were captured on the device (maybe offline); the server adds its
+   // own receive time. `sentAt` (device clock at send time) rides in the query so it never changes the replay hash.
+   async visit_check_in(op){return visitEvent(op,'check-in');},
+   async visit_check_out(op){return visitEvent(op,'check-out');},
    async complete_inspection(op){
     const draft=await store.getDraft(op.inspectionId);
     const r=await send('POST','/api/inspections/submit',{id:op.inspectionId,version:draft?.baseVersion,autoPublish:!!op.payload.autoPublish},op.opId);const kind=classify(r.status);

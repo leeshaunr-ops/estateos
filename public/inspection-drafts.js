@@ -200,13 +200,16 @@ function offlinePhotoDialog(i){
  $('modalBody').innerHTML=`<h2>Add inspection photos</h2><div id="formError" class="error" hidden></div><form id="offlinePhotoForm" class="form"><div class="field full"><label for="offlinePhotos">Take or choose photos</label><input id="offlinePhotos" type="file" accept="image/*" multiple required></div><p class="muted full">Photos are resized on this phone and saved here first. They upload automatically when there is signal.</p><div class="dialog-footer">${btn('Cancel','close')}<button class="primary" type="submit">Save photos</button></div></form>`;
  $('offlinePhotoForm').onsubmit=async e=>{e.preventDefault();const button=e.submitter;button.disabled=true;try{
   const files=[...$('offlinePhotos').files];if(!files.length)throw Error('Choose at least one photo.');if(files.length>20)throw Error('Add at most 20 photos at a time.');
+  // Visit verification: one position for this batch, kept only on photos taken in the last 10 minutes (no prompt here).
+  const where=typeof visitPhotoPosition==='function'?await visitPhotoPosition():null;
   for(const [n,file] of files.entries()){
    button.textContent=`Saving ${n+1} of ${files.length}…`;
    const blob=await offlineCompressPhoto(file),capturedAt=offlineCaptureTime(file),opId=offlineCore.uuid();
    const name=(file.name||'photo').replace(/\.[^.]+$/,'').replace(/[^\w .-]/g,'').slice(0,80)+'.jpg';
    await OFF.store.putBlob(opId,blob);                       // bytes first, so a queued upload always has its photo
    await offlineUpdateDraft(i.id,d=>{d.photos=[...(d.photos||[]),{opId,name,capturedAt,bytes:blob.size}];return d;},i);
-   await offlineCore.enqueue(OFF.store,{opId,type:'upload_photo',inspectionId:i.id,payload:{propertyId:i.property_id,name,capturedAt}});
+   const fresh=where&&(!capturedAt||Math.abs(Date.parse(capturedAt)-Date.now())<=window.EAVisit.PHOTO_FRESH_MS);
+   await offlineCore.enqueue(OFF.store,{opId,type:'upload_photo',inspectionId:i.id,payload:{propertyId:i.property_id,name,capturedAt,...(fresh?{captureLatitude:where.lat,captureLongitude:where.lon,captureAccuracy:where.accuracy}:{})}});
   }
   await offlineRefreshMirror();$('modal').close();render();offlineRequestBackgroundSync();
   toast(offlineIsOnline()?`${files.length} photo${files.length===1?'':'s'} saved. Uploading…`:`${files.length} photo${files.length===1?'':'s'} saved on this device. They will upload when you're back online.`);
@@ -227,6 +230,7 @@ async function offlineComplete(i){
  const admin=data.user.role==='admin';
  $('modalBody').innerHTML=`<h2>Mark inspection complete?</h2><form id="offlineCompleteForm" class="form"><p class="full">${offlineIsOnline()?'The inspection is submitted for review now.':'You are offline. It is saved on this device and <strong>will submit when you are back online</strong>.'} You can’t edit it after this.</p>${admin?'<label class="check-row full"><input type="checkbox" name="autoPublish"> Publish automatically when synced (sends the report to the family)</label>':'<p class="muted full">An admin publishes the report after review.</p>'}<div class="dialog-footer">${btn('Cancel','close')}<button class="primary" type="submit">Mark complete</button></div></form>`;
  $('offlineCompleteForm').onsubmit=async e=>{e.preventDefault();const autoPublish=admin&&e.target.autoPublish?.checked;
+  if(typeof visitAutoCheckOut==='function')await visitAutoCheckOut(i);   // visit verification: check out (automatic) before submitting
   const next=await offlineUpdateDraft(i.id,x=>Object.assign(x,{completeQueued:true,autoPublish:!!autoPublish}),i);
   if(next.dirty)await offlineCore.enqueue(OFF.store,{type:'save_draft',inspectionId:i.id});
   await offlineCore.enqueue(OFF.store,{type:'complete_inspection',inspectionId:i.id,payload:{autoPublish:!!autoPublish}});
@@ -242,7 +246,7 @@ async function offlineDownload(propertyIds,{quiet=false}={}){
  const r=await offlineSend('GET','/api/offline/visits?propertyIds='+encodeURIComponent(ids.join(',')));
  if(r.status!==200){if(!quiet)toast(r.status===0?'You are offline. Connect to download residences.':(r.body.error||'Could not download for offline use.'));return;}
  const s=r.body,savedAt=new Date().toISOString();
- await OFF.store.putMeta('workspace',{user:s.user,company:s.company,companyLogo:s.companyLogo,template:s.template,checklist:{source:s.checklist.source,template_id:s.checklist.template_id,template_version:s.checklist.template_version},checklists:s.checklists||[],savedAt});
+ await OFF.store.putMeta('workspace',{user:s.user,company:s.company,companyLogo:s.companyLogo,template:s.template,checklist:{source:s.checklist.source,template_id:s.checklist.template_id,template_version:s.checklist.template_version},checklists:s.checklists||[],visitVerification:s.visitVerification||null,savedAt});
  for(const p of s.properties)await OFF.store.putSnapshot({id:p.id,property:p,inspections:s.inspections.filter(i=>i.property_id===p.id),files:s.files.filter(f=>f.property_id===p.id),savedAt});
  try{await navigator.storage?.persist?.();}catch{}
  await offlineRefreshMirror();
@@ -274,7 +278,7 @@ function offlinePriorAnswer(i,key){
 function offlineData(){
  const ws=OFF.workspace;if(!ws)return null;
  const snaps=[...OFF.snapshots.values()];
- return {offline:true,user:{...ws.user,platformOwner:false,platformAccess:false},company:ws.company,companyLogo:ws.companyLogo,workspaceLogo:ws.companyLogo,template:ws.template,checklist:ws.checklist,checklists:ws.checklists||[],properties:snaps.map(s=>s.property),inspections:snaps.flatMap(s=>s.inspections),files:snaps.flatMap(s=>s.files),archivedProperties:[],invitations:[],clients:[],vendors:[],users:[],assets:[],asset_inspections:[],work:[],requests:[],shopping:[],arrivals:[],maintenance:[],notes:[],invoices:[],audit:[],notifications:[],unreadMessages:0,demo:null,messaging:{threads:[],messages:[]},operations:{followups:[],approvals:[],plans:[],email:[],automation:{}},security:{enabled:false},staff:{assignments:[],profiles:[],schedules:[]},checklistTemplates:{templates:[]}};
+ return {offline:true,user:{...ws.user,platformOwner:false,platformAccess:false},company:ws.company,companyLogo:ws.companyLogo,workspaceLogo:ws.companyLogo,template:ws.template,checklist:ws.checklist,checklists:ws.checklists||[],visitVerification:ws.visitVerification||null,properties:snaps.map(s=>s.property),inspections:snaps.flatMap(s=>s.inspections),files:snaps.flatMap(s=>s.files),archivedProperties:[],invitations:[],clients:[],vendors:[],users:[],assets:[],asset_inspections:[],work:[],requests:[],shopping:[],arrivals:[],maintenance:[],notes:[],invoices:[],audit:[],notifications:[],unreadMessages:0,demo:null,messaging:{threads:[],messages:[]},operations:{followups:[],approvals:[],plans:[],email:[],automation:{}},security:{enabled:false},staff:{assignments:[],profiles:[],schedules:[]},checklistTemplates:{templates:[]}};
 }
 async function offlineBoot(error){
  if(error&&error.status)return false;                 // the server answered: a real error, not "no signal"
@@ -348,7 +352,7 @@ function offlineUpdateUi(){
  if(page==='inspection'){const id=activeInspection;const el=$('draft-status');if(el){const d=offlineDraft(id);const problem=!!(d?.conflict||OFF.outbox.some(o=>o.inspectionId===id&&o.state==='failed'));el.classList.toggle('error',problem);const t=el.querySelector('.draft-status-text');const msg=offlineStatusText(id);if(t&&t.textContent!==msg)t.textContent=msg;if(d?.conflict&&!el.querySelector('[data-action="sync-resolve"]'))el.insertAdjacentHTML('beforeend',btn(d.conflict.type==='locked'?'Review':'Resolve','sync-resolve',id));}offlineRefreshItemBadges();}
  offlineUpdateInstallBanner();
 }
-const OP_LABELS={start_inspection:'Start inspection',save_draft:'Checklist & notes',upload_photo:'Photo',complete_inspection:'Submit inspection'};
+const OP_LABELS={start_inspection:'Start inspection',save_draft:'Checklist & notes',upload_photo:'Photo',complete_inspection:'Submit inspection',visit_check_in:'Check in',visit_check_out:'Check out'};
 function offlinePanel(){
  const rows=OFF.outbox.map(o=>{const i=data.inspections.find(x=>x.id===o.inspectionId);const online=offlineIsOnline();const when=online&&o.state==='pending'&&o.nextAttemptAt>Date.now()?'Retrying '+new Date(o.nextAttemptAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',second:'2-digit'}):'';const status=o.state==='conflict'?'Conflict':o.state==='failed'?'Needs attention':online?'Waiting to sync':'Waiting for signal';
   return `<div class="row sync-row"><div><strong>${esc(OP_LABELS[o.type]||o.type)}${o.type==='upload_photo'?' · '+esc(o.payload?.name||''):''}</strong><div class="muted">${esc(i?propertyName(i.property_id)+' · '+i.inspection_date:'Inspection')} · ${esc(status)}${when?' · '+esc(when):''}</div>${o.lastError&&(o.state!=='pending'||online)?`<div class="sync-error">${esc(o.lastError)}</div>`:''}</div><div class="actions">${o.state==='conflict'?btn('Resolve','sync-resolve',o.inspectionId,true):''}${o.state==='failed'?btn('Retry now','sync-retry',o.opId,true)+btn('Discard','sync-discard',o.opId):''}${i?btn('Open','inspection',i.id):''}</div></div>`;}).join('');
@@ -377,6 +381,7 @@ async function offlineDiscardOp(opId){
  for(const o of ops){await OFF.store.deleteOp(o.opId);if(o.type==='upload_photo')await OFF.store.deleteBlob(o.opId);}
  const d=offlineDraft(op.inspectionId);
  if(d){if(op.type==='start_inspection')await OFF.store.deleteDraft(d.inspectionId);else await offlineUpdateDraft(d.inspectionId,x=>{if(op.type==='upload_photo')x.photos=(x.photos||[]).filter(p=>p.opId!==op.opId);if(op.type==='complete_inspection')x.completeQueued=false;return x;});}
+ if(op.type==='visit_check_in'||op.type==='visit_check_out'){const k='visit:'+op.inspectionId,m=await OFF.store.getMeta(k);if(m&&m.local){delete m.local[op.type==='visit_check_in'?'check_in':'check_out'];await OFF.store.putMeta(k,m);}}
  await offlineRefreshMirror();if(op.type==='start_inspection'){data.inspections=data.inspections.filter(i=>i.id!==op.inspectionId);if(activeInspection===op.inspectionId){activeInspection=null;page='inspections';}}
 }
 async function offlineDiscardDraft(id){
