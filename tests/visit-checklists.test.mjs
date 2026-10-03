@@ -237,9 +237,12 @@ test('answer values and display per type',()=>{
 test('legacy reports render byte-for-byte the same PDF as before template support',async()=>{
  const report={id:'r1',company:'Harbor',property:'Ocean House',client:'Family',inspector:'Leo',date:'2026-10-02',completedAt:'2026-10-02T14:00:00Z',overall:'Monitor',answers:builtIn.map((a,n)=>({...a,status:['pass','monitor','attention','na'][n%4],note:n%3?'':'Seen'})),summary:'Fine',notes:'None'};
  const a=inspectionPdf(report);
- // Hash of the same report rendered by pdf.mjs before template support (stability-baseline 4dd965d).
+ // Hash of the same report pinned after audit batch 4c (summary moved to the top, readable inspection date); before
+ // that it matched pdf.mjs before template support (stability-baseline 4dd965d, 08f7846d…). Template support itself
+ // still must not change legacy output: only deliberate layout changes may move this hash.
  const {createHash}=await import('node:crypto');
- assert.equal(createHash('sha256').update(a).digest('hex'),'08f7846d5badc58dbfa7d405354b126abde4b79527a122de49a5f92fad051fe3');
+ assert.equal(createHash('sha256').update(a).digest('hex'),'92b3dd2fbfefa83e192cd70eac832ee74cac99c634ef115fa2a27e5215ec99e2');
  const text=a.toString('latin1');
+ assert.ok(text.includes('(Fri, Oct 2, 2026)'),'readable inspection date');assert.ok(text.indexOf('(Summary)')<text.indexOf('(Walkthrough checklist)'),'summary before the checklist');
  assert.ok(text.includes('(MONITOR)')&&text.includes('(ATTENTION)')&&!text.includes('(Checklist)')&&!text.includes('(RECORDED)'));
 });

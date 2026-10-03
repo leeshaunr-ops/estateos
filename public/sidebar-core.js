@@ -9,7 +9,7 @@
   if(role==='client')nav.push(['shopping','Shopping list']);
   if(role!=='vendor')nav.push(['inspections','Inspection reports'],['requests','Service requests'],['arrivals','Arrival preparation'],['calendar','Calendar'],['documents','Documents']);
   if(staff)nav.push(['maintenance','Maintenance'],['assets','Assets'],['routes','Daily route'],['storm','Storms']);
-  if(user&&user.platformOwner||role==='admin')nav.push(['platform','Platform Administration']);
+  // No 'platform' item: it only repeated Billing. Platform owners get the Platform console link in the sidebar footer.
   if(staff)nav.push(['staff-schedules','Staff schedules']);
   if(role==='admin')nav.push(['staff','Staff'],['workspace','Company settings'],['clients','Client families'],['vendors','Vendors'],['billing','Billing'],['users','Team & access'],['audit','Audit history']);
   if(role==='admin'||role==='client')nav.push(['approvals','Client approvals']);

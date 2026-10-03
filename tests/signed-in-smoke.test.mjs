@@ -28,22 +28,41 @@ const password='Test-only-strong-password-928!';
 async function start(){const env={...process.env,PORT:'0',ESTATEOS_DATA_DIR:dir,ESTATEOS_VAULT_KEY:randomBytes(32).toString('base64')};delete env.DATABASE_URL;delete env.RENDER;delete env.ESTATEOS_SECURE_COOKIES;
  proc=spawn(process.execPath,['server.mjs'],{cwd:root,env,windowsHide:true});proc.stderr.on('data',c=>{log+=c;});
  base=await new Promise((resolve,reject)=>{proc.stdout.on('data',c=>{const m=String(c).match(/http:\/\/127\.0\.0\.1:\d+/);if(m)resolve(m[0]);});proc.once('exit',code=>reject(Error('Server exited: '+code+' '+log)));setTimeout(()=>reject(Error('Startup timeout')),10000).unref();});}
-function client(){let cookie='';return async(endpoint,b,expected=200)=>{const res=await fetch(base+'/api/'+endpoint,{method:b===undefined?'GET':'POST',headers:{Origin:base,'Content-Type':'application/json',Cookie:cookie},body:b===undefined?undefined:JSON.stringify(b)});const set=res.headers.get('set-cookie');if(set)cookie=set.split(';')[0];const result=await res.json();assert.equal(res.status,expected,endpoint+': '+JSON.stringify(result));return result;};}
+function client(){let cookie='';const call=async(endpoint,b,expected=200)=>{const res=await fetch(base+'/api/'+endpoint,{method:b===undefined?'GET':'POST',headers:{Origin:base,'Content-Type':'application/json',Cookie:cookie},body:b===undefined?undefined:JSON.stringify(b)});const set=res.headers.get('set-cookie');if(set)cookie=set.split(';')[0];const result=await res.json();assert.equal(res.status,expected,endpoint+': '+JSON.stringify(result));return result;};call.cookie=()=>cookie;return call;}
 const tokenOf=inv=>new URL('http://x'+inv.invitePath).searchParams.get('invite');
 const day=n=>{const d=new Date();d.setDate(d.getDate()+n);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
 let draftId;
+// Sessions from setup / accept-invite, reused by the app-page checks so the suite stays under the sign-in rate limit
+// (20 sign-ins per 10 minutes per address); the full sign-in flow is covered by the journey test.
+const sessions={};
 before(async()=>{if(skip)return;await start();const admin=client();
  await admin('setup',{company:'Smoke Test Home Watch',name:'Avery Admin',email:'admin@example.test',password},201);
  const fam=await admin('clients',{name:'Rivera Family'},201);const ven=await admin('vendors',{name:'Bluewater Pools'},201);
  const home=await admin('properties',{clientId:fam.id,name:'Ocean House',streetAddress:'1 Ocean Dr',city:'Stuart',state:'FL',postalCode:'34994',country:'United States'},201);
  draftId=(await admin('inspections',{propertyId:home.id,date:'2026-10-01'},201)).id;
  const accept=async(role,email,extra={})=>{const c=client();await c('accept-invite',{token:tokenOf(await admin('invitations',{role,email,...extra},201)),name:email.split('@')[0],password},201);return c;};
- const staff=await accept('employee','staff@example.test');await accept('vendor','vendor@example.test',{vendorId:ven.id});await accept('client','client@example.test',{clientId:fam.id});
+ const staff=await accept('employee','staff@example.test');const vendor=await accept('vendor','vendor@example.test',{vendorId:ven.id});const family=await accept('client','client@example.test',{clientId:fam.id});
+ Object.assign(sessions,{'admin@example.test':admin.cookie(),'staff@example.test':staff.cookie(),'vendor@example.test':vendor.cookie(),'client@example.test':family.cookie()});
  // Something for the Overview to show: the staff member looks after Ocean House, an overdue work order, a message.
  const users=(await admin('data')).users;const id=e=>users.find(u=>u.email===e).id;
  await admin('access',{userId:id('staff@example.test'),propertyId:home.id},201);
  await admin('work',{propertyId:home.id,title:'Replace pool light',priority:'High',dueDate:day(-3)},201);
  await staff('messages/send',{subject:'Ocean House gate',message:'The side gate latch is loose; I zip-tied it for now.',messageId:randomUUID(),recipientId:id('admin@example.test')},201);
+ // App pages (audit batches): a second home with no work, requests at both, an arrival entered as a wall-clock time and an estimate.
+ const cottage=await admin('properties',{clientId:fam.id,name:'Bay Cottage',streetAddress:'9 Bay Rd',city:'Stuart',state:'FL',postalCode:'34994',country:'United States'},201);
+ await family('requests',{propertyId:cottage.id,title:'Check the dock lights',description:'',priority:'Normal'},201);
+ await family('requests',{propertyId:home.id,title:'Stock the fridge',description:'Sparkling water.',priority:'Normal'},201);
+ await family('arrivals',{propertyId:home.id,arrivalAt:day(5)+'T15:00',notes:'Arriving with grandchildren.'},201);
+ const job=(await admin('data')).work.find(w=>w.title==='Replace pool light');
+ await admin('operations/approval',{workId:job.id,amountMinor:12500,description:'New pool light fixture and labor.'},200);
+ // Batch 3a: a third home where the vendor has a job, so the vendor can open a residence.
+ const loft=await admin('properties',{clientId:fam.id,name:'Harbor Loft',streetAddress:'3 Harbor Way',city:'Stuart',state:'FL',postalCode:'34994',country:'United States'},201);
+ await admin('work',{propertyId:loft.id,title:'Service the pool pump',priority:'Normal',dueDate:day(4),vendorId:ven.id},201);
+ // Batch 5: a storm-prep shift (tomorrow, so it never overlaps the smoke shift) and two unassigned jobs for Assign all
+ // (the pool light gets assigned by the batch 0 Assign check).
+ await admin('staff/schedule',{staffId:id('staff@example.test'),title:'Storm shutters up',startsAt:new Date(day(1)+'T09:00').toISOString(),endsAt:new Date(day(1)+'T11:00').toISOString(),propertyId:home.id},200);
+ await admin('work',{propertyId:loft.id,title:'Clear the dock drains',priority:'Normal',dueDate:day(2)},201);
+ await admin('work',{propertyId:loft.id,title:'Rinse the pool deck',priority:'Normal',dueDate:day(3)},201);
 });
 after(async()=>{if(proc&&!proc.killed){proc.kill();await new Promise(r=>proc.once('exit',r));}rmSync(dir,{recursive:true,force:true});});
 
@@ -58,7 +77,7 @@ async function watch(ctx){
 }
 // Screens the menu reached before the sidebar refresh (stability-baseline 75b4901), per role.
 const MENU_BEFORE={
- admin:['dashboard','messages','properties','clients','arrivals','work','requests','inspections','storm','calendar','routes','staff','staff-schedules','vendors','users','assets','maintenance','documents','platform','workspace','billing','audit','checklist-templates','profile','notifications'],
+ admin:['dashboard','messages','properties','clients','arrivals','work','requests','inspections','storm','calendar','routes','staff','staff-schedules','vendors','users','assets','maintenance','documents','workspace','billing','audit','checklist-templates','profile','notifications'],
  employee:['dashboard','messages','properties','arrivals','work','requests','inspections','storm','calendar','routes','staff-schedules','assets','maintenance','documents','profile','notifications'],
  client:['dashboard','messages','properties','arrivals','shopping','work','requests','inspections','calendar','documents','approvals','profile','notifications'],
  vendor:['dashboard','messages','properties','work','profile','notifications']
@@ -193,6 +212,273 @@ for(const [name,launch,options] of browsers.length?browsers:[['browser',null,nul
   for(const [role,email] of roles){
    const {errors,shown,visited}=await journey(name,launch,options,role,email);
    assert.deepEqual(errors,[],`${role}: page errors after ${visited.join(', ')}`);
+   assert.deepEqual(shown.filter(t=>ERROR_TOAST.test(t)),[],`${role}: error toasts`);
+  }
+ });
+}
+
+// App pages (design audit batches): each affected page opens for the roles that use it, shows readable dates
+// (never "2026-10-08 15:00:00.000Z"), and its fixed features work, with zero page errors and error toasts.
+const MACHINE_DATE=/\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/;
+const mainText=page=>page.locator('.shell main .content').innerText();
+async function go(page,id){await page.evaluate(id=>action('navigate',id),id);await page.waitForSelector('.shell main .content',{timeout:5000});await settle(page);return mainText(page);}
+// Batch 1: every page header matches the Overview (Georgia title, no company eyebrow; left-aligned with full-width
+// actions on the phone) and shows readable dates.
+async function headerChecks(page,mobile,role,ids,done){
+ for(const id of ids){const t=await go(page,id);assert.doesNotMatch(t,MACHINE_DATE,`${role}: ${id} has no machine dates`);
+  const h=await page.evaluate(()=>{const head=document.querySelector('.content .page-head'),title=head?.querySelector('.page-title'),text=head?.querySelector('.page-head-text'),acts=[...(head?.querySelectorAll('.page-actions button,.page-actions .button')||[])];
+   return head&&{font:getComputedStyle(title).fontFamily,eyebrow:!!head.querySelector('.eyebrow'),textLeft:Math.round(text.getBoundingClientRect().left-head.getBoundingClientRect().left),
+    full:acts.every(b=>b.getBoundingClientRect().width>=head.getBoundingClientRect().width-2)};});
+  assert.ok(h,`${role}: ${id} has the shared page header`);assert.match(h.font,/Georgia/,`${role}: ${id} title uses Georgia`);
+  assert.equal(h.eyebrow,false,`${role}: ${id} has no company eyebrow`);
+  if(mobile){assert.ok(h.textLeft<=1,`${role}: ${id} header is left-aligned on the phone`);assert.ok(h.full,`${role}: ${id} header actions are full width on the phone`);}
+  done.push(id);}
+}
+// Empty lists show a card with a title, one sentence and (where the role can act) the next step.
+async function emptyCheck(page,role,id,title,action){await go(page,id);
+ const e=await page.evaluate(()=>{const c=document.querySelector('.content .empty-state');return c&&{title:c.querySelector('.empty-title')?.textContent,detail:!!c.querySelector('.empty-detail'),action:c.querySelector('.empty-action [data-action]')?.dataset.action||''};});
+ assert.ok(e,`${role}: ${id} shows an empty-state card`);assert.match(e.title,title,`${role}: ${id} empty-state title`);assert.ok(e.detail,`${role}: ${id} empty state explains the next step`);assert.equal(e.action,action,`${role}: ${id} empty-state action`);}
+// Batch 3a: residence detail has a facts strip and wrapping sections (no sideways tab strip), and the Summary shows
+// visits and work openly (no closed toggles). Old tab names still open the section that holds them.
+async function residenceChecks(page,role,name,expect,done){
+ await go(page,'properties');await page.evaluate(n=>action('property',data.properties.find(p=>p.name===n).id),name);await settle(page);
+ const r=await page.evaluate(()=>{const tabs=document.querySelector('.content .res-tabs');return {title:document.querySelector('.content .page-title')?.textContent,facts:document.querySelectorAll('.content .res-fact').length,
+  tabs:tabs?[...tabs.querySelectorAll('button')].map(b=>b.dataset.id):null,overflow:tabs?tabs.scrollWidth>tabs.clientWidth+1:false,closed:document.querySelectorAll('.content details.collapsible-panel:not([open])').length,
+  panels:[...document.querySelectorAll('.content .res-panel h2')].map(h=>h.textContent.replace(/\s*\d+$/,'').trim()),wide:document.documentElement.scrollWidth>innerWidth+1};});
+ assert.equal(r.title,name,`${role}: residence title`);assert.equal(r.wide,false,`${role}: residence page fits the screen`);
+ if(expect.tabs===null){assert.equal(r.tabs,null,`${role}: no lone tab strip`);done.push('residence');return;}
+ assert.deepEqual(r.tabs,expect.tabs,`${role}: residence sections`);assert.equal(r.overflow,false,`${role}: sections wrap instead of scrolling`);
+ assert.equal(r.facts,5,`${role}: facts strip`);assert.equal(r.closed,0,`${role}: nothing hidden behind closed toggles`);
+ for(const p of expect.panels)assert.ok(r.panels.includes(p),`${role}: Summary shows ${p} (got ${r.panels.join(', ')})`);
+ if(expect.alias){await page.evaluate(([t])=>action('tab',t),[expect.alias[0]]);await settle(page);
+  assert.equal(await page.locator('.content .res-tabs button.active').getAttribute('data-id'),expect.alias[1],`${role}: old tab ${expect.alias[0]} opens ${expect.alias[1]}`);}
+ done.push('residence');
+}
+// Batch 3b: work orders are a filtered list grouped by due date with one open work order and a single next step.
+async function workChecks(page,role,expect,done){
+ await go(page,'work');
+ const w=await page.evaluate(()=>({chips:[...document.querySelectorAll('.content .work-chips .chip')].map(c=>c.textContent.replace(/\s+\d+$/,'').trim()),groups:[...document.querySelectorAll('.content .work-group')].map(g=>g.textContent),
+  rows:[...document.querySelectorAll('.content .work-row')].map(r=>r.querySelector('strong').textContent),title:document.querySelector('.content .work-detail-title')?.textContent,
+  primary:document.querySelectorAll('.content .work-actions > button.primary').length,cards:document.querySelectorAll('.content details.work-card').length,wide:document.documentElement.scrollWidth>innerWidth+1}));
+ assert.equal(w.cards,0,`${role}: no fold-out work cards`);assert.equal(w.wide,false,`${role}: work page fits the screen`);
+ for(const c of expect.chips)assert.ok(w.chips.includes(c),`${role}: filter chip ${c} (got ${w.chips.join(', ')})`);
+ for(const r of expect.rows)assert.ok(w.rows.includes(r),`${role}: work list shows ${r}`);
+ assert.equal(w.title,w.rows[0],`${role}: the first work order is open beside the list`);
+ assert.ok(w.primary<=1,`${role}: at most one primary next step`);if(expect.primary)assert.equal(await page.locator('.content .work-actions > button.primary').innerText(),expect.primary,`${role}: next step`);
+ if(expect.groups)for(const g of expect.groups)assert.ok(w.groups.includes(g),`${role}: group ${g}`);
+ if(w.rows.length>1){await page.locator('.content .work-row').nth(1).click();await settle(page);assert.equal(await page.locator('.content .work-detail-title').innerText(),w.rows[1],`${role}: choosing a row opens it`);}
+ await page.locator('.content .work-chips .chip',{hasText:'Completed'}).click();await settle(page);assert.equal(await page.locator('.content .work-chips .chip.active').getAttribute('data-id'),'completed',`${role}: Completed filter`);
+ await page.locator('.content .work-chips .chip[data-id="open"]').click();await settle(page);done.push('work');
+}
+// Batch 3c: Staff schedules is a real week view. The admin adds a shift through the dialog and sees it in the week
+// (grid on desktop, day list on the phone, never sideways scrolling); the staff member sees their own week, read-only.
+async function scheduleChecks(page,role,mobile,done){
+ await go(page,'staff-schedules');
+ if(role==='admin'&&!await page.evaluate(()=>(data.staff?.schedules||[]).some(s=>s.title==='Smoke shift'))){
+  await click(page,'.content .page-actions [data-action="schedule-new"]');await page.waitForSelector('dialog[open] select[name="staffId"]',{timeout:5000});
+  const staffId=await page.evaluate(()=>[...document.querySelectorAll('dialog[open] select[name="staffId"] option')].find(o=>o.textContent==='staff')?.value);
+  assert.ok(staffId,'admin: the staff member is offered for a shift');await page.selectOption('dialog[open] select[name="staffId"]',staffId);
+  await page.fill('dialog[open] input[name="start"]','09:00');await page.fill('dialog[open] input[name="end"]','15:00');await page.fill('dialog[open] input[name="title"]','Smoke shift');
+  await page.click('dialog[open] button[type="submit"]');await page.waitForFunction(()=>!document.querySelector('dialog[open]'),null,{timeout:5000});await settle(page);
+ }
+ const s=await page.evaluate(()=>{const vis=el=>el&&el.getBoundingClientRect().width>0;const box=[...document.querySelectorAll('.content .sched-grid,.content .sched-days')].find(vis);
+  return {box:box?.className||'',items:box?[...box.querySelectorAll('.sched-item')].map(i=>i.textContent):[],add:document.querySelectorAll('.content [data-action="schedule-new"]').length,
+   rows:document.querySelectorAll('.content .sched-grid .sched-person[role="rowheader"]').length,wide:document.documentElement.scrollWidth>innerWidth+1,lede:document.querySelector('.content .page-lede')?.textContent||''};});
+ assert.equal(s.wide,false,`${role}: schedules fit the screen`);assert.match(s.box,mobile?/sched-days/:/sched-grid/,`${role}: ${mobile?'day list on the phone':'week grid on desktop'}`);
+ assert.ok(s.items.some(t=>/9 AM–3 PM/.test(t)&&/Smoke shift/.test(t)),`${role}: the shift shows in the week (got ${s.items.join(' | ')})`);
+ if(role==='admin'){assert.ok(s.add>1,'admin: can add shifts');assert.match(await mainText(page),/Needs someone/,'admin: unassigned work is listed');}
+ else{assert.equal(s.add,0,`${role}: staff cannot add shifts`);if(!mobile)assert.equal(s.rows,1,`${role}: staff see only their own row`);}
+ done.push('staff-schedules');
+}
+// Batch 5: Export CSV downloads the jobs shown; Remind client nudges the family once and then shows when; the
+// Storm prep only chip narrows the week; Assign all lists the unassigned jobs and sends them in one request.
+async function extrasChecks(page,mobile,done){
+ await go(page,'work');
+ let status=0,csv='';await page.route('**/api/work-orders/export',async r=>{const resp=await r.fetch();status=resp.status();csv=await resp.text();await r.fulfill({response:resp});});
+ await click(page,'.content .page-actions [data-action="work-export"]');await page.waitForFunction(()=>(window.__toasts||[]).some(t=>/^Exported/.test(t)),null,{timeout:8000}).catch(()=>{});await page.unroute('**/api/work-orders/export');
+ assert.equal(status,200,'admin: export succeeds');
+ assert.match(csv,/"Title","Residence","Status","Priority","Assigned to","Due","Created","Completed"/,'admin: CSV header');assert.match(csv,/"Replace pool light","Ocean House","Waiting on client","High"/,'admin: CSV row');
+ await settle(page);
+ assert.ok((await page.evaluate(()=>window.__toasts||[])).some(t=>/^Exported \d+ work orders?\.$/.test(t)),'admin: export toast');done.push('work-export');
+ await page.evaluate(()=>action('work-open',data.work.find(w=>w.title==='Replace pool light').id));await settle(page);
+ if(await page.locator('.content .work-actions [data-action="work-remind"]').count()){await click(page,'.content .work-actions [data-action="work-remind"]');await page.waitForSelector('.content .work-reminded',{timeout:8000});}
+ assert.match(await page.locator('.content .work-reminded').innerText(),/^Reminded /,'admin: Remind client turns into "Reminded <time>"');
+ assert.equal(await page.locator('.content .work-actions [data-action="work-remind"]').count(),0,'admin: no second reminder within 24 hours');done.push('work-remind');
+ await go(page,'staff-schedules');const vis='.content .sched-grid .sched-item:visible,.content .sched-days .sched-item:visible';
+ await click(page,'.content [data-action="schedule-storm"]');await settle(page);
+ assert.equal(await page.locator('.content [data-action="schedule-storm"]').getAttribute('aria-pressed'),'true','admin: Storm prep only is on');
+ const storm=await page.locator(vis).allInnerTexts();assert.ok(storm.some(t=>/Storm shutters up/.test(t)),`admin: storm shift shown (got ${storm.join(' | ')})`);assert.ok(!storm.some(t=>/Smoke shift/.test(t)),'admin: ordinary shifts hidden');
+ await click(page,'.content [data-action="schedule-storm"]');await settle(page);assert.ok((await page.locator(vis).allInnerTexts()).some(t=>/Smoke shift/.test(t)),'admin: everything back');done.push('schedule-storm');
+ let sent=null;await page.route('**/api/staff/assign-all',r=>{sent=r.request().postDataJSON();r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({assigned:sent.workIds.length,skipped:0,assignee:'staff'})});});
+ const need=await page.evaluate(()=>schedNeed().map(w=>w.id));assert.ok(need.length>=2,'admin: at least two jobs need someone');
+ await click(page,'.content [data-action="schedule-assign-all"]');await page.waitForSelector('dialog[open] .assign-all-list',{timeout:5000});
+ assert.equal(await page.locator('dialog[open] .assign-all-list li').count(),need.length,'admin: the dialog lists every job');
+ const staffOpt=await page.evaluate(()=>[...document.querySelectorAll('dialog[open] select[name="assignee"] option')].find(o=>o.textContent==='staff')?.value);assert.ok(staffOpt,'admin: staff offered');
+ await page.selectOption('dialog[open] select[name="assignee"]',staffOpt);await page.click('dialog[open] button[type="submit"]');await page.waitForFunction(()=>!document.querySelector('dialog[open]'),null,{timeout:5000});await settle(page);
+ assert.deepEqual(sent?.workIds,need,'admin: one request with all the listed jobs');assert.ok(sent.staffId&&!sent.vendorId);await page.unroute('**/api/staff/assign-all');
+ assert.ok((await page.evaluate(()=>window.__toasts||[])).some(t=>t===`${need.length} jobs assigned to staff.`),'admin: assign-all toast');done.push('assign-all');
+}
+// Batch 3d: Calendar is an agenda grouped by day that starts today (overdue first for staff), marked by kind.
+async function calendarChecks(page,role,expect,done){
+ await go(page,'calendar');
+ const c=await page.evaluate(()=>({heads:[...document.querySelectorAll('.content .cal-agenda .ov-day')].map(h=>h.textContent),rows:[...document.querySelectorAll('.content .cal-agenda .cal-row')].map(r=>r.innerText.replace(/\s+/g,' ')),
+  chips:[...document.querySelectorAll('.content .work-chips .chip')].map(c=>c.textContent),wide:document.documentElement.scrollWidth>innerWidth+1}));
+ assert.equal(c.wide,false,`${role}: calendar fits the screen`);
+ const firstDay=c.heads.findIndex(h=>!/^Overdue/i.test(h));assert.match(c.heads[firstDay]||'',/^Today/i,`${role}: agenda starts today (got ${c.heads.join(' | ')})`);
+ assert.ok(c.rows.some(r=>/3:00 PM/.test(r)&&/Arrival/.test(r)&&r.includes(expect.arrival)),`${role}: arrival marked with a readable time (got ${c.rows.join(' | ')})`);
+ for(const ch of expect.chips)assert.ok(c.chips.includes(ch),`${role}: calendar chip ${ch}`);
+ await page.locator('.content .work-chips .chip[data-id="arrival"]').click();await settle(page);
+ assert.ok(await page.evaluate(()=>[...document.querySelectorAll('.content .cal-agenda .cal-row .ov-pill')].every(p=>p.textContent==='Arrival')),`${role}: Arrivals chip shows only arrivals`);
+ await page.locator('.content .work-chips .chip[data-id="all"]').click();await settle(page);done.push('calendar-agenda');
+}
+// Batch 4a: company settings are shown on the page, automation lists its schedules, assets are a compact table.
+async function polishChecks(page,mobile,done){
+ const ws=await go(page,'workspace');assert.ok(await page.locator('.content .set-fields').count()>=2,'admin: settings shown on the page');
+ assert.match(ws,/Smoke Test Home Watch/);assert.match(ws,/Visit verification/);assert.match(ws,/Client portal/);done.push('company-settings');
+ const auto=await go(page,'automation');for(const t of ['Recurring visits','Maintenance schedules','Status'])assert.match(auto,new RegExp(t),`admin: automation shows ${t}`);
+ assert.doesNotMatch(auto,/Recovery backup|encrypted archive/,'admin: no backup engineering card');done.push('automation');
+ await go(page,'assets');
+ if(!await page.evaluate(()=>data.assets.some(a=>a.name==='Pool heater'))){
+  await click(page,'.content .page-actions [data-action="new-asset"]');await page.waitForSelector('dialog[open] input[name="name"]',{timeout:5000});
+  await page.fill('dialog[open] input[name="name"]','Pool heater');await page.selectOption('dialog[open] select[name="category"]','Pool equipment');
+  await page.fill('dialog[open] input[name="location"]','Pool pad');await page.fill('dialog[open] input[name="warranty"]','2030-05-01');
+  await page.click('dialog[open] button[type="submit"]');await page.waitForFunction(()=>!document.querySelector('dialog[open]'),null,{timeout:5000});
+  // load() skips a refetch within 1.5 s of the previous one, so wait and refresh before reading the list.
+  await page.waitForTimeout(1600);await page.evaluate(()=>load());await go(page,'assets');
+ }
+ const a=await page.evaluate(()=>({lines:[...document.querySelectorAll('.content .asset-table .asset-line')].map(l=>l.querySelector('summary').innerText.replace(/\s+/g,' ')),cards:document.querySelectorAll('.content .asset-card').length,wide:document.documentElement.scrollWidth>innerWidth+1}));
+ assert.equal(a.cards,0,'admin: no big asset cards');assert.equal(a.wide,false,'admin: assets fit the screen');
+ assert.ok(a.lines.some(l=>/Pool heater/.test(l)&&/Until May 1, 2030/.test(l)&&/Never/.test(l)),`admin: asset row with readable warranty (got ${a.lines.join(' | ')})`);
+ await page.locator('.content .asset-line summary',{hasText:'Pool heater'}).click();await settle(page);
+ assert.ok(await page.locator('.content .asset-line[open] [data-action="asset-inspection"]').isVisible(),'admin: opening an asset shows its actions');done.push('assets');
+}
+// Batch 4b: the inbox shows who, subject, the last line and a readable time; notifications are grouped by day and a
+// row opens/marks itself read (one "Mark all read" instead of a button per item).
+async function inboxChecks(page,role,expect,done){
+ await go(page,'messages');
+ const rows=await page.evaluate(()=>[...document.querySelectorAll('.content .message-inbox .msg-row')].map(r=>r.innerText.replace(/\s+/g,' ')));
+ assert.ok(rows.some(r=>r.includes(expect.subject)&&r.includes(expect.preview)&&/\d:\d\d [AP]M|[A-Z][a-z]{2}, [A-Z][a-z]{2} \d/.test(r)),`${role}: inbox row shows subject, last line and time (got ${rows.join(' | ')})`);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${role}: inbox fits the screen`);done.push('inbox');
+ await go(page,'notifications');
+ const n=await page.evaluate(()=>({rows:document.querySelectorAll('.content .note-row').length,unread:document.querySelectorAll('.content .note-row.unread').length,perRow:document.querySelectorAll('.content .note-row [data-action="read-notification"], .content .note-list [data-action="read-notification"]').length,heads:[...document.querySelectorAll('.content .note-list .ov-day')].map(h=>h.textContent)}));
+ assert.equal(n.perRow,0,`${role}: no Mark read button on every notification`);
+ if(n.rows){assert.ok(n.heads.length>0,`${role}: notifications grouped by day`);}
+ if(n.unread){await page.locator('.content .note-row.unread').first().click();await page.waitForTimeout(1200);await go(page,'notifications');
+  assert.equal(await page.locator('.content .note-row.unread').count(),n.unread-1,`${role}: opening a notification marks it read`);}
+ done.push('notifications');
+}
+// Batch 4c: the inspection fill-in shows a readable date, the checklist before the report recipient, a left-aligned
+// "Room-by-room checks" heading and no "Optional" tag on every item.
+async function inspectionChecks(page,role,mobile,done){
+ await page.evaluate(id=>action('inspection',id),draftId);await settle(page);
+ const r=await page.evaluate(()=>{const scr=document.querySelector('.content .inspection-screen');const hs=[...scr.querySelectorAll('h2')];const walk=hs.find(h=>h.textContent==='Walkthrough checklist');
+  const rec=[...scr.querySelectorAll('.panel')].find(p=>/report recipient/i.test(p.textContent));const rooms=scr.querySelector('.insp-rooms-head h2');
+  return {lede:document.querySelector('.content .page-lede')?.textContent||'',walkFirst:!!walk&&(!rec||!!(walk.compareDocumentPosition(rec)&Node.DOCUMENT_POSITION_FOLLOWING)),
+   optional:[...scr.querySelectorAll('.ck-meta')].filter(m=>/Optional/.test(m.textContent)).length,facts:scr.querySelectorAll('.set-fields dt').length,
+   roomsLeft:rooms?Math.round(rooms.getBoundingClientRect().left-scr.getBoundingClientRect().left):null,align:rooms?getComputedStyle(rooms).textAlign:'',wide:document.documentElement.scrollWidth>innerWidth+1};});
+ assert.doesNotMatch(r.lede,/\d{4}-\d{2}-\d{2}/,`${role}: inspection date is readable (${r.lede})`);
+ assert.ok(r.walkFirst,`${role}: checklist comes before the report recipient`);assert.equal(r.optional,0,`${role}: no Optional tags`);
+ assert.ok(r.facts>=3,`${role}: report header facts`);assert.equal(r.wide,false,`${role}: inspection fits the screen`);
+ if(r.roomsLeft!==null){assert.ok(r.roomsLeft<40,`${role}: Room-by-room checks heading is left-aligned (${r.roomsLeft}px)`);assert.notEqual(r.align,'right');assert.notEqual(r.align,'center');}
+ done.push('inspection-fill-in');
+}
+const PAGE_CHECKS={
+ admin:async(page,mobile,done)=>{
+  await headerChecks(page,mobile,'admin',['properties','work','inspections','requests','maintenance','documents','assets','audit','billing','messages','notifications','storm'],done);
+  await residenceChecks(page,'admin','Ocean House',{tabs:['overview','inspections','services','arrivals','records','people','notes'],panels:['Needs attention here','Visits','Work orders','Owners & family','Next arrival','Home records','Latest note'],alias:['assets','records']},done);
+  if(!await page.evaluate(()=>data.assets.length))await emptyCheck(page,'admin','assets',/No assets yet/,'new-asset');await emptyCheck(page,'admin','documents',/No documents yet/,'new-document');await emptyCheck(page,'admin','billing',/No invoices yet/,'');done.push('empty-states');
+  assert.equal(await page.locator('aside [data-id="platform"]').count(),0,'admin: no duplicate Platform Administration item');
+  for(const id of ['arrivals','calendar']){const t=await go(page,id);assert.doesNotMatch(t,MACHINE_DATE,`admin: ${id} has no machine dates`);done.push(id);}
+  assert.match(await go(page,'arrivals'),/Arrival|3:00 PM/,'admin: arrivals list');
+  assert.doesNotMatch(await mainText(page),/0\/0 (rooms|items)/,'admin: no empty 0/0 badges');
+  // Assign / schedule opens a real assignment dialog and saves.
+  await go(page,'work');
+  await page.evaluate(()=>{const d=document.querySelector('details.work-card');if(d)d.open=true;});
+  await click(page,'[data-action="work-assignment"]');await page.waitForSelector('dialog[open] select[name="assignee"]',{timeout:5000});
+  const staffValue=await page.evaluate(()=>[...document.querySelectorAll('dialog[open] select[name="assignee"] option')].find(o=>o.value.startsWith('staff:')&&/staff/i.test(o.textContent))?.value);
+  assert.ok(staffValue,'admin: staff members are offered');
+  await page.selectOption('dialog[open] select[name="assignee"]',staffValue);await page.click('dialog[open] button[type="submit"]');
+  await page.waitForSelector('dialog[open]',{state:'detached',timeout:5000}).catch(()=>{});await page.waitForFunction(()=>!document.querySelector('dialog[open]'),null,{timeout:5000});await settle(page);
+  await page.evaluate(()=>{const d=document.querySelector('details.work-card');if(d)d.open=true;});
+  await click(page,'[data-action="work-assignment"]');await page.waitForSelector('dialog[open] select[name="assignee"]',{timeout:5000});
+  assert.equal(await page.locator('dialog[open] select[name="assignee"]').inputValue(),staffValue,'admin: the saved assignment is shown when reopened');
+  await page.evaluate(()=>document.querySelector('dialog[open]').close());done.push('work-assignment');
+  // Approvals: amount on its own line, no dangling separator.
+  const appr=await go(page,'approvals');assert.match(appr,/\$125\.00/);assert.doesNotMatch(appr,/·\s*$/m,'admin: no dangling separator');done.push('approvals');
+  await workChecks(page,'admin',{chips:['Open','Overdue','Waiting on client','Vendors','Completed'],rows:['Replace pool light','Service the pool pump'],groups:['Overdue','Due this week']},done);
+  // Requests: "Link work order" only where there is work to link.
+  await go(page,'requests');
+  const links=await page.evaluate(()=>[...document.querySelectorAll('.content .row')].map(r=>({t:r.innerText,link:!!r.querySelector('[data-action="link-request"]')})));
+  assert.equal(links.find(r=>/dock lights/.test(r.t))?.link,false,'admin: no Link work order without work at Bay Cottage');
+  assert.equal(links.find(r=>/Stock the fridge/.test(r.t))?.link,true,'admin: Link work order where work exists');done.push('requests');
+  // Secondary request actions sit behind More; it opens, and closes on an outside click.
+  const more=page.locator('.content .row',{hasText:'Stock the fridge'}).locator('details.more-menu');
+  await more.locator('summary').click();assert.equal(await more.evaluate(d=>d.open),true,'admin: More opens');
+  assert.ok(await more.locator('[data-action="request-priority"]').isVisible(),'admin: Edit priority is in More');
+  await page.locator('.content .page-title').click();assert.equal(await more.evaluate(d=>d.open),false,'admin: More closes on an outside click');done.push('more-menu');
+  assert.doesNotMatch(await go(page,'profile'),/Account ID/,'admin: no raw account ID');done.push('profile');
+  // Batch 2 wording: one name for Staff, plain audit events and email statuses, no staff jargon.
+  await go(page,'staff');assert.equal(await page.locator('.content .page-title').innerText(),'Staff','admin: Staff page title matches the menu');
+  const audit=await go(page,'audit');assert.match(audit,/Residence created/,'admin: audit events in sentence case');assert.doesNotMatch(audit,/Property Created|Work Created/,'admin: no Title Case codes');
+  const email=await go(page,'email-activity');assert.doesNotMatch(email,/\d+ attempts|submissions to the provider/,'admin: no email jargon');
+  assert.doesNotMatch(await go(page,'automation'),/Recovery backup|encrypted archive|consolidated/,'admin: no automation jargon');done.push('wording');
+  await scheduleChecks(page,'admin',mobile,done);
+  await extrasChecks(page,mobile,done);
+  await polishChecks(page,mobile,done);
+  await inboxChecks(page,'admin',{subject:'Ocean House gate',preview:'side gate latch'},done);
+  await inspectionChecks(page,'admin',mobile,done);
+  await calendarChecks(page,'admin',{arrival:'Owners arrive',chips:['Everything','Visits','Arrivals','Work','Shifts']},done);
+ },
+ employee:async(page,mobile,done)=>{
+  await scheduleChecks(page,'employee',mobile,done);
+ },
+ vendor:async(page,mobile,done)=>{
+  await headerChecks(page,mobile,'vendor',['work','properties','messages'],done);
+  // Batch 3e: the vendor home is built from the Overview pieces: greeting, summary strip, jobs, waiting on you, messages.
+  const home=await go(page,'dashboard');
+  const v=await page.evaluate(()=>({title:document.querySelector('.content .ov-title')?.textContent||'',kpis:document.querySelectorAll('.content .vendor-kpis .ov-kpi').length,
+   panels:[...document.querySelectorAll('.content .ov-panel h2')].map(h=>h.textContent.replace(/\d+$/,'').trim()),start:!!document.querySelector('.content .vendor-wait [data-action="work-start"]'),wide:document.documentElement.scrollWidth>innerWidth+1}));
+  assert.match(v.title,/^Good (morning|afternoon|evening)/,'vendor: home greets the vendor');assert.equal(v.kpis,4,'vendor: summary strip');assert.equal(v.wide,false,'vendor: home fits the screen');
+  assert.deepEqual(v.panels,['Your jobs','Waiting on you','Messages'],'vendor: home panels');assert.ok(v.start,'vendor: Start work offered from home');
+  assert.match(home,/Service the pool pump/,'vendor: home lists the job');assert.doesNotMatch(home,/estate overview|Upcoming arrivals|Arrivals to prepare|inspection/i,'vendor: no estate/arrival/inspection tiles');
+  await page.locator('.content .vendor-kpis .ov-kpi').first().click();await settle(page);assert.equal(await page.locator('.content .page-title').innerText(),'Your jobs','vendor: summary strip opens Your jobs');done.push('vendor-home');
+  await go(page,'work');assert.equal(await page.locator('.content .page-title').innerText(),'Your jobs','vendor: jobs title');
+  await residenceChecks(page,'vendor','Harbor Loft',{tabs:null},done);
+  await workChecks(page,'vendor',{chips:['Open','Completed'],rows:['Service the pool pump'],primary:'Start work'},done);
+  assert.match(await go(page,'messages'),/company that sends you jobs/,'vendor: messages subtitle for vendors');done.push('wording');
+ },
+ client:async(page,mobile,done)=>{
+  await headerChecks(page,mobile,'client',['properties','work','inspections','requests','documents','messages','notifications'],done);
+  await emptyCheck(page,'client','documents',/No documents yet/,'');
+  await workChecks(page,'client',{chips:['Open','Needs your approval','Completed'],rows:['Replace pool light'],primary:'Review the estimate'},done);
+  await residenceChecks(page,'client','Ocean House',{tabs:['overview','inspections','services','arrivals','records','people'],panels:['Needs attention here','Visits','Service updates','Owners & family','Next arrival','Home records'],alias:['shopping','arrivals']},done);
+  // Batch 2 wording: written for the family, not for staff.
+  const home=await go(page,'dashboard');assert.match(await page.locator('.content .page-title').innerText(),/^Good (morning|afternoon|evening)/,'client: home greets the family');
+  assert.equal(await page.locator('details.action-needed').evaluate(d=>d.open),true,'client: Action needed starts open');assert.doesNotMatch(home,/\b1 work orders\b/,'client: singular work order');
+  assert.doesNotMatch(await go(page,'messages'),/staff, vendors, employees/,'client: messages subtitle for the family');
+  assert.doesNotMatch(await go(page,'inspections'),/correct family/,'client: reports subtitle for the family');
+  const work=await go(page,'work');assert.equal(await page.locator('.content .page-title').innerText(),'Service updates','client: title matches the menu');assert.doesNotMatch(work,/verified completion/,'client: no staff wording');
+  await page.evaluate(()=>action('property',data.properties.find(p=>p.name==='Ocean House').id));await settle(page);assert.doesNotMatch(await mainText(page),/Client access active/,'client: no staff access wording');done.push('wording');
+  for(const id of ['arrivals','calendar']){const t=await go(page,id);assert.doesNotMatch(t,MACHINE_DATE,`client: ${id} has no machine dates`);done.push(id);}
+  const appr=await go(page,'approvals');assert.match(appr,/\$125\.00/);assert.doesNotMatch(appr,/·\s*$/m,'client: no dangling separator');done.push('approvals');
+  assert.doesNotMatch(await go(page,'profile'),/Account ID/,'client: no raw account ID');done.push('profile');
+  await calendarChecks(page,'client',{arrival:'You arrive',chips:['Everything','Visits','Arrivals','Service']},done);
+ }
+};
+async function pageJourney(launch,contextOptions,role,email){
+ const browser=await launch();const ctx=await browser.newContext({...contextOptions,serviceWorkers:'block'});
+ const {page,errors,toasts}=await watch(ctx);const done=[];
+ try{const [name,value]=sessions[email].split('=');await ctx.addCookies([{name,value,url:base}]);
+  await page.goto(base+'/login');await page.waitForSelector('.shell',{timeout:15000});await settle(page);
+  await PAGE_CHECKS[role](page,!!contextOptions.isMobile,done);
+  await page.waitForTimeout(300);return {errors,shown:await toasts(),done};
+ }finally{await browser.close();}
+}
+for(const [name,launch,options] of browsers.length?browsers:[['browser',null,null]]){
+ test(`signed in (${name}): app pages from the design audit work for each role`,{skip,timeout:240000},async()=>{
+  for(const [role,email] of roles.filter(([r])=>PAGE_CHECKS[r])){
+   const {errors,shown,done}=await pageJourney(launch,options,role,email);
+   assert.deepEqual(errors,[],`${role}: page errors after ${done.join(', ')}`);
    assert.deepEqual(shown.filter(t=>ERROR_TOAST.test(t)),[],`${role}: error toasts`);
   }
  });

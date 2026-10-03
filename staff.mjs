@@ -3,7 +3,7 @@ export function createStaff({get,all,run,transaction,fail,text,note,id,now,passw
   const row=await get("SELECT id,name FROM users WHERE id=? AND organization_id=? AND role IN ('employee','admin') AND active=1",uid,user.organization_id);
   if(!row)fail(422,'Choose an active staff member from this company.');return row;
  }
- async function assignment(user,workId,b) {
+ async function assignment(user,workId,b,{notify=true}={}) {
   const job=await get('SELECT w.* FROM work_orders w JOIN properties p ON p.id=w.property_id WHERE w.id=? AND p.organization_id=?',workId,user.organization_id);
   if(!job)fail(404,'Work order not found.');
   if(user.role!=='admin')fail(403,'Only administrators can change staff assignments.');
@@ -13,7 +13,29 @@ export function createStaff({get,all,run,transaction,fail,text,note,id,now,passw
   if(b.scheduleId){const s=await get('SELECT * FROM staff_schedules WHERE id=? AND organization_id=?',b.scheduleId,user.organization_id);if(!s||s.user_id!==b.staffId||(s.property_id&&s.property_id!==job.property_id))fail(422,'Choose a schedule for this staff member and residence.');}
   await run('INSERT INTO work_staff(work_id,user_id,schedule_id) VALUES(?,?,?) ON CONFLICT(work_id) DO UPDATE SET user_id=excluded.user_id,schedule_id=excluded.schedule_id',workId,b.staffId||null,b.scheduleId||null);
   await run('UPDATE work_orders SET vendor_id=?,version=version+1 WHERE id=?',b.vendorId||null,workId);
-  await audit(user,'work.assignment_updated',workId);await communications.work(user,workId);
+  await audit(user,'work.assignment_updated',workId);if(notify)await communications.work(user,workId);
+ }
+ // "Assign all" on Staff schedules (batch 5): every still-unassigned, unfinished job in the list goes to one person or vendor,
+ // who gets a single summary notification instead of one per job. Jobs assigned meanwhile are skipped, never reassigned.
+ async function assignAll(user,b) {
+  if(user.role!=='admin')fail(403,'Only administrators can change staff assignments.');
+  if(!!b.staffId===!!b.vendorId)fail(422,'Choose one staff member or one vendor.');
+  if(!Array.isArray(b.workIds)||!b.workIds.length||b.workIds.length>200||b.workIds.some(x=>typeof x!=='string'))fail(422,'Choose between 1 and 200 jobs.');
+  let who;
+  if(b.staffId){const m=await member(user,b.staffId);who={name:m.name,recipients:[await get('SELECT id,email FROM users WHERE id=? AND organization_id=? AND active=1',m.id,user.organization_id)]};}
+  else{const v=await get('SELECT id,name,email FROM vendors WHERE id=? AND organization_id=?',b.vendorId,user.organization_id);if(!v)fail(422,'Unknown vendor.');const users=await all("SELECT id,email FROM users WHERE vendor_id=? AND organization_id=? AND role='vendor' AND active=1",v.id,user.organization_id);who={name:v.name,recipients:users.length?users:[{email:v.email}]};}
+  const done=[],skipped=[];
+  for(const workId of [...new Set(b.workIds)]){
+   const job=await get("SELECT w.id,w.title,w.status,w.vendor_id,p.name property_name,(SELECT a.user_id FROM work_staff a WHERE a.work_id=w.id) staff_id FROM work_orders w JOIN properties p ON p.id=w.property_id WHERE w.id=? AND p.organization_id=?",workId,user.organization_id);
+   if(!job)fail(404,'Work order not found.');
+   if(['completed','cancelled'].includes(job.status)||job.vendor_id||job.staff_id){skipped.push(job.id);continue;}
+   await assignment(user,job.id,{staffId:b.staffId||null,vendorId:b.vendorId||null},{notify:false});done.push(job);
+  }
+  if(!done.length)fail(409,'These jobs were already assigned. Refresh to see the latest.');
+  const list=done.slice(0,25).map(j=>'- '+j.title+' ('+j.property_name+')').join('\n')+(done.length>25?'\n- and '+(done.length-25)+' more':'');
+  await communications.enqueue(user.organization_id,'work-bulk:'+id(),who.recipients,done.length===1?'Work order assigned: '+done[0].title:done.length+' work orders assigned to you','You have been assigned '+(done.length===1?'a work order':done.length+' work orders')+':\n'+list+'\n\nSign in to review the details.',done[0].id);
+  await audit(user,'work.bulk_assigned',b.staffId||b.vendorId);
+  return {assigned:done.length,skipped:skipped.length,assignee:who.name};
  }
  async function handle(req,res,url,user){
   if(!url.pathname.startsWith('/api/staff/'))return false;
@@ -76,6 +98,7 @@ export function createStaff({get,all,run,transaction,fail,text,note,id,now,passw
    });json(res,200,{id:key});return true;
   }
   if(url.pathname==='/api/staff/assign'){await transaction(()=>assignment(user,b.workId,b));json(res,200,{ok:true});return true;}
+  if(url.pathname==='/api/staff/assign-all'){json(res,200,await transaction(()=>assignAll(user,b)));return true;}
   fail(404,'Endpoint not found.');
  }
  return {handle,assignment};

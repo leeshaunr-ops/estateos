@@ -58,15 +58,17 @@ test('a missing record or no access falls back to Overview', () => {
  for(const h of ['#/residence/gone','#/inspection/gone','#/asset-inspection/a1/gone','#/asset-inspection/gone/r1','#/checklist-templates/gone','#/clients/gone','#/arrivals/gone']){
   const r=ok(h);assert.equal(r.fellBack,true,h);assert.equal(r.state.page,'dashboard',h);assert.equal(R.toHash(r.state),'',h);
  }
- // An employee: no checklist editor or family records; admin-only residence tabs fall back to the first tab.
+ // An employee: no checklist editor or family records. Old tab names open the section that now holds them (batch 3a).
  const staff={...data,user:{id:'u-staff',role:'employee'}};
  assert.equal(R.resolve(R.parse('#/checklist-templates/t1'),staff).fellBack,true);
  assert.equal(R.resolve(R.parse('#/clients/c1'),staff).fellBack,true);
- assert.equal(R.resolve(R.parse('#/residence/p1/off_site_butler'),staff).state.tab,'overview');
+ assert.equal(R.resolve(R.parse('#/residence/p1/off_site_butler'),staff).state.tab,'people');
+ assert.equal(R.resolve(R.parse('#/residence/p1/assets'),staff).state.tab,'records');
  assert.equal(R.resolve(R.parse('#/residence/p1/notes'),staff).state.tab,'notes');
- // A client: only staff tabs are refused; a vendor only has Services.
+ // A client: staff-only Notes are refused; a vendor only has Services.
  const client={...data,user:{id:'u-client',role:'client'}};
- assert.equal(R.resolve(R.parse('#/residence/p1/access_codes'),client).state.tab,'overview');
+ assert.equal(R.resolve(R.parse('#/residence/p1/notes'),client).state.tab,'overview');
+ assert.equal(R.resolve(R.parse('#/residence/p1/shopping'),client).state.tab,'arrivals');
  assert.equal(R.resolve(R.parse('#/residence/p1/inspections'),client).state.tab,'inspections');
  assert.equal(R.resolve(R.parse('#/residence/p1'),{...data,user:{id:'v',role:'vendor'}}).state.tab,'services');
  // No hash: Overview without a fallback notice. Offline: the saved-inspections list is home.

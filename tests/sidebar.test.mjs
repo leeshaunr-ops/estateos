@@ -15,7 +15,7 @@ const read=f=>readFileSync(path.join(root,f),'utf8');
 // intersected with each role's screens). Approvals, Schedules & automation and Email activity were admin screens
 // that the old groups never listed; the new menu adds them.
 const BEFORE={
- admin:['dashboard','messages','properties','clients','arrivals','work','requests','inspections','storm','calendar','routes','staff','staff-schedules','vendors','users','assets','maintenance','documents','platform','workspace','billing','audit','checklist-templates','profile','notifications'],
+ admin:['dashboard','messages','properties','clients','arrivals','work','requests','inspections','storm','calendar','routes','staff','staff-schedules','vendors','users','assets','maintenance','documents','workspace','billing','audit','checklist-templates','profile','notifications'],
  employee:['dashboard','messages','properties','arrivals','work','requests','inspections','storm','calendar','routes','staff-schedules','assets','maintenance','documents','profile','notifications'],
  client:['dashboard','messages','properties','arrivals','shopping','work','requests','inspections','calendar','documents','approvals','profile','notifications'],
  vendor:['dashboard','messages','properties','work','profile','notifications']
@@ -25,7 +25,7 @@ const users=[];for(const role of Object.keys(BEFORE))for(const platformOwner of 
 test('no screen that was reachable from the menu became unreachable, for every role',()=>{
  for(const user of users){
   const ids=S.ids(S.menu(S.navFor(user),user.role));
-  const before=BEFORE[user.role].concat(user.platformOwner&&user.role!=='client'?['platform']:[]);
+  const before=BEFORE[user.role];
   for(const id of before)assert.ok(ids.includes(id),`${user.role}${user.platformOwner?' (platform owner)':''}: ${id} is still in the menu`);
  }
 });
@@ -43,7 +43,8 @@ test('every screen a role may open is in its menu exactly once, and nothing else
 test('role visibility is unchanged',()=>{
  const ids=(role,platformOwner=false)=>S.navFor({role,platformOwner}).map(n=>n[0]);
  assert.ok(!ids('employee').some(id=>['staff','clients','vendors','billing','users','audit','workspace','automation','email-activity','checklist-templates','approvals','platform'].includes(id)),'staff never see admin screens');
- assert.ok(ids('employee',true).includes('platform'),'platform owners keep Platform Administration');
+ // 'Platform Administration' only repeated Billing (audit bug 4); platform owners use the Platform console link instead.
+ for(const role of ['admin','employee','client','vendor'])for(const owner of [false,true])assert.ok(!ids(role,owner).includes('platform'),`${role}: no duplicate Platform Administration item`);
  assert.deepEqual(ids('vendor'),['dashboard','messages','properties','work','profile','notifications']);
  assert.ok(!ids('client').some(id=>['routes','storm','assets','maintenance','staff-schedules','platform'].includes(id)),'clients never see staff screens');
  assert.ok(ids('client').includes('shopping')&&!ids('admin').includes('shopping'),'shopping list is the client screen');
@@ -58,7 +59,7 @@ test('menu structure: flat headings in the mockup style, short client and vendor
   'Daily work: Visits & inspections, Daily route, Calendar, Work orders, Requests, Arrival preparation, Storm board, Client approvals',
   'Residences: Residences, Client families, Documents, Assets, Maintenance',
   'Team: Staff, Staff schedules, Vendors, Team & access',
-  'Company: Company settings, Checklist templates, Schedules & automation, Billing, Email activity, Audit history, Platform Administration']);
+  'Company: Company settings, Checklist templates, Schedules & automation, Billing, Email activity, Audit history']);
  assert.deepEqual(titles('employee'),[
   'Daily work: Visits & inspections, Daily route, Calendar, Work orders, Requests, Arrival preparation, Storm board',
   'Residences: Residences, Documents, Assets, Maintenance',
@@ -108,7 +109,7 @@ test('the group holding the current page (or the parent a detail screen highligh
   inspections:'daily-work',routes:'daily-work',approvals:'daily-work',inspection:'daily-work',
   properties:'residences',property:'residences',clients:'residences',assets:'residences','asset-inspection':'residences',maintenance:'residences',
   staff:'team','staff-schedules':'team',users:'team',vendors:'team',
-  workspace:'company',billing:'company',audit:'company',platform:'company','checklist-templates':'company','checklist-editor':'company','email-activity':'company',automation:'company'};
+  workspace:'company',billing:'company',audit:'company','checklist-templates':'company','checklist-editor':'company','email-activity':'company',automation:'company'};
  for(const [page,group] of Object.entries(cases)){
   assert.equal(S.groupOf(m,page),group,`${page} lives in ${group}`);
   const states=S.groupStates(m,{page});
