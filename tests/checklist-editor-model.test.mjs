@@ -130,7 +130,7 @@ test('isTypingTarget ignores shortcuts only while typing',()=>{
 });
 
 test('answer choices and photo prompts only describe supported behaviour',()=>{
- assert.deepEqual(M.answerChoices('pass_fail_na').map(x=>x.label),['Pass','Fail','N/A']);
+ assert.deepEqual(M.answerChoices('pass_fail_na').map(x=>x.label),['Pass','Monitor','Fail','N/A']);
  assert.deepEqual(M.answerChoices('select',['Good',' ','Poor']).map(x=>x.label),['Good','Poor']);
  assert.match(M.photoPrompt({photo_rule:'required_on_fail',response_type:'pass_fail_na'}),/Fail/);
  assert.equal(M.photoPrompt({photo_rule:'none'}),'');

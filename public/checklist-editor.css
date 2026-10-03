@@ -246,6 +246,7 @@ html.ce-fullpage body{background:var(--canvas)}
 .ce .ce-chip-pass{background:var(--ce-pass-soft);color:var(--ce-pass)}
 .ce .ce-chip-fail{background:var(--ce-fail-soft);color:var(--ce-fail)}
 .ce .ce-chip-na{background:var(--ce-line-soft);color:var(--ce-muted)}
+.ce .ce-chip-monitor{background:var(--ce-warn-soft);color:var(--ce-warn)}
 .ce .ce-chip-empty{background:transparent;color:var(--ce-muted);font-weight:500;font-style:italic}
 .ce .ce-photo-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .ce .ce-opt-card{display:flex;align-items:flex-start;gap:10px;padding:12px;border-radius:10px;border:1px solid var(--ce-line);background:var(--ce-surface);text-align:left;box-shadow:var(--ce-shadow-xs);color:inherit;font-weight:inherit;min-width:0}
@@ -317,12 +318,13 @@ html.ce-fullpage body{background:var(--canvas)}
 .ce .ce-req{color:var(--ce-fail)}
 .ce .ce-p-help{font-size:12.5px;line-height:18px;color:var(--ce-muted);margin:0;overflow-wrap:anywhere;white-space:pre-wrap}
 .ce .ce-p-answers{display:grid;gap:6px;margin-top:14px}
-.ce .ce-p-3{grid-template-columns:repeat(3,1fr)}.ce .ce-p-2{grid-template-columns:repeat(2,1fr)}
+.ce .ce-p-3{grid-template-columns:repeat(3,1fr)}.ce .ce-p-4{grid-template-columns:repeat(4,1fr)}.ce .ce-p-2{grid-template-columns:repeat(2,1fr)}
 .ce .ce-p-ans{min-height:56px;border-radius:12px;border:1.5px solid var(--ce-line);background:var(--ce-surface);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:12px;font-weight:600;color:var(--ce-ink)}
 .ce .ce-p-ans .ce-i{width:18px;height:18px;color:var(--ce-faint)}
 .ce .ce-p-ans.ce-p-pass{border-color:var(--ce-pass-line);color:var(--ce-pass);background:var(--ce-pass-soft)}
 .ce .ce-p-ans.ce-p-pass .ce-i{color:var(--ce-pass)}
 .ce .ce-p-ans.ce-p-fail .ce-i{color:var(--ce-fail)}
+.ce .ce-p-ans.ce-p-monitor .ce-i{color:var(--ce-warn)}
 .ce .ce-p-input{display:flex;align-items:center;gap:8px;margin-top:14px;min-height:44px;padding:10px 12px;border-radius:12px;border:1.5px solid var(--ce-line);background:var(--ce-surface);color:var(--ce-faint);font-size:13px}
 .ce .ce-p-textarea{min-height:72px;align-items:flex-start}
 .ce .ce-p-options{display:grid;gap:6px;margin-top:14px}

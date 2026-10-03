@@ -352,7 +352,7 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
      <div class="ce-field-label"><span class="ce-lbl" id="ceTypeLbl">How should it be answered?</span></div>
      <div class="ce-answer-grid" role="radiogroup" aria-labelledby="ceTypeLbl" data-group="type">${M.ANSWER_TYPES.map(tile).join('')}</div>
      <div class="ce-choice-types" role="radiogroup" aria-label="Choice list answers" data-group="type"><span class="ce-choice-k">Or a list of choices</span>${M.CHOICE_TYPES.map(t=>`<button type="button" class="ce-mini-tile${item.response_type===t.value?' is-on':''}" role="radio" aria-checked="${item.response_type===t.value}" data-ce="type" data-id="${t.value}" data-fk="type:${t.value}" tabindex="${item.response_type===t.value?0:-1}">${icon(t.icon,'ce-i-sm')}${esc(t.label)}</button>`).join('')}</div>
-     <div class="ce-choices"><span class="ce-k">Tech can choose</span>${choices.map(c=>`<span class="ce-chip ce-chip-${c.tone}">${c.tone==='pass'?icon('check','ce-i-xs'):c.tone==='fail'?icon('x','ce-i-xs'):''}${esc(c.label)}</span>`).join('')}</div>
+     <div class="ce-choices"><span class="ce-k">Tech can choose</span>${choices.map(c=>`<span class="ce-chip ce-chip-${c.tone}">${c.tone==='pass'?icon('check','ce-i-xs'):c.tone==='fail'?icon('x','ce-i-xs'):c.tone==='monitor'?icon('eye','ce-i-xs'):''}${esc(c.label)}</span>`).join('')}</div>
      ${isChoice?`<div class="ce-field ce-sub-field"><div class="ce-field-label"><label for="ceOptions">Choices</label><span class="ce-opt">One per line</span></div><textarea id="ceOptions" class="ce-ta ce-ta-notes" rows="3" data-autosize data-field="options" data-fk="options" placeholder="Good&#10;Needs attention&#10;Not applicable">${esc(item.options.join('\n'))}</textarea></div>`:''}
     </div>
     <div class="ce-field">
@@ -401,7 +401,7 @@ export async function mountChecklistEditor({root,templateId,api,context={},onExi
   let answers='';
   if(item){
    const t=item.response_type;
-   if(t==='pass_fail_na')answers=`<div class="ce-p-answers ce-p-3"><span class="ce-p-ans ce-p-pass">${icon('checkCircle')}Pass</span><span class="ce-p-ans ce-p-fail">${icon('xCircle')}Fail</span><span class="ce-p-ans">${icon('minusCircle')}N/A</span></div>`;
+   if(t==='pass_fail_na')answers=`<div class="ce-p-answers ce-p-4"><span class="ce-p-ans ce-p-pass">${icon('checkCircle')}Pass</span><span class="ce-p-ans ce-p-monitor">${icon('eye')}Monitor</span><span class="ce-p-ans ce-p-fail">${icon('xCircle')}Fail</span><span class="ce-p-ans">${icon('minusCircle')}N/A</span></div>`;
    else if(t==='yes_no')answers=`<div class="ce-p-answers ce-p-2"><span class="ce-p-ans ce-p-pass">${icon('check')}Yes</span><span class="ce-p-ans ce-p-fail">${icon('x')}No</span></div>`;
    else if(t==='number'||t==='rating')answers=`<div class="ce-p-input">${icon(t==='rating'?'star':'hash','ce-i-sm')}<span>${t==='rating'?'Enter a rating':'Enter a number'}</span></div>`;
    else if(t==='text')answers=`<div class="ce-p-input ce-p-textarea"><span>Type your answer</span></div>`;
