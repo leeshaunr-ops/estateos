@@ -130,3 +130,70 @@ test('HSTS is sent only when the server runs with secure cookies (production)', 
   for (const url of ['/', '/faq', '/favicon.ico', '/no-such-page'])
     assert.equal((await fetch(production + url)).headers.get('strict-transport-security'), 'max-age=31536000', url);
 });
+
+test('homepage refresh: new sections, nav links, open FAQ, and no placeholder or real-storm copy', () => {
+  const home = read('public/marketing.html');
+  for (const id of ['whats-new', 'hurricane', 'features', 'trust', 'tutorial', 'pricing', 'faq', 'contact'])
+    assert.match(home, new RegExp(`<section[^>]*\\bid="${id}"`), 'missing section #' + id);
+  const nav = home.match(/<nav aria-label="Main navigation">([\s\S]*?)<\/nav>/)[1];
+  assert.match(nav, /href="#whats-new">What’s new<\/a>/);
+  assert.match(nav, /href="#hurricane">Hurricane season<\/a>/);
+  const header = home.match(/<header class="site-header">([\s\S]*?)<\/header>/)[1];
+  const demoButtons = [...header.matchAll(/<a class="button primary nav-cta[^"]*" href="([^"]+)">Start free demo<\/a>/g)];
+  assert.ok(demoButtons.length >= 1, 'header has a Start free demo button');
+  for (const [, href] of demoButtons) assert.equal(href, '/demo');
+  assert.match(home, /<link rel="stylesheet" href="\/refresh\.css"><link rel="stylesheet" href="\/home-refresh\.css">/, 'home-refresh.css loads after refresh.css');
+  assert.match(home, /Built for the way Florida home watch actually works\./);
+  assert.match(home, /When a storm is coming, every home is accounted for\./);
+  assert.match(home, /Your clients trust you with their homes\. We take that seriously\./);
+  assert.match(home, /A Visit verification box shows arrival, departure and GPS distance\./);
+  // Every FAQ answer is visible: no collapsed <details>, and all five questions from the quick-fix pass remain.
+  assert.doesNotMatch(home, /<details|<summary/);
+  assert.equal([...home.matchAll(/<div class="faq-item">/g)].length, 5);
+  for (const q of ['Can we use our own company branding?', 'What can clients and vendors see?', 'Can we try it before deciding?', 'What’s the difference between the free demo and the 30-day trial?', 'What does it cost, and how do we get support?'])
+    assert.ok(home.includes(`<h3>${q}</h3>`), 'FAQ question missing: ' + q);
+  // No fake social proof, mockup notes, launch-pricing duration or real storm / owner names.
+  assert.doesNotMatch(home, /PLACEHOLDER|NOT FOR LAUNCH|testimonial|Owner to confirm|mockup|<blockquote/i);
+  assert.doesNotMatch(home, /launch pricing (ends|lasts|through|until|for \d)/i);
+  assert.doesNotMatch(home, /Milton|Nadine|Shaun|Lee family/i);
+});
+
+test('homepage images are optimized, sized, lazy below the fold, and served with image types', async () => {
+  const base = await start();
+  const home = read('public/marketing.html');
+  const imgs = [...home.matchAll(/<img\b[^>]*>/g)].map(([tag]) => tag);
+  assert.ok(imgs.length >= 13, 'homepage has ' + imgs.length + ' images');
+  const heroEnd = home.indexOf('<div class="value-strip">');
+  const urls = new Set([home.match(/poster="([^"]+)"/)[1]]);
+  for (const tag of imgs) {
+    const src = tag.match(/\bsrc="([^"]+)"/)[1];
+    assert.match(tag, /\bwidth="\d+"/, src + ' needs a width');
+    assert.match(tag, /\bheight="\d+"/, src + ' needs a height');
+    assert.match(tag, /\balt="/, src + ' needs alt text');
+    if (home.indexOf(tag) > heroEnd && !/ea-shield/.test(src)) assert.match(tag, /loading="lazy"/, src + ' is below the fold and should lazy-load');
+    urls.add(src);
+  }
+  let total = 0;
+  for (const url of urls) {
+    const res = await fetch(base + url);
+    assert.equal(res.status, 200, url);
+    assert.match(res.headers.get('content-type'), /^image\//, url);
+    const size = (await res.arrayBuffer()).byteLength;
+    if (url.startsWith('/img/')) {
+      assert.equal(res.headers.get('content-type'), 'image/webp', url);
+      assert.ok(size <= 60000, `${url} is ${size} bytes`);
+      total += size;
+    }
+  }
+  assert.ok(total <= 400000, 'homepage /img total is ' + total + ' bytes');
+  for (const bad of ['/img/missing.webp', '/img/..%2Fserver.mjs', '/img/Hero.WEBP'])
+    assert.equal((await fetch(base + bad)).status, 404, bad);
+  const css = await fetch(base + '/home-refresh.css');
+  assert.equal(css.status, 200);
+  assert.match(css.headers.get('content-type'), /^text\/css/);
+  const text = await css.text();
+  assert.match(text, /\.demo-section \.button\.light\{background:#fbf5e8;border-color:#fbf5e8;color:#7e202b\}/, 'final CTA button stays cream on wine');
+  // Accessibility colours from the quick-fix pass are not regressed.
+  assert.doesNotMatch(text, /#8b7754|#7b858d/);
+  assert.doesNotMatch(text, /legal-links\{[^}]*justify-content:center/);
+});
