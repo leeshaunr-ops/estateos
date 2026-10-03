@@ -170,7 +170,38 @@ function authProblem(kind){
  document.title=(kind==='workspace'?'Sign-up link expired':kind==='portal'?'Client portal not found':'Invitation expired')+' | EstateAegis';
 }
 
-const api_={loginContext,card,problemCard,page,pageTitle,header,panel,footer};
+// An older service worker can answer with cached scripts for a newer page (the page comes from the network,
+// scripts from the old cache). The server stamps the deploy's shell version into the page and live.js; if they
+// differ, move to the new version once instead of running mixed code.
+function shellMismatch(pageVersion,scriptVersion){return !!pageVersion&&!/^__/.test(pageVersion)&&pageVersion!==scriptVersion;}
+async function recoverShell(){
+ const reload=()=>location.reload();
+ try{
+  const reg=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration();
+  if(reg){
+   const fallback=setTimeout(async()=>{try{await reg.unregister();}catch{}reload();},6000);
+   navigator.serviceWorker.addEventListener('controllerchange',()=>{clearTimeout(fallback);reload();},{once:true});
+   const activate=w=>w&&w.postMessage({type:'SKIP_WAITING'});
+   if(!reg.waiting)await reg.update().catch(()=>{});
+   if(reg.waiting)activate(reg.waiting);
+   else if(reg.installing){const w=reg.installing;w.addEventListener('statechange',()=>{if(w.state==='installed')activate(w);});}
+   return;
+  }
+ }catch{}
+ try{for(const key of await caches.keys())if(key.startsWith('estateaegis-shell-'))await caches.delete(key);}catch{}
+ reload();
+}
+function checkShellVersion(){
+ const pageVersion=document.querySelector('meta[name="ea-shell"]')?.content;
+ if(!shellMismatch(pageVersion,window.EA_SHELL_VERSION))return false;
+ let last=0;try{last=Number(sessionStorage.getItem('ea-shell-recover')||0);}catch{}
+ if(Date.now()-last<60000)return false;// tried a moment ago: don't loop
+ try{sessionStorage.setItem('ea-shell-recover',String(Date.now()));}catch{}
+ window.EA_SHELL_RECOVERING=true;recoverShell();return true;
+}
+if(typeof document!=='undefined'&&typeof window!=='undefined')checkShellVersion();
+
+const api_={loginContext,card,problemCard,page,pageTitle,header,panel,footer,shellMismatch};
 if(typeof window!=='undefined'){window.portalAuth=portalAuth;window.workspaceRegistration=workspaceRegistration;window.authProblem=authProblem;window.EALogin=api_;}
 if(typeof globalThis!=='undefined')globalThis.EALogin=api_;
 })();

@@ -2,20 +2,34 @@
    - Caches only the app shell (HTML, JS, CSS, icons). It never stores /api/* responses: user data lives in the per-user IndexedDB.
    - The cache name carries a hash of the shell files (filled in by the server), so each deploy installs a fresh cache.
    - A new version waits until the user taps "Reload" (never mid-inspection), then takes over.
+     Exception: workers from before the v2 cache name are replaced at once (they had a broken Sign out).
+   - The app page carries an X-EA-Shell header; a page from a newer deploy never runs on this worker's older cached scripts.
    - Background Sync (Chrome/Android) replays the offline inspection outbox even after the tab is closed. */
-const VERSION='__SHELL_VERSION__',CACHE='estateaegis-shell-'+VERSION;
+const VERSION='__SHELL_VERSION__',CACHE='estateaegis-shell-v2-'+VERSION;
 const SHELL=['/login','/live.js','/login.js','/login.css','/fonts/inter-latin-var.woff2','/inspection-checklist.js','/visit-verification.js','/visit-card.js','/view-route.js','/storm-core.js','/storm.js','/storm.css','/inspection-drafts.js','/proactive.js','/offline-core.js','/offline-store.js','/logo-background.js','/live.css','/company.css','/refresh.css','/checklist-editor.css','/proactive.css','/offline.css','/manifest.webmanifest','/icon-192.png','/icon-512.png','/icon-maskable-512.png','/ea-shield.png','/ea-shield-80.png','/ea-shield-120.png','/checklist-editor.mjs','/checklist-editor-model.mjs'];
 const APP_ROUTES=/^\/(login|client-login|client\/[a-z0-9-]+)?$/i;
 importScripts('/offline-core.js','/offline-store.js');
 
 self.addEventListener('install',event=>{
- event.waitUntil(caches.open(CACHE).then(cache=>Promise.all(SHELL.map(url=>fetch(new Request(url,{cache:'reload',credentials:'same-origin'})).then(response=>{if(!response.ok)throw Error('Precache failed: '+url);return cache.put(url,response);})))));
+ event.waitUntil((async()=>{
+  const cache=await caches.open(CACHE);
+  await Promise.all(SHELL.map(url=>fetch(new Request(url,{cache:'reload',credentials:'same-origin'})).then(response=>{if(!response.ok)throw Error('Precache failed: '+url);return cache.put(url,response);})));
+  // Workers from before the v2 cache name (Oct 3, 2026) shipped a broken Sign out and could serve their cached scripts with a
+  // newer page. Replace them right away instead of waiting for the Reload banner; the open page keeps running and the next
+  // load is all new. Later updates wait for Reload as usual.
+  if((await caches.keys()).some(key=>key.startsWith('estateaegis-shell-')&&!key.startsWith('estateaegis-shell-v2-')))await self.skipWaiting();
+ })());
 });
 self.addEventListener('activate',event=>{
  event.waitUntil((async()=>{for(const key of await caches.keys())if(key.startsWith('estateaegis-shell-')&&key!==CACHE)await caches.delete(key);await self.clients.claim();})());
 });
 self.addEventListener('message',event=>{
- if(event.data?.type==='SKIP_WAITING')self.skipWaiting();
+ if(event.data?.type==='SKIP_WAITING'){
+  // The page's Reload button. If this worker already took over (see install), reload that page on the user's tap,
+  // since an older page only reloads itself when it sees the worker change after the tap.
+  if(!self.registration.waiting&&self.registration.active&&event.source&&typeof event.source.navigate==='function')event.waitUntil(event.source.navigate(event.source.url).catch(()=>{}));
+  else self.skipWaiting();
+ }
  if(event.data?.type==='VERSION')event.ports[0]?.postMessage({version:VERSION});
 });
 function withTimeout(promise,ms){return new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('timeout')),ms);promise.then(v=>{clearTimeout(timer);resolve(v);},e=>{clearTimeout(timer);reject(e);});});}
@@ -32,8 +46,14 @@ self.addEventListener('fetch',event=>{
   }
   // "/" depends on the sign-in cookie (marketing page vs app), so go to the network first and fall back to the shell without signal.
   event.respondWith((async()=>{
-   try{return await withTimeout(fetch(request),4000);}
+   let response;
+   try{response=await withTimeout(fetch(request),4000);}
    catch{return (await caches.match('/login',{cacheName:CACHE}))||offlinePage();}
+   // A newer deploy's app page must not run on this worker's older cached scripts: keep the whole shell on this version
+   // until the waiting worker takes over (the update banner offers Reload).
+   const shell=response.headers.get('X-EA-Shell');
+   if(shell&&shell!==VERSION){const cached=await caches.match('/login',{cacheName:CACHE});if(cached)return cached;}
+   return response;
   })());
   return;
  }
