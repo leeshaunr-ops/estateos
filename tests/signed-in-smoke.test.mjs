@@ -346,6 +346,14 @@ const PAGE_CHECKS={
  },
  vendor:async(page,mobile,done)=>{
   await headerChecks(page,mobile,'vendor',['work','properties','messages'],done);
+  // Batch 3e: the vendor home is built from the Overview pieces: greeting, summary strip, jobs, waiting on you, messages.
+  const home=await go(page,'dashboard');
+  const v=await page.evaluate(()=>({title:document.querySelector('.content .ov-title')?.textContent||'',kpis:document.querySelectorAll('.content .vendor-kpis .ov-kpi').length,
+   panels:[...document.querySelectorAll('.content .ov-panel h2')].map(h=>h.textContent.replace(/\d+$/,'').trim()),start:!!document.querySelector('.content .vendor-wait [data-action="work-start"]'),wide:document.documentElement.scrollWidth>innerWidth+1}));
+  assert.match(v.title,/^Good (morning|afternoon|evening)/,'vendor: home greets the vendor');assert.equal(v.kpis,4,'vendor: summary strip');assert.equal(v.wide,false,'vendor: home fits the screen');
+  assert.deepEqual(v.panels,['Your jobs','Waiting on you','Messages'],'vendor: home panels');assert.ok(v.start,'vendor: Start work offered from home');
+  assert.match(home,/Service the pool pump/,'vendor: home lists the job');assert.doesNotMatch(home,/estate overview|Upcoming arrivals|Arrivals to prepare|inspection/i,'vendor: no estate/arrival/inspection tiles');
+  await page.locator('.content .vendor-kpis .ov-kpi').first().click();await settle(page);assert.equal(await page.locator('.content .page-title').innerText(),'Your jobs','vendor: summary strip opens Your jobs');done.push('vendor-home');
   await go(page,'work');assert.equal(await page.locator('.content .page-title').innerText(),'Your jobs','vendor: jobs title');
   await residenceChecks(page,'vendor','Harbor Loft',{tabs:null},done);
   await workChecks(page,'vendor',{chips:['Open','Completed'],rows:['Service the pool pump'],primary:'Start work'},done);
