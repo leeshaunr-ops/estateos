@@ -4,11 +4,14 @@
 // Runs against a local server with a temporary database (never a real one). Needs playwright-core and a browser:
 // set PLAYWRIGHT_CORE (path to playwright-core/index.mjs) and CHROME_PATH, or it looks in the usual places and
 // skips with a message when neither is available. WebKit (iPhone emulation) runs when Playwright's WebKit is installed.
+// The Overview checks: admin and staff get the refreshed Overview (needs-your-attention list, message previews and a
+// "Plan today's route" button that opens the Daily route planner); clients and vendors never see the route button; the
+// marketing footer stays hidden inside the app; on the phone the menu opens over a dimmed backdrop that closes it.
 import {test,after,before} from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {mkdtempSync,rmSync,existsSync} from 'node:fs';
-import {randomBytes} from 'node:crypto';
+import {randomBytes,randomUUID} from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
@@ -26,14 +29,20 @@ async function start(){const env={...process.env,PORT:'0',ESTATEOS_DATA_DIR:dir,
  base=await new Promise((resolve,reject)=>{proc.stdout.on('data',c=>{const m=String(c).match(/http:\/\/127\.0\.0\.1:\d+/);if(m)resolve(m[0]);});proc.once('exit',code=>reject(Error('Server exited: '+code+' '+log)));setTimeout(()=>reject(Error('Startup timeout')),10000).unref();});}
 function client(){let cookie='';return async(endpoint,b,expected=200)=>{const res=await fetch(base+'/api/'+endpoint,{method:b===undefined?'GET':'POST',headers:{Origin:base,'Content-Type':'application/json',Cookie:cookie},body:b===undefined?undefined:JSON.stringify(b)});const set=res.headers.get('set-cookie');if(set)cookie=set.split(';')[0];const result=await res.json();assert.equal(res.status,expected,endpoint+': '+JSON.stringify(result));return result;};}
 const tokenOf=inv=>new URL('http://x'+inv.invitePath).searchParams.get('invite');
+const day=n=>{const d=new Date();d.setDate(d.getDate()+n);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
 let draftId;
 before(async()=>{if(skip)return;await start();const admin=client();
  await admin('setup',{company:'Smoke Test Home Watch',name:'Avery Admin',email:'admin@example.test',password},201);
  const fam=await admin('clients',{name:'Rivera Family'},201);const ven=await admin('vendors',{name:'Bluewater Pools'},201);
  const home=await admin('properties',{clientId:fam.id,name:'Ocean House',streetAddress:'1 Ocean Dr',city:'Stuart',state:'FL',postalCode:'34994',country:'United States'},201);
  draftId=(await admin('inspections',{propertyId:home.id,date:'2026-10-01'},201)).id;
- const accept=async(role,email,extra={})=>client()('accept-invite',{token:tokenOf(await admin('invitations',{role,email,...extra},201)),name:email.split('@')[0],password},201);
- await accept('employee','staff@example.test');await accept('vendor','vendor@example.test',{vendorId:ven.id});await accept('client','client@example.test',{clientId:fam.id});
+ const accept=async(role,email,extra={})=>{const c=client();await c('accept-invite',{token:tokenOf(await admin('invitations',{role,email,...extra},201)),name:email.split('@')[0],password},201);return c;};
+ const staff=await accept('employee','staff@example.test');await accept('vendor','vendor@example.test',{vendorId:ven.id});await accept('client','client@example.test',{clientId:fam.id});
+ // Something for the Overview to show: the staff member looks after Ocean House, an overdue work order, a message.
+ const users=(await admin('data')).users;const id=e=>users.find(u=>u.email===e).id;
+ await admin('access',{userId:id('staff@example.test'),propertyId:home.id},201);
+ await admin('work',{propertyId:home.id,title:'Replace pool light',priority:'High',dueDate:day(-3)},201);
+ await staff('messages/send',{subject:'Ocean House gate',message:'The side gate latch is loose; I zip-tied it for now.',messageId:randomUUID(),recipientId:id('admin@example.test')},201);
 });
 after(async()=>{if(proc&&!proc.killed){proc.kill();await new Promise(r=>proc.once('exit',r));}rmSync(dir,{recursive:true,force:true});});
 
@@ -56,6 +65,30 @@ async function journey(browserName,launch,contextOptions,role,email){
  const {page,errors,toasts}=await watch(ctx);const visited=[];
  try{
   await page.goto(base+'/login');await signIn(page,email);
+  assert.equal(await page.evaluate(()=>{const f=document.getElementById('siteFooter');return !f||getComputedStyle(f).display==='none';}),true,`${role}: no marketing footer inside the app`);
+  if(['admin','employee'].includes(role)){
+   await page.waitForSelector('.ov #overviewAttention',{timeout:5000});
+   assert.match(await page.locator('#overviewAttention .ov-row').allInnerTexts().then(t=>t.join('\n')),/Replace pool light/,`${role}: the overdue work order needs attention`);
+   assert.ok(await page.locator('.ov-msg').count()>=1,`${role}: message previews`);
+   assert.match(await page.locator('.ov-msg').first().innerText(),/side gate latch/,`${role}: message snippet`);
+   await click(page,'.ov-route');await settle(page);
+   assert.equal(await page.evaluate(()=>page),'routes',`${role}: the route button opens the route planner`);
+   assert.match(await page.locator('.shell main h1').first().innerText(),/Plan your day/);
+   visited.push('route-button');
+   await click(page,'aside [data-action="navigate"][data-id="dashboard"]');await settle(page);
+  }else{
+   assert.equal(await page.locator('.ov-route').count(),0,`${role}: no route button`);
+  }
+  if(contextOptions.isMobile){
+   await page.click('.topbar-menu');await settle(page);
+   assert.equal(await page.locator('.nav-backdrop').isVisible(),true,`${role}: dimmed backdrop behind the menu`);
+   assert.equal(await page.locator('.topbar-menu').getAttribute('aria-expanded'),'true');
+   const vp=page.viewportSize();await page.mouse.click(vp.width-8,Math.round(vp.height/2));await settle(page);
+   assert.equal(await page.locator('#sidebar.open').count(),0,`${role}: tapping the backdrop closes the menu`);
+   visited.push('menu-backdrop');
+  }else{
+   assert.equal(await page.locator('.topbar-menu').isVisible(),false,`${role}: no Menu button on desktop`);
+  }
   // Every left-menu section, as listed in the sidebar for this role.
   const pages=await page.evaluate(()=>[...document.querySelectorAll('aside [data-action="navigate"]')].map(b=>b.dataset.id));
   assert.ok(pages.length>=4,`${role}: menu has sections`);
