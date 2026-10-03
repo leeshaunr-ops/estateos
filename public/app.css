@@ -1,0 +1,15 @@
+/* EstateAegis app pages (audit follow-up, Oct 2026). Shared look for every signed-in page, matching the Overview and
+   the sidebar. Colours come only from the existing palette. External CSS only (CSP); no scrolling boxes. */
+
+/* ---------- Accessibility fixes (batch 0) ---------- */
+.shell h2.h3{font-size:16px;font-weight:600;letter-spacing:0;margin:0 0 10px}
+.route-planner h2.summary{border-top:1px solid var(--line);padding-top:20px}
+.shell .route-planner small,.shell .panel>small{color:#5f6b76}
+.shell .status-attention .eyebrow,.shell .status-attention .muted{color:#4a5560}
+.shell .message-thread-copy>span,.shell .message-thread-meta small,.shell .message-bubble time{color:#5f6b76}
+.shell .residence-manager{display:block}
+.shell .residence-manager dd{display:flex;align-items:center;gap:9px;margin:4px 0 0}
+.shell .approval .approval-amount{margin:4px 0 2px;font-size:18px;font-weight:700;color:#1f2933}
+.shell .approval h2.h3{margin:0}
+.shell .table-wrap:focus-visible{outline:2px solid #8b242b;outline-offset:2px}
+.ce .eyebrow,.ce .ce-p-note{color:#5f6b76}

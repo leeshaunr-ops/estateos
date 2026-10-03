@@ -38,12 +38,19 @@ before(async()=>{if(skip)return;await start();const admin=client();
  const home=await admin('properties',{clientId:fam.id,name:'Ocean House',streetAddress:'1 Ocean Dr',city:'Stuart',state:'FL',postalCode:'34994',country:'United States'},201);
  draftId=(await admin('inspections',{propertyId:home.id,date:'2026-10-01'},201)).id;
  const accept=async(role,email,extra={})=>{const c=client();await c('accept-invite',{token:tokenOf(await admin('invitations',{role,email,...extra},201)),name:email.split('@')[0],password},201);return c;};
- const staff=await accept('employee','staff@example.test');await accept('vendor','vendor@example.test',{vendorId:ven.id});await accept('client','client@example.test',{clientId:fam.id});
+ const staff=await accept('employee','staff@example.test');await accept('vendor','vendor@example.test',{vendorId:ven.id});const family=await accept('client','client@example.test',{clientId:fam.id});
  // Something for the Overview to show: the staff member looks after Ocean House, an overdue work order, a message.
  const users=(await admin('data')).users;const id=e=>users.find(u=>u.email===e).id;
  await admin('access',{userId:id('staff@example.test'),propertyId:home.id},201);
  await admin('work',{propertyId:home.id,title:'Replace pool light',priority:'High',dueDate:day(-3)},201);
  await staff('messages/send',{subject:'Ocean House gate',message:'The side gate latch is loose; I zip-tied it for now.',messageId:randomUUID(),recipientId:id('admin@example.test')},201);
+ // App pages (audit batches): a second home with no work, requests at both, an arrival entered as a wall-clock time and an estimate.
+ const cottage=await admin('properties',{clientId:fam.id,name:'Bay Cottage',streetAddress:'9 Bay Rd',city:'Stuart',state:'FL',postalCode:'34994',country:'United States'},201);
+ await family('requests',{propertyId:cottage.id,title:'Check the dock lights',description:'',priority:'Normal'},201);
+ await family('requests',{propertyId:home.id,title:'Stock the fridge',description:'Sparkling water.',priority:'Normal'},201);
+ await family('arrivals',{propertyId:home.id,arrivalAt:day(5)+'T15:00',notes:'Arriving with grandchildren.'},201);
+ const job=(await admin('data')).work.find(w=>w.title==='Replace pool light');
+ await admin('operations/approval',{workId:job.id,amountMinor:12500,description:'New pool light fixture and labor.'},200);
 });
 after(async()=>{if(proc&&!proc.killed){proc.kill();await new Promise(r=>proc.once('exit',r));}rmSync(dir,{recursive:true,force:true});});
 
@@ -58,7 +65,7 @@ async function watch(ctx){
 }
 // Screens the menu reached before the sidebar refresh (stability-baseline 75b4901), per role.
 const MENU_BEFORE={
- admin:['dashboard','messages','properties','clients','arrivals','work','requests','inspections','storm','calendar','routes','staff','staff-schedules','vendors','users','assets','maintenance','documents','platform','workspace','billing','audit','checklist-templates','profile','notifications'],
+ admin:['dashboard','messages','properties','clients','arrivals','work','requests','inspections','storm','calendar','routes','staff','staff-schedules','vendors','users','assets','maintenance','documents','workspace','billing','audit','checklist-templates','profile','notifications'],
  employee:['dashboard','messages','properties','arrivals','work','requests','inspections','storm','calendar','routes','staff-schedules','assets','maintenance','documents','profile','notifications'],
  client:['dashboard','messages','properties','arrivals','shopping','work','requests','inspections','calendar','documents','approvals','profile','notifications'],
  vendor:['dashboard','messages','properties','work','profile','notifications']
@@ -193,6 +200,62 @@ for(const [name,launch,options] of browsers.length?browsers:[['browser',null,nul
   for(const [role,email] of roles){
    const {errors,shown,visited}=await journey(name,launch,options,role,email);
    assert.deepEqual(errors,[],`${role}: page errors after ${visited.join(', ')}`);
+   assert.deepEqual(shown.filter(t=>ERROR_TOAST.test(t)),[],`${role}: error toasts`);
+  }
+ });
+}
+
+// App pages (design audit batches): each affected page opens for the roles that use it, shows readable dates
+// (never "2026-10-08 15:00:00.000Z"), and its fixed features work, with zero page errors and error toasts.
+const MACHINE_DATE=/\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/;
+const mainText=page=>page.locator('.shell main .content').innerText();
+async function go(page,id){await page.evaluate(id=>action('navigate',id),id);await page.waitForSelector('.shell main .content',{timeout:5000});await settle(page);return mainText(page);}
+const PAGE_CHECKS={
+ admin:async(page,mobile,done)=>{
+  assert.equal(await page.locator('aside [data-id="platform"]').count(),0,'admin: no duplicate Platform Administration item');
+  for(const id of ['arrivals','calendar']){const t=await go(page,id);assert.doesNotMatch(t,MACHINE_DATE,`admin: ${id} has no machine dates`);done.push(id);}
+  assert.match(await go(page,'arrivals'),/Arrival|3:00 PM/,'admin: arrivals list');
+  assert.doesNotMatch(await mainText(page),/0\/0 (rooms|items)/,'admin: no empty 0/0 badges');
+  // Assign / schedule opens a real assignment dialog and saves.
+  await go(page,'work');
+  await page.evaluate(()=>{const d=document.querySelector('details.work-card');if(d)d.open=true;});
+  await click(page,'[data-action="work-assignment"]');await page.waitForSelector('dialog[open] select[name="assignee"]',{timeout:5000});
+  const staffValue=await page.evaluate(()=>[...document.querySelectorAll('dialog[open] select[name="assignee"] option')].find(o=>o.value.startsWith('staff:')&&/staff/i.test(o.textContent))?.value);
+  assert.ok(staffValue,'admin: staff members are offered');
+  await page.selectOption('dialog[open] select[name="assignee"]',staffValue);await page.click('dialog[open] button[type="submit"]');
+  await page.waitForSelector('dialog[open]',{state:'detached',timeout:5000}).catch(()=>{});await page.waitForFunction(()=>!document.querySelector('dialog[open]'),null,{timeout:5000});await settle(page);
+  await page.evaluate(()=>{const d=document.querySelector('details.work-card');if(d)d.open=true;});
+  await click(page,'[data-action="work-assignment"]');await page.waitForSelector('dialog[open] select[name="assignee"]',{timeout:5000});
+  assert.equal(await page.locator('dialog[open] select[name="assignee"]').inputValue(),staffValue,'admin: the saved assignment is shown when reopened');
+  await page.evaluate(()=>document.querySelector('dialog[open]').close());done.push('work-assignment');
+  // Approvals: amount on its own line, no dangling separator.
+  const appr=await go(page,'approvals');assert.match(appr,/\$125\.00/);assert.doesNotMatch(appr,/·\s*$/m,'admin: no dangling separator');done.push('approvals');
+  // Requests: "Link work order" only where there is work to link.
+  await go(page,'requests');
+  const links=await page.evaluate(()=>[...document.querySelectorAll('.content .row')].map(r=>({t:r.innerText,link:!!r.querySelector('[data-action="link-request"]')})));
+  assert.equal(links.find(r=>/dock lights/.test(r.t))?.link,false,'admin: no Link work order without work at Bay Cottage');
+  assert.equal(links.find(r=>/Stock the fridge/.test(r.t))?.link,true,'admin: Link work order where work exists');done.push('requests');
+  assert.doesNotMatch(await go(page,'profile'),/Account ID/,'admin: no raw account ID');done.push('profile');
+ },
+ client:async(page,mobile,done)=>{
+  for(const id of ['arrivals','calendar']){const t=await go(page,id);assert.doesNotMatch(t,MACHINE_DATE,`client: ${id} has no machine dates`);done.push(id);}
+  const appr=await go(page,'approvals');assert.match(appr,/\$125\.00/);assert.doesNotMatch(appr,/·\s*$/m,'client: no dangling separator');done.push('approvals');
+  assert.doesNotMatch(await go(page,'profile'),/Account ID/,'client: no raw account ID');done.push('profile');
+ }
+};
+async function pageJourney(launch,contextOptions,role,email){
+ const browser=await launch();const ctx=await browser.newContext({...contextOptions,serviceWorkers:'block'});
+ const {page,errors,toasts}=await watch(ctx);const done=[];
+ try{await page.goto(base+'/login');await signIn(page,email);await settle(page);
+  await PAGE_CHECKS[role](page,!!contextOptions.isMobile,done);
+  await page.waitForTimeout(300);return {errors,shown:await toasts(),done};
+ }finally{await browser.close();}
+}
+for(const [name,launch,options] of browsers.length?browsers:[['browser',null,null]]){
+ test(`signed in (${name}): app pages from the design audit work for each role`,{skip,timeout:240000},async()=>{
+  for(const [role,email] of roles.filter(([r])=>PAGE_CHECKS[r])){
+   const {errors,shown,done}=await pageJourney(launch,options,role,email);
+   assert.deepEqual(errors,[],`${role}: page errors after ${done.join(', ')}`);
    assert.deepEqual(shown.filter(t=>ERROR_TOAST.test(t)),[],`${role}: error toasts`);
   }
  });
