@@ -3,7 +3,7 @@
 
 // Existing enum values (see checklist-templates.mjs RESPONSE_TYPES / PHOTO_RULES).
 export const ANSWER_TYPES=[
- {value:'pass_fail_na',label:'Pass / Fail',icon:'checkCircle'},
+ {value:'pass_fail_na',label:'Pass / Monitor / Fail',icon:'checkCircle'},
  {value:'yes_no',label:'Yes / No',icon:'toggle'},
  {value:'number',label:'Number',icon:'hash'},
  {value:'text',label:'Text',icon:'type'},
@@ -229,7 +229,7 @@ export function sectionSummary(section,max=3){
 /** What the field tech can choose for an answer type (only what the field app supports). */
 export function answerChoices(type,options=[]){
  switch(type){
-  case 'pass_fail_na':return [{label:'Pass',tone:'pass'},{label:'Fail',tone:'fail'},{label:'N/A',tone:'na'}];
+  case 'pass_fail_na':return [{label:'Pass',tone:'pass'},{label:'Monitor',tone:'monitor'},{label:'Fail',tone:'fail'},{label:'N/A',tone:'na'}];
   case 'yes_no':return [{label:'Yes',tone:'pass'},{label:'No',tone:'fail'}];
   case 'number':return [{label:'Any number',tone:'na'}];
   case 'rating':return [{label:'A numeric rating',tone:'na'}];

@@ -7,7 +7,7 @@ When a field visit is completed with failed checklist items that are set to **Al
 - On `POST /api/inspections/submit` (draft → submitted), including offline-synced submissions.
 - On `POST /api/inspections/publish` when an admin publishes straight from a draft.
 - At most once per inspection. The `inspection_fail_alerts` primary key is written in the same transaction as the status change, so these cases never send a second alert: Idempotency-Key replays, a retry with a new key (the visit is already submitted), reopen then resubmit, and submit then publish.
-- A visit counts as failed when an item is **Attention** (the built-in checklist's fail result, shown as "Action needed" on reports) or **Fail** (pass/fail/N/A template items). **Monitor** is not a failure.
+- A visit counts as failed when an item is **Attention** (the built-in checklist's fail result, shown as "Action needed" on reports) or **Fail** (pass/monitor/fail/N/A template items). **Monitor** is not a failure.
 
 ## Which failed items alert
 

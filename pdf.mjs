@@ -54,7 +54,7 @@ export function inspectionPdf(report,photos=[]){
   y+=8;
  }
  y+=8;need(68);
- if(report.checklist){for(const [index,[status,style,title]] of [['pass','pass','PASS'],['fail','attention','FAIL'],['na','na','N/A']].entries()){const x=40+index*180;rect(x,y,172,58,backgrounds[style]);text(String((report.answers||[]).filter(a=>a.status===status).length),x+13,y+8,21,C[style]||C.muted,true);text(title,x+13,y+36,9,C[style]||C.muted,true);}}
+ if(report.checklist){for(const [index,[status,style,title]] of [['pass','pass','PASS'],['monitor','monitor','MONITOR'],['fail','attention','FAIL'],['na','na','N/A']].entries()){const x=40+index*135,count=EAChecklist.totals(report.answers)[status];rect(x,y,127,58,backgrounds[style]);text(String(count),x+13,y+8,21,C[style]||C.muted,true);text(title,x+13,y+36,9,C[style]||C.muted,true);}}
  else for(const [index,status] of ['pass','monitor','attention'].entries()){const x=40+index*180;rect(x,y,172,58,backgrounds[status]);text(String((report.answers||[]).filter(a=>a.status===status).length),x+13,y+8,21,C[status],true);text(statusLabel(status),x+13,y+36,9,C[status],true);}y+=76;
  paragraph('Overall condition: '+(report.overall||'Not recorded'),11,C.ink,520,40);
  heading('Walkthrough checklist');let section='';

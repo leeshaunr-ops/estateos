@@ -6,14 +6,17 @@
    PDF) and Node tests. Exposed as globalThis.EAChecklist.
 
    Every answer value is stored in answer.status as a string so the offline merge (which compares status and note)
-   works for every type: pass_fail_na pass|fail|na, yes_no yes|no, rating "1".."5", number "12.5", text, select
+   works for every type: pass_fail_na pass|monitor|fail|na (Monitor added later; visits answered before it simply never
+   used it), yes_no yes|no, yes_no yes|no, rating "1".."5", number "12.5", text, select
    (the option), multi_select (a JSON array of options). "unchecked" means not answered yet. */
 (function(root){
  'use strict';
  const TYPES=['pass_fail_na','yes_no','rating','number','text','select','multi_select'];
  const PHOTO_RULES=['none','optional','required_on_fail'];
  const OPEN='unchecked',RATING_MAX=5,MAX_TEXT=4000;
- const TYPE_LABELS={pass_fail_na:'Pass / Fail / N/A',yes_no:'Yes / No',rating:'Rating 1–5',number:'Number',text:'Text',select:'Choose one',multi_select:'Choose any'};
+ /** Pass / Monitor / Fail / N/A, in display order. Monitor matches the built-in checklist: no alert, no note required. */
+ const PASS_FAIL_VALUES=['pass','monitor','fail','na'];
+ const TYPE_LABELS={pass_fail_na:'Pass / Monitor / Fail / N/A',yes_no:'Yes / No',rating:'Rating 1–5',number:'Number',text:'Text',select:'Choose one',multi_select:'Choose any'};
  const str=v=>String(v??'');
  /** True for answers that came from a checklist template (they carry a response type). */
  const isTemplateAnswer=a=>!!(a&&TYPES.includes(a.response_type));
@@ -41,7 +44,7 @@
  function valueProblem(item,value){
   const v=str(value);if(v===OPEN)return '';
   switch(item.response_type){
-   case 'pass_fail_na':return ['pass','fail','na'].includes(v)?'':'Choose Pass, Fail or N/A.';
+   case 'pass_fail_na':return PASS_FAIL_VALUES.includes(v)?'':'Choose Pass, Monitor, Fail or N/A.';
    case 'yes_no':return ['yes','no'].includes(v)?'':'Choose Yes or No.';
    case 'rating':return /^[1-9]\d*$/.test(v)&&Number(v)<=RATING_MAX?'':`Choose a rating from 1 to ${RATING_MAX}.`;
    case 'number':return v.trim()!==''&&v.length<=40&&Number.isFinite(Number(v))?'':'Enter a number.';
@@ -59,7 +62,7 @@
   if(v===OPEN||v.trim()==='')return isTemplateAnswer(a)&&!a.required?'Not answered':'Not checked';
   if(!isTemplateAnswer(a))return v==='na'?'Not applicable':v.charAt(0).toUpperCase()+v.slice(1);
   switch(a.response_type){
-   case 'pass_fail_na':return {pass:'Pass',fail:'Fail',na:'Not applicable'}[v]||v;
+   case 'pass_fail_na':return {pass:'Pass',monitor:'Monitor',fail:'Fail',na:'Not applicable'}[v]||v;
    case 'yes_no':return {yes:'Yes',no:'No'}[v]||v;
    case 'rating':return `${v} of ${RATING_MAX}`;
    case 'multi_select':return multiValues(v).join(', ');
@@ -74,7 +77,12 @@
   if(a.response_type==='yes_no')return v==='yes'?'pass':'monitor';
   return 'value';
  }
- /** Items that still block completion: built-in items not checked, template items marked Required not answered. */
+ /** Note placeholder for a template row. Monitor, like on the built-in checklist, never requires a note, but the
+   field asks for one so the office knows what to watch. */
+ function notePrompt(type,status){return type==='text'?'Extra note (optional)':type==='pass_fail_na'&&str(status)==='monitor'?'What to watch (recommended)':'Reading, observation or N/A reason';}
+/** Pass / Monitor / Fail / N/A counts over a template visit's pass/fail items (reports, PDF, portal). */
+ function totals(answers){const out={pass:0,monitor:0,fail:0,na:0};for(const a of answers||[])if(isTemplateAnswer(a)&&a.response_type==='pass_fail_na'&&Object.hasOwn(out,a.status))out[a.status]++;return out;}
+/** Items that still block completion: built-in items not checked, template items marked Required not answered. */
  const stillOpen=answers=>(answers||[]).filter(a=>isTemplateAnswer(a)?a.required&&!answered(a):a.status===OPEN);
  /** Failed template items whose photo rule requires a photo on fail. */
  const photoRequired=answers=>(answers||[]).filter(a=>isTemplateAnswer(a)&&a.photo_rule==='required_on_fail'&&a.status==='fail');
@@ -92,5 +100,5 @@
   if(!str(summary).trim())problems.push('Add an inspection summary.');
   return problems;
  }
- root.EAChecklist={TYPES,TYPE_LABELS,PHOTO_RULES,OPEN,RATING_MAX,MAX_TEXT,isTemplateAnswer,answered,multiValues,snapshotItem,roomItemApplies,roomAnswerKey,answerFor,propertyAnswers,roomAnswers,valueProblem,isFailed,displayValue,tone,stillOpen,photoRequired,completionProblems};
+ root.EAChecklist={TYPES,TYPE_LABELS,PASS_FAIL_VALUES,totals,notePrompt,PHOTO_RULES,OPEN,RATING_MAX,MAX_TEXT,isTemplateAnswer,answered,multiValues,snapshotItem,roomItemApplies,roomAnswerKey,answerFor,propertyAnswers,roomAnswers,valueProblem,isFailed,displayValue,tone,stillOpen,photoRequired,completionProblems};
 })(typeof self!=='undefined'?self:globalThis);

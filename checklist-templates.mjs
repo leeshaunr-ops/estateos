@@ -83,8 +83,8 @@ export function presetItems(visitType){return (PRESET_ITEMS[visitType]||[]).map(
 // The built-in standard checklist (inspection-template.json) as an editable "Routine visit" starter. It is the
 // same checklist a visit falls back to when the company has no published template for the visit type. Item keys
 // are the built-in keys (and condition / readiness / fixtures for the per-room checks), so a template made from it
-// lines up with past built-in visits ("Last visit" hints, follow-ups). Pass / Fail / N/A replaces the built-in
-// Pass / Monitor / Attention / N/A scale.
+// lines up with past built-in visits ("Last visit" hints, follow-ups). Template pass/fail items answer
+// Pass / Monitor / Fail / N/A, the built-in Pass / Monitor / Attention / N/A scale with Fail for Attention.
 const BUILT_IN_CHECKLIST=JSON.parse(readFileSync(new URL('./inspection-template.json',import.meta.url),'utf8'));
 const ROOM_CHECKS=[['condition','Overall condition'],['readiness','Cleanliness and readiness'],['fixtures','Fixtures and equipment']];
 export function standardRoutineItems(){
@@ -133,7 +133,7 @@ export function mergeChecklist(template, settings={}){
 }
 export function validateAnswer(item, value){
  if(value===null||value===undefined||value==='') return item.required?{ok:false,error:'Answer is required'}:{ok:true};
- if(item.response_type==='pass_fail_na'&&!['pass','fail','na'].includes(value))return{ok:false,error:'Expected pass, fail, or na'};
+ if(item.response_type==='pass_fail_na'&&!['pass','monitor','fail','na'].includes(value))return{ok:false,error:'Expected pass, monitor, fail, or na'};
  if(item.response_type==='yes_no'&&!['yes','no'].includes(value))return{ok:false,error:'Expected yes or no'};
  if(['rating','number'].includes(item.response_type)&&(!Number.isFinite(Number(value))))return{ok:false,error:'Expected a number'};
  if(['select','multi_select'].includes(item.response_type)){const values=item.response_type==='multi_select'?(Array.isArray(value)?value:[value]):[value];if(values.some(v=>!item.options.includes(String(v))))return{ok:false,error:'Answer is not an available option'};}

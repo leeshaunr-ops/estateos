@@ -45,7 +45,7 @@ Each answer is stored in the existing `inspection_answers` table: `item_key` = t
 
 | Type | Control | Stored as |
 |---|---|---|
-| Pass / Fail / N/A | chips | `pass`, `fail`, `na` |
+| Pass / Monitor / Fail / N/A | chips | `pass`, `monitor`, `fail`, `na` (see [template-monitor-answer.md](template-monitor-answer.md)) |
 | Yes / No | chips | `yes`, `no` |
 | Rating | 1–5 chips | `"1"`…`"5"` |
 | Number | number input (unit in label) | numeric string |
@@ -71,7 +71,7 @@ The offline workspace caches every published checklist with its items. A visit s
 
 ## Reports, PDF and portal
 
-Template visits show a **Checklist** row (`Name (version N)`) and Pass / Fail / N/A summary boxes. Each item gets a pill: PASS, FAIL, N/A, YES, NO, 4/5, the number, the short select option, or RECORDED with an "Answer: …" line. The family portal shows the checklist name and the answers. Built-in visits render exactly as before; the legacy PDF is byte-identical, which a test checks against a sha256 golden.
+Template visits show a **Checklist** row (`Name (version N)`) and Pass / Monitor / Fail / N/A summary boxes. Each item gets a pill: PASS, MONITOR, FAIL, N/A, YES, NO, 4/5, the number, the short select option, or RECORDED with an "Answer: …" line. The family portal shows the checklist name and the answers. Built-in visits render exactly as before; the legacy PDF is byte-identical, which a test checks against a sha256 golden.
 
 | Report | PDF | Portal |
 |---|---|---|
@@ -88,7 +88,6 @@ The template editor's **Load starter items** now offers **Routine visit**: the b
 ## Known limitations
 
 - Photos attach to the visit, not to an item, so "photo required on fail" means at least one photo on the visit.
-- Templates have no **Monitor** result (pass / fail / N/A only).
 - Multi-select answers are stored as a JSON string in `status`.
 - Per-residence checklist settings (`property_checklist_settings`) are not applied to template visits.
 - Room items expand for the residence's current rooms when the visit is shown, as the legacy room checks do.

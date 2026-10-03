@@ -127,7 +127,7 @@ async function scenario(label,env){
   assert.deepEqual(rooms.map(a=>a.key),['space-kitchen-windows-closed-and-latched','space-bed-1-windows-closed-and-latched','space-bed-1-bed-linens-fresh'],'room items per room; room types filter');
   const all=[...after.answers,...rooms].map(a=>({...a}));
   const save=(answers,version,extra={})=>employee.call('POST','inspections/save',{id:picked.id,version,answers,summary:'',notes:'',internalNotes:'',...extra});
-  for(const [key,bad] of [['front-door-locks-work','monitor'],['mail-and-packages-collected','maybe'],['overall-tidiness','9'],['thermostat-reading-f','warm'],['pool-water','Purple'],['lights-left-on','["Attic"]']]){
+  for(const [key,bad] of [['front-door-locks-work','attention'],['mail-and-packages-collected','maybe'],['overall-tidiness','9'],['thermostat-reading-f','warm'],['pool-water','Purple'],['lights-left-on','["Attic"]']]){
    const r=await save(all.map(a=>a.key===key?{...a,status:bad}:a),1);assert.equal(r.status,422,key+' rejects '+bad);
   }
   assert.equal((await save(all.filter(a=>a.key!=='space-bed-1-bed-linens-fresh'),1)).status,422,'each room needs all its items');
@@ -224,7 +224,7 @@ test('completion rules: built-in visits keep the original messages; template vis
 
 test('answer values and display per type',()=>{
  const item=(response_type,options=[])=>({response_type,options,required:true});
- assert.equal(CK.valueProblem(item('pass_fail_na'),'pass'),'');assert.ok(CK.valueProblem(item('pass_fail_na'),'monitor'));
+ assert.equal(CK.valueProblem(item('pass_fail_na'),'pass'),'');assert.equal(CK.valueProblem(item('pass_fail_na'),'monitor'),'');assert.ok(CK.valueProblem(item('pass_fail_na'),'attention'));
  assert.equal(CK.valueProblem(item('rating'),'5'),'');assert.ok(CK.valueProblem(item('rating'),'0'));assert.ok(CK.valueProblem(item('rating'),'2.5'));
  assert.equal(CK.valueProblem(item('number'),'-3.5'),'');assert.ok(CK.valueProblem(item('number'),'abc'));
  assert.equal(CK.valueProblem(item('multi_select',['A','B']),'["A","B"]'),'');assert.ok(CK.valueProblem(item('multi_select',['A']),'["A","A"]'));

@@ -166,9 +166,10 @@ function offlineRefreshItemBadges(){
 }
 document.addEventListener('input',e=>{if(!e.target.matches('[data-answer],[data-answer-note],#f-summary,#f-notes,#f-internalNotes')||page!=='inspection')return;storeDraft(e.target);offlineScheduleSync(1200);});
 document.addEventListener('change',e=>{if(e.target.matches('[data-answer]')&&page==='inspection'){const row=e.target.closest('.inspection-item');if(row){
- // Template rows: tone from the answer type (Fail red, No amber). Built-in rows: Monitor amber, Attention red.
+ // Template rows: tone from the answer type (Fail red, Monitor and No amber). Built-in rows: Monitor amber, Attention red.
  const tone=row.dataset.ckType?window.EAChecklist.tone({response_type:row.dataset.ckType,status:offlineAnswerValue(e.target),required:true}):e.target.value==='monitor'?'monitor':e.target.value==='attention'?'fail':'';
- row.classList.toggle('status-monitor',tone==='monitor');row.classList.toggle('status-attention',tone==='fail');}}});
+ row.classList.toggle('status-monitor',tone==='monitor');row.classList.toggle('status-attention',tone==='fail');
+ const note=row.dataset.ckType&&row.querySelector('[data-answer-note]');if(note)note.placeholder=window.EAChecklist.notePrompt(row.dataset.ckType,offlineAnswerValue(e.target));}}});
 window.addEventListener('beforeunload',()=>{if(OFF.pending.size)offlineFlushNow();});
 
 /* ---------- photos ---------- */
