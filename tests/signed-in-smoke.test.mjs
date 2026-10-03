@@ -1,4 +1,5 @@
-// Signed-in browser smoke test: every role logs in, opens every menu item (and none that was reachable before is missing), starts an inspection, goes offline
+// Signed-in browser smoke test: every role logs in, opens every menu item by expanding its group where the menu has
+// collapsible groups (admin and staff; none that was reachable before is missing), starts an inspection, goes offline
 // and back, signs out and in again, and reloads, with zero page errors and zero error toasts. It would have
 // caught the Oct 3 sign-out regression (auth is not defined, then data.offline on a null session).
 // Runs against a local server with a temporary database (never a real one). Needs playwright-core and a browser:
@@ -99,17 +100,63 @@ async function journey(browserName,launch,contextOptions,role,email){
   // Every left-menu section, as listed in the sidebar for this role.
   const pages=await page.evaluate(()=>[...document.querySelectorAll('aside [data-action="navigate"]')].map(b=>b.dataset.id));
   assert.ok(pages.length>=4,`${role}: menu has sections`);
-  // The flat menu: no collapsible groups, every screen this role may open is listed once, nothing that was
-  // reachable before the refresh is missing.
-  assert.equal(await page.locator('aside details, aside .nav-chevron').count(),0,`${role}: no collapsible groups`);
+  // Every screen this role may open is listed once, and nothing that was reachable before the refresh is missing.
   const allowed=await page.evaluate(()=>window.EASidebar.navFor(data.user).map(n=>n[0]));
   assert.deepEqual([...pages].sort(),[...allowed].sort(),`${role}: menu lists exactly the screens this role may open`);
   for(const id of MENU_BEFORE[role])assert.ok(pages.includes(id),`${role}: ${id} is still in the menu`);
+  // Admin and staff: each heading is a collapsible group button; Daily work starts open, the rest collapsed.
+  // Client and vendor menus stay flat.
+  const grouped=['admin','employee'].includes(role),mobile=!!contextOptions.isMobile;
+  const openMenu=async()=>{if(mobile&&!(await page.locator('#sidebar.open').count())){await page.click('.topbar-menu');await page.locator('#sidebar.open').waitFor({timeout:3000});await settle(page);}};
+  const groupState=()=>page.evaluate(()=>Object.fromEntries([...document.querySelectorAll('aside [data-side-toggle]')].map(b=>[b.dataset.sideToggle,b.getAttribute('aria-expanded')])));
+  if(grouped){
+   const groups=await page.evaluate(()=>[...document.querySelectorAll('aside [data-side-toggle]')].map(b=>({key:b.dataset.sideToggle,tag:b.tagName,type:b.type,controls:b.getAttribute('aria-controls'),target:!!document.getElementById(b.getAttribute('aria-controls')),chevron:!!b.querySelector('.side-chevron'),text:b.innerText.trim()})));
+   const expected=role==='admin'?['daily-work','residences','team','company']:['daily-work','residences','team'];
+   assert.deepEqual(groups.map(g=>g.key),expected,`${role}: group buttons`);
+   for(const g of groups){assert.equal(g.tag,'BUTTON');assert.equal(g.type,'button');assert.ok(g.target&&g.chevron,`${role}: ${g.key} has aria-controls and a chevron`);assert.match(g.text,/^(DAILY WORK|RESIDENCES|TEAM|COMPANY)/);}
+   assert.deepEqual(await groupState(),Object.fromEntries(expected.map(k=>[k,String(k==='daily-work')])),`${role}: defaults on Overview`);
+   assert.equal(await page.locator('#sideGroupItems-residences [data-id="properties"]').isVisible(),false,`${role}: collapsed items are hidden`);
+   assert.equal(await page.evaluate(()=>{const b=document.querySelector('#sideGroupItems-residences [data-id="properties"]');return getComputedStyle(b).visibility;}),'hidden',`${role}: collapsed items are out of the tab order`);
+   if(!mobile){
+    // Keyboard: Enter and Space toggle the focused group button.
+    await page.focus('aside [data-side-toggle="daily-work"]');await page.keyboard.press('Enter');await settle(page);
+    assert.equal((await groupState())['daily-work'],'false',`${role}: Enter collapses Daily work`);
+    await page.keyboard.press('Space');await page.locator('#sideGroupItems-daily-work [data-id="inspections"]').waitFor({state:'visible',timeout:2000});
+    assert.equal((await groupState())['daily-work'],'true',`${role}: Space opens it again`);
+   }
+  }else{
+   assert.equal(await page.locator('aside [data-side-toggle], aside details, aside .side-chevron, aside [aria-expanded]').count(),0,`${role}: flat menu, no collapsible groups`);
+  }
+  // Open every item the way a person would: expand its group if it is collapsed, then click the visible item
+  // (on the phone through the slide-out menu). The current page's group is open after each navigation.
   for(const id of pages){
-   await click(page,`aside [data-action="navigate"][data-id="${id}"]`);await settle(page);visited.push(id);
+   await openMenu();
+   const btn=page.locator(`aside [data-action="navigate"][data-id="${id}"]`);
+   if(!(await btn.isVisible())){
+    assert.ok(grouped,`${role}: ${id} is visible in the flat menu`);
+    const key=await btn.evaluate(b=>b.closest('[data-side-group]')?.dataset.sideGroup);
+    assert.ok(key,`${role}: hidden ${id} is inside a group`);
+    const toggle=page.locator(`aside [data-side-toggle="${key}"]`);
+    assert.equal(await toggle.getAttribute('aria-expanded'),'false',`${role}: ${key} was collapsed`);
+    await toggle.click();
+    await btn.waitFor({state:'visible',timeout:3000});
+    assert.equal(await toggle.getAttribute('aria-expanded'),'true',`${role}: ${key} expands`);
+    visited.push('expand:'+key);
+   }
+   await btn.click({timeout:5000});await settle(page);visited.push(id);
    assert.equal(await page.locator('.shell').count(),1,`${role}: ${id} renders`);
    assert.equal(await page.evaluate(()=>page),id,`${role}: ${id} opens`);
    assert.equal(await page.locator(`aside [data-id="${id}"][aria-current="page"]`).count(),1,`${role}: ${id} is highlighted`);
+   if(grouped){const key=await page.evaluate(id=>document.querySelector(`aside [data-id="${id}"]`).closest('[data-side-group]')?.dataset.sideGroup||null,id);if(key)assert.equal((await groupState())[key],'true',`${role}: ${id}'s group is open`);}
+  }
+  if(grouped){
+   // A detail screen keeps its parent's group open even after the user collapses that group elsewhere.
+   await openMenu();await click(page,'aside [data-side-toggle="daily-work"]');await settle(page);
+   assert.equal((await groupState())['daily-work'],'false');
+   await page.evaluate(id=>action('inspection',id),draftId);await page.waitForSelector('.shell main',{timeout:5000});await settle(page);
+   assert.equal((await groupState())['daily-work'],'true',`${role}: the inspection detail opens Daily work`);
+   assert.equal(await page.locator('aside [data-id="inspections"][aria-current="page"]').count(),1,`${role}: Visits & inspections is highlighted on the detail screen`);
+   visited.push('detail-opens-group');
   }
   assert.deepEqual(errors,[],`${role}: no page errors while opening every menu item`);
   if(['admin','employee'].includes(role)){
@@ -122,6 +169,15 @@ async function journey(browserName,launch,contextOptions,role,email){
   assert.equal(await page.locator('.shell').count(),0,`${role}: the app is gone after sign-out`);
   assert.match(new URL(page.url()).pathname,/^\/login$/);
   await signIn(page,email);await page.reload();await page.waitForSelector('.shell',{timeout:15000});visited.push('signout-signin-reload');
+  if(['admin','employee'].includes(role)){
+   // Remembered per user: every group was expanded above and Daily work was last collapsed, which beats its default.
+   const saved=await page.evaluate(()=>({key:window.EASidebar.storageKey(data.user.id),value:JSON.parse(localStorage.getItem(window.EASidebar.storageKey(data.user.id))||'{}'),page,state:Object.fromEntries([...document.querySelectorAll('aside [data-side-toggle]')].map(b=>[b.dataset.sideToggle,b.getAttribute('aria-expanded')]))}));
+   assert.equal(saved.value['daily-work'],false,`${role}: the collapsed Daily work choice is saved`);
+   for(const [k,v] of Object.entries(saved.state))if(k!=='daily-work')assert.equal(v,'true',`${role}: ${k} stays open after sign-out, sign-in and reload`);
+   const current=await page.evaluate(()=>window.EASidebar.groupOf(window.EASidebar.menu(window.EASidebar.navFor(data.user),data.user.role),page));
+   assert.equal(saved.state['daily-work'],current==='daily-work'?'true':'false',`${role}: Daily work follows the saved choice unless it holds the current page`);
+   visited.push('groups-remembered');
+  }
   await page.waitForTimeout(500);
   const shown=await toasts();
   return {errors,shown,visited};
