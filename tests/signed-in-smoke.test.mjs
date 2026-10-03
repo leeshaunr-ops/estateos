@@ -318,6 +318,26 @@ async function extrasChecks(page,mobile,done){
  assert.deepEqual(sent?.workIds,need,'admin: one request with all the listed jobs');assert.ok(sent.staffId&&!sent.vendorId);await page.unroute('**/api/staff/assign-all');
  assert.ok((await page.evaluate(()=>window.__toasts||[])).some(t=>t===`${need.length} jobs assigned to staff.`),'admin: assign-all toast');done.push('assign-all');
 }
+// Oct 3 fixes: Request service saves with the chosen priority (it used to fail with "Choose a valid priority."), and
+// Edit email on an inspection saves the report recipient (it used to post to properties/update and fail on the address).
+async function requestServiceCheck(page,role,done){
+ await go(page,'requests');const title=`Smoke ${role} request ${Date.now()}`;
+ await page.evaluate(()=>action('new-request'));await page.waitForSelector('dialog[open] select[name="priority"]',{timeout:5000});
+ assert.deepEqual(await page.locator('dialog[open] select[name="priority"] option').evaluateAll(o=>o.map(x=>x.value)),['Low','Normal','High','Urgent'],`${role}: priority values`);
+ await page.fill('dialog[open] input[name="title"]',title);await page.selectOption('dialog[open] select[name="priority"]','High');
+ await page.click('dialog[open] button[type="submit"]');await page.waitForFunction(()=>!document.querySelector('dialog[open]'),null,{timeout:8000});await settle(page);
+ await page.waitForFunction(t=>data.requests.some(r=>r.title===t),title,{timeout:8000}).catch(()=>{});
+ assert.equal(await page.evaluate(t=>data.requests.find(r=>r.title===t)?.priority,title),'High',`${role}: request saved with High priority (toasts: ${JSON.stringify(await page.evaluate(()=>window.__toasts))})`);done.push('request-service');
+}
+async function recipientEditCheck(page,done){
+ await page.evaluate(id=>action('inspection',id),draftId);await settle(page);
+ await click(page,'.content [data-action="inspection-recipient-edit"]');await page.waitForSelector('dialog[open] input[name="email"]',{timeout:5000});
+ await page.fill('dialog[open] input[name="email"]','reports@example.test');await page.click('dialog[open] button[type="submit"]');
+ await page.waitForFunction(()=>!document.querySelector('dialog[open]'),null,{timeout:8000});await settle(page);
+ await page.waitForFunction(()=>data.properties.find(p=>p.name==='Ocean House').inspection_report_email==='reports@example.test',null,{timeout:8000}).catch(()=>{});
+ assert.equal(await page.evaluate(()=>data.properties.find(p=>p.name==='Ocean House').inspection_report_email),'reports@example.test','admin: Edit email saves the report recipient');
+ assert.match(await mainText(page),/reports@example\.test/,'admin: the inspection shows the new recipient');done.push('inspection-recipient');
+}
 // Batch 3d: Calendar is an agenda grouped by day that starts today (overdue first for staff), marked by kind.
 async function calendarChecks(page,role,expect,done){
  await go(page,'calendar');
@@ -424,6 +444,7 @@ const PAGE_CHECKS={
   assert.doesNotMatch(await go(page,'automation'),/Recovery backup|encrypted archive|consolidated/,'admin: no automation jargon');done.push('wording');
   await scheduleChecks(page,'admin',mobile,done);
   await extrasChecks(page,mobile,done);
+  await recipientEditCheck(page,done);
   await polishChecks(page,mobile,done);
   await inboxChecks(page,'admin',{subject:'Ocean House gate',preview:'side gate latch'},done);
   await inspectionChecks(page,'admin',mobile,done);
@@ -431,6 +452,7 @@ const PAGE_CHECKS={
  },
  employee:async(page,mobile,done)=>{
   await scheduleChecks(page,'employee',mobile,done);
+  await requestServiceCheck(page,'employee',done);
  },
  vendor:async(page,mobile,done)=>{
   await headerChecks(page,mobile,'vendor',['work','properties','messages'],done);
@@ -463,6 +485,7 @@ const PAGE_CHECKS={
   const appr=await go(page,'approvals');assert.match(appr,/\$125\.00/);assert.doesNotMatch(appr,/·\s*$/m,'client: no dangling separator');done.push('approvals');
   assert.doesNotMatch(await go(page,'profile'),/Account ID/,'client: no raw account ID');done.push('profile');
   await calendarChecks(page,'client',{arrival:'You arrive',chips:['Everything','Visits','Arrivals','Service']},done);
+  await requestServiceCheck(page,'client',done);
  }
 };
 async function pageJourney(launch,contextOptions,role,email){
