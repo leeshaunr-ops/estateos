@@ -5,6 +5,7 @@ const EAChecklist=globalThis.EAChecklist;
 export function jpegSize(bytes){if(bytes[0]!==255||bytes[1]!==216)throw Error('JPEG required');let pos=2;while(pos<bytes.length){if(bytes[pos++]!==255)continue;let marker=bytes[pos++];while(marker===255)marker=bytes[pos++];if(marker===217||marker===218)break;const length=bytes.readUInt16BE(pos);if([192,193,194].includes(marker)){const height=bytes.readUInt16BE(pos+3),width=bytes.readUInt16BE(pos+5),channels=bytes[pos+7];if(!width||!height||width*height>40000000||![1,3].includes(channels))throw Error('Unsupported JPEG');return {height,width,channels};}if(length<2)break;pos+=length;}throw Error('Invalid JPEG');}
 const C={ink:[.122,.161,.2],muted:[.373,.42,.463],brand:[.545,.141,.169],gold:[.722,.6,.376],line:[.886,.906,.922],white:[1,1,1],pass:[.12,.38,.29],monitor:[.57,.36,.02],attention:[.66,.12,.15]};
 const backgrounds={pass:[.92,.96,.93],monitor:[1,.95,.72],attention:[1,.88,.88],na:[.95,.95,.94],unchecked:[.95,.95,.94]};
+const visitStyles={pass:'pass',monitor:'monitor',fail:'attention',open:'na'};
 const statusLabel=s=>({pass:'PASS',monitor:'MONITOR',attention:'ATTENTION',na:'N/A',unchecked:'NOT ASSESSED'}[s]||String(s||'').toUpperCase());
 // Template answers (visits started from a published checklist): colour by tone, short values in the pill, longer
 // answers (text, number, choices) on their own line under the item. Built-in answers never reach this.
@@ -25,7 +26,7 @@ export function photoTakenAt(photo){
  if(!photo?.capturedAt)return '';const at=new Date(photo.capturedAt);if(Number.isNaN(at.getTime()))return '';
  const format=timeZone=>at.toLocaleString('en-US',{timeZone,year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'});
  let value;try{value=format(photo.timezone||'America/New_York');}catch{value=format('America/New_York');}
- return 'Taken '+value.replace(/[\u202f\u00a0]/g,' ');
+ return 'Taken '+value.replace(/[\u202f\u00a0]/g,' ')+(photo.atResidence?' at the residence':'');
 }
 export function inspectionPdf(report,photos=[]){
  const objects=[];const add=o=>(objects.push(o),objects.length);const catalog=add(''),root=add('');const regular=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>'),bold=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
@@ -39,11 +40,25 @@ export function inspectionPdf(report,photos=[]){
  function need(h){if(y+h>730)newPage();}
  function paragraph(value,size=10,color=C.ink,width=508,x=52){for(const line of lines(value,width,size)){need(size+6);text(line,x,y,size,color);y+=size+6;}}
  function heading(title){need(55);y+=10;text(title,40,y,14,C.brand,true);y+=25;}
+ // "Visit verification" box (reports published with visit verification on). Coloured pill, no glyphs (WinAnsi fonts).
+ function visitBox(v){
+  const style=visitStyles[v.tone]||'na',rows=(v.rows||[]).map(([label,value])=>[label,lines(value,372,10)]),notes=(v.notes||[]).flatMap(n=>lines(n,500,9));
+  const height=40+rows.reduce((h,[,l])=>h+l.length*14+4,0)+notes.length*13+(notes.length?4:0);
+  y+=6;need(height+8);
+  rect(40,y,532,height,[.985,.98,.97]);rect(40,y,4,height,C.brand);rect(40,y,532,1,C.line);rect(40,y+height-1,532,1,C.line);
+  text('VISIT VERIFICATION',54,y+12,9,C.brand,true);
+  const pill=clean(v.label||'').toUpperCase(),pw=Math.max(60,pill.length*5.6+18);rect(560-pw,y+8,pw,18,backgrounds[style]);text(pill,560-pw+9,y+12,8,C[style]||C.muted,true);
+  let top=y+34;
+  for(const [label,value] of rows){text(label,54,top,9,C.muted,true);for(const line of value){text(line,170,top,10,C.ink);top+=14;}top+=4;}
+  for(const n of notes){text(n,54,top,9,C.muted);top+=13;}
+  y+=height+10;
+ }
  newPage();paragraph(report.property||'Residence inspection',24,C.ink,520,40);y+=8;
  text('INSPECTION REPORT',40,y,10,C.brand,true);y+=22;
- for(const [label,value] of [['Family',report.client||'Not specified'],['Inspected by',report.inspector||'Not recorded'],['Inspection date',report.date||'Not recorded'],['Completed',reportTimestamp(report.completedAt)],...(report.checklist?[['Checklist',`${report.checklist.name} (version ${report.checklist.template_version})`]]:[]),['Report reference',report.id||'Not recorded']]){
+ for(const [label,value] of [['Family',report.client||'Not specified'],['Inspected by',report.inspector||'Not recorded'],['Inspection date',report.date||'Not recorded'],['Completed',reportTimestamp(report.completedAt,report.timezone||'America/New_York')],...(report.checklist?[['Checklist',`${report.checklist.name} (version ${report.checklist.template_version})`]]:[]),...(report.reportNumber?[['Report number',report.reportNumber]]:[['Report reference',report.id||'Not recorded']])]){
   const row=lines(value,390,10);need(row.length*15+9);text(label,40,y,10,C.muted,true);for(const line of row){text(line,162,y,10);y+=15;}y+=5;
  }
+ if(report.visit)visitBox(report.visit);
  if(report.assetDetails?.length){
   heading('Asset and equipment details');
   for(const asset of report.assetDetails){
@@ -73,12 +88,12 @@ export function inspectionPdf(report,photos=[]){
  }
  if(photos.length){for(const [i,photo] of photos.entries()){
   const d=jpegSize(photo.bytes),scale=Math.min(508/d.width,440/d.height),w=d.width*scale,h=d.height*scale;
-  const taken=photoTakenAt(photo);need(h+(i===0?101:66)+(taken?15:0));if(i===0)heading('Photo evidence');text('PHOTO '+(i+1),40,y,9,C.brand,true);y+=19;
+  const taken=photoTakenAt(photo)||(photo.atResidence?'Taken at the residence':'');need(h+(i===0?101:66)+(taken?15:0));if(i===0)heading('Photo evidence');text('PHOTO '+(i+1),40,y,9,C.brand,true);y+=19;
   const image=add(Buffer.concat([Buffer.from(`<< /Type /XObject /Subtype /Image /Width ${d.width} /Height ${d.height} /ColorSpace /${d.channels===1?'DeviceGray':'DeviceRGB'} /BitsPerComponent 8 /Filter /DCTDecode /Length ${photo.bytes.length} >>\nstream\n`),photo.bytes,Buffer.from('\nendstream')]));const name='Im'+image;page.images.push([name,image]);page.stream+=`q ${w} 0 0 ${h} ${40+(532-w)/2} ${792-y-h} cm /${name} Do Q\n`;y+=h+9;paragraph(photo.name||'Inspection evidence',9,C.muted,520,40);if(taken)paragraph(taken,9,C.muted,520,40);y+=12;
  }}
  heading('Notes to the client');paragraph(report.notes||'No additional notes.');
  heading('Inspection summary');paragraph(report.summary||'No summary recorded.');
- const pageIds=[];for(let index=0;index<pages.length;index++){page=pages[index];rect(40,750,532,1,C.line);text('Powered by EstateAegis  |  Confidential client report',40,762,8,C.muted);text(`Page ${index+1} of ${pages.length}`,500,762,8,C.muted);const bytes=Buffer.from(page.stream,'latin1'),content=add(Buffer.concat([Buffer.from(`<< /Length ${bytes.length} >>\nstream\n`),bytes,Buffer.from('\nendstream')]));pageIds.push(add(`<< /Type /Page /Parent ${root} 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${regular} 0 R /F2 ${bold} 0 R >> /XObject << ${page.images.map(([name,id])=>`/${name} ${id} 0 R`).join(' ')} >> >> /Contents ${content} 0 R >>`));}
+ const pageIds=[];for(let index=0;index<pages.length;index++){page=pages[index];rect(40,750,532,1,C.line);text('Powered by EstateAegis  |  Confidential client report',40,762,8,C.muted);if(report.reportNumber&&report.id)text('Reference '+report.id,40,773,6,C.muted);text(`Page ${index+1} of ${pages.length}`,500,762,8,C.muted);const bytes=Buffer.from(page.stream,'latin1'),content=add(Buffer.concat([Buffer.from(`<< /Length ${bytes.length} >>\nstream\n`),bytes,Buffer.from('\nendstream')]));pageIds.push(add(`<< /Type /Page /Parent ${root} 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${regular} 0 R /F2 ${bold} 0 R >> /XObject << ${page.images.map(([name,id])=>`/${name} ${id} 0 R`).join(' ')} >> >> /Contents ${content} 0 R >>`));}
  objects[catalog-1]=`<< /Type /Catalog /Pages ${root} 0 R >>`;objects[root-1]=`<< /Type /Pages /Count ${pageIds.length} /Kids [${pageIds.map(id=>id+' 0 R').join(' ')}] >>`;
  const parts=[Buffer.from('%PDF-1.4\n%\xe2\xe3\xcf\xd3\n','latin1')],offsets=[0];let size=parts[0].length;for(const [i,obj] of objects.entries()){offsets.push(size);const chunk=Buffer.concat([Buffer.from(`${i+1} 0 obj\n`),Buffer.isBuffer(obj)?obj:Buffer.from(obj),Buffer.from('\nendobj\n')]);parts.push(chunk);size+=chunk.length;}
  parts.push(Buffer.from(`xref\n0 ${objects.length+1}\n0000000000 65535 f \n${offsets.slice(1).map(n=>String(n).padStart(10,'0')+' 00000 n \n').join('')}trailer\n<< /Size ${objects.length+1} /Root ${catalog} 0 R >>\nstartxref\n${size}\n%%EOF`));return Buffer.concat(parts);

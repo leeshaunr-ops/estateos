@@ -4,6 +4,8 @@ import {EAChecklist, parseSnapshot, defaultChecklist} from './visit-checklists.m
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export const isUuid = value => typeof value === 'string' && UUID.test(value);
 export const IDEMPOTENT_ROUTES = new Set(['/api/inspections', '/api/inspections/save', '/api/inspections/submit', '/api/inspections/publish', '/api/files']);
+// Visit check-in / check-out / override (visit-verification.mjs) replay safely too.
+export const IDEMPOTENT_PATTERN = /^\/api\/inspections\/[^/]+\/(check-in|check-out|visit\/override)$/;
 const KEY_TTL_MS = 30 * 24 * 3600000, STALE_CLAIM_MS = 120000;
 
 /** Parse a device capture time. Returns an ISO string, or null when missing or implausible. */
@@ -23,11 +25,11 @@ export function submissionProblems(row, { photoCount = null } = {}) {
  return EAChecklist.completionProblems(JSON.parse(row.answers || '[]'), { summary: row.summary, photoCount });
 }
 
-export function createOfflineInspections({ get, all, run, body, json, fail, roles, property, entity, hash, now, template, visitChecklists }) {
+export function createOfflineInspections({ get, all, run, body, json, fail, roles, property, entity, hash, now, template, visitChecklists, visitVerification }) {
  /** Wrap a mutating handler so a repeated Idempotency-Key replays the first successful response instead of writing twice. */
  async function idempotent(req, res, url, user, handler) {
   const key = req.headers['idempotency-key'];
-  if (!user || req.method !== 'POST' || !key || !IDEMPOTENT_ROUTES.has(url.pathname)) return handler();
+  if (!user || req.method !== 'POST' || !key || !(IDEMPOTENT_ROUTES.has(url.pathname) || IDEMPOTENT_PATTERN.test(url.pathname))) return handler();
   if (!isUuid(key)) fail(422, 'Idempotency-Key must be a UUID.');
   const b = await body(req), endpoint = url.pathname, org = user.organization_id;
   const requestHash = hash(endpoint + '\n' + JSON.stringify(b));
@@ -76,14 +78,14 @@ export function createOfflineInspections({ get, all, run, body, json, fail, role
     for (const id of ids) { const row = await get("SELECT * FROM inspections WHERE property_id=? AND status='published' ORDER BY inspection_date DESC,published_at DESC LIMIT 1", id); if (row) lastPublished.push(row); }
     visits = [...open, ...lastPublished].map(i => inspectionFields(i, names));
     const visitIds = open.map(i => i.id);
-    if (visitIds.length) files = await all(`SELECT id,property_id,inspection_id,name,mime,bytes,created_at,captured_at FROM files WHERE inspection_id IN (${visitIds.map(() => '?').join(',')}) ORDER BY created_at`, ...visitIds);
+    if (visitIds.length) files = await all(`SELECT id,property_id,inspection_id,name,mime,bytes,created_at,captured_at,capture_lat,capture_lon,capture_accuracy_m,capture_source FROM files WHERE inspection_id IN (${visitIds.map(() => '?').join(',')}) ORDER BY created_at`, ...visitIds);
    }
    const client = new Map((await all('SELECT id,name FROM clients WHERE organization_id=?', user.organization_id)).map(c => [c.id, c.name]));
    const settings = await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?', user.organization_id);
    // Every published company checklist (latest published version, with items) so visits can be started and filled with no signal.
    const checklists = visitChecklists ? await visitChecklists.published(user.organization_id, { items: true }) : [];
    const routine = defaultChecklist(checklists, 'routine');
-   json(res, 200, {
+   const payload = {
     generatedAt: now(),
     user: { id: user.id, name: user.name, email: user.email, role: user.role },
     company: (await get('SELECT name FROM organizations WHERE id=?', user.organization_id))?.name || '',
@@ -95,7 +97,9 @@ export function createOfflineInspections({ get, all, run, body, json, fail, role
     properties: homes.map(h => ({ id: h.id, name: h.name, address: h.address, client_id: h.client_id, client_name: client.get(h.client_id) || '', account_manager_id: h.account_manager_id, account_manager_name: names.get(h.account_manager_id) || '', timezone: h.timezone || '', room_profile: h.room_profile, inspection_report_email: h.inspection_report_email || '' })),
     inspections: visits,
     files
-   });
+   };
+   if (visitVerification) await visitVerification.decorateOffline(user, payload);
+   json(res, 200, payload);
    return true;
   }
   const match = /^\/api\/offline\/inspections\/([^/]+)$/.exec(p);

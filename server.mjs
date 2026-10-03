@@ -30,6 +30,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inspectionPdf, jpegSize } from './pdf.mjs';
+import { createVisitVerification } from './visit-verification.mjs';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const db = await openDatabase(root);
 let storage;
@@ -207,7 +208,8 @@ const demos=createDemos({get,all,run,transaction,id,now,hash,randomBytes,body,js
 const saas = createSaas({get,all,run,transaction,fail,text,note,id,hash,now,passwordHash,session,json,body,rate,audit,randomBytes,demos,demoSignup});
 const staff = createStaff({get,all,run,transaction,fail,text,note,id,now,passwordHash,json,body,audit,communications,assertCapacity:billing.assertCapacity});
 const checklistTemplates = createChecklistTemplates({get,all,run,transaction,body,json,fail,roles,property,id,now,audit});
-const offlineInspections = createOfflineInspections({get,all,run,body,json,fail,roles,property,entity,hash,now,template,visitChecklists});
+const visitVerification = createVisitVerification({get,all,run,transaction,id,now,fail,json,body,roles,property,entity,audit,captureTime});
+const offlineInspections = createOfflineInspections({get,all,run,body,json,fail,roles,property,entity,hash,now,template,visitChecklists,visitVerification});
 async function assertWorkspaceActive(organizationId){if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',organizationId))?.status==='suspended')fail(403,'This company workspace is suspended. Contact support.');const d=await demos.lookup(organizationId);if(d&&Number(d.expires_at)<=Date.now())fail(403,'Your seven-day demo has ended. Contact sales@estateaegis.com for more time.');}
 const clientErrorWindows = new Map();
 function clientErrorAllowed(req){
@@ -244,6 +246,7 @@ async function api(req, res, url, user) {
     if(await checklistTemplates.handle(req,res,url,user))return;
     if(await offlineInspections.handle(req,res,url,user))return;
     if(await failAlerts.handle(req,res,url,user))return;
+    if(await visitVerification.handle(req,res,url,user))return;
     if(await communications.handle(req,res,url,user))return;
     if(await operations.handle(req,res,url,user))return;
     if(await security.handle(req,res,url,user))return;
@@ -367,7 +370,7 @@ async function api(req, res, url, user) {
         return json(res, 200, { ok: true });
     }
     if (p === '/api/data' && method === 'GET')
-        return json(res, 200, (await snapshot(user)));
+        return json(res, 200, await visitVerification.decorate(user, await snapshot(user)));
     if (p.startsWith('/api/files/') && method === 'GET') {
         const f = (await readFile(user, p.split('/')[3]));
         const bytes = (await readBytes(f.storage_key));
@@ -378,7 +381,7 @@ async function api(req, res, url, user) {
         const row = (await entity(user, 'inspections', p.split('/')[3]));
         if (row.status !== 'published')
             fail(409, 'Publish the inspection first.');
-        const report = {...JSON.parse(row.report_snapshot),companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'', completedAt:JSON.parse(row.report_snapshot).completedAt||row.published_at};
+        const report = await visitVerification.reportForPdf(user, row, {...JSON.parse(row.report_snapshot),companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'', completedAt:JSON.parse(row.report_snapshot).completedAt||row.published_at});
         const pdf = inspectionPdf(report, await inspectionPhotos(user, report));
         res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="EstateAegis-Inspection-${row.id}.pdf"`, 'Cache-Control': 'no-store' });
         return res.end(pdf);
@@ -513,6 +516,7 @@ async function api(req, res, url, user) {
             fail(422, 'Select a client family.');
         const a = addressFields(b), key = id();
         await transaction(async()=>{await billing.assertCapacity(user.organization_id,'residences');(await run('INSERT INTO properties(id,organization_id,client_id,name,address,timezone,manual,created_at,street_address,address_line2,city,state,postal_code,country,room_profile) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', key, user.organization_id, b.clientId, text(b.name, 'Residence', 160), a.full, note(b.timezone, 80) || 'America/New_York', '', now(), a.street, a.line2, a.city, a.state, a.postal, a.country, JSON.stringify(roomProfile(b.roomProfile))));});
+        await visitVerification.afterAddressSave(key, b, null);
         (await audit(user, 'property.created', key));
         result = { id: key };
     }
@@ -520,6 +524,7 @@ async function api(req, res, url, user) {
         roles(user, 'admin');
         const row = (await property(user, b.id, 'operate')), a = addressFields(b);
         (await run('UPDATE properties SET name=?,address=?,street_address=?,address_line2=?,city=?,state=?,postal_code=?,country=?,room_profile=? WHERE id=?', text(b.name, 'Residence', 160), a.full, a.street, a.line2, a.city, a.state, a.postal, a.country, JSON.stringify(roomProfile(b.roomProfile)), row.id));
+        await visitVerification.afterAddressSave(row.id, b, row);
         (await audit(user, 'property.updated', row.id));
         result = { id: row.id };
     }
@@ -891,6 +896,7 @@ async function api(req, res, url, user) {
             fail(409, 'Published reports cannot be edited.');
         const linked = parseSnapshot(row.checklist_snapshot);
         const answers = linked ? visitChecklists.validateAnswers(b.answers, linked) : validateAnswers(b.answers);
+        await visitVerification.assertCheckedIn(user, row, answers);
         const changed=await run("UPDATE inspections SET answers=?,summary=?,notes=?,internal_notes=?,version=version+1 WHERE id=? AND status='draft' AND version=?",JSON.stringify(answers),note(b.summary),note(b.notes),note(b.internalNotes),row.id,row.version);
         if(changed.changes!==1)fail(409,'This inspection changed. Refresh before saving.');
         (await audit(user, 'inspection.saved', row.id));
@@ -912,6 +918,7 @@ async function api(req, res, url, user) {
             assertVersion(row, b);
             const problems = submissionProblems(row, { photoCount: Number((await get('SELECT COUNT(*) total FROM files WHERE inspection_id=?', row.id))?.total || 0) });
             if (problems.length) fail(422, problems.join(' '));
+            await visitVerification.autoCheckOut(user, row);
             const submittedAt = now();
             await transaction(async () => {
                 const changed = await run("UPDATE inspections SET status='submitted',submitted_at=?,submitted_by=?,version=version+1 WHERE id=? AND status='draft' AND version=?", submittedAt, user.id, row.id, row.version);
@@ -985,14 +992,17 @@ async function api(req, res, url, user) {
             jpegSize(bytes);
         else if (bytes.subarray(0, 5).toString() !== '%PDF-' || b.inspectionId || b.workId)
             fail(422, 'Use JPEG photos or PDF documents.');
+        // Location privacy: EXIF GPS / XMP are always removed from stored JPEGs; with visit verification on, the photo's
+        // position (device, else EXIF) and EXIF capture time are kept as columns instead.
+        const meta = await visitVerification.uploadMeta(user, pRow, b, bytes, isJpeg);
         const key = id(), storageKey = id();
         let stored=false;
         try {
             await transaction(async()=>{
-                await subscriptions.ensureSpace(user.organization_id,bytes.length);
-                await putBytes(storageKey,bytes,isJpeg?'image/jpeg':'application/pdf');stored=true;
+                await subscriptions.ensureSpace(user.organization_id,meta.bytes.length);
+                await putBytes(storageKey,meta.bytes,isJpeg?'image/jpeg':'application/pdf');stored=true;
                 const receivedAt=now();
-                await run('INSERT INTO files(id,property_id,inspection_id,work_order_id,name,mime,bytes,storage_key,visibility,created_by,created_at,answer_key,client_op_id,captured_at,received_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',key,pRow.id,b.inspectionId||null,b.workId||null,text(b.name,'Filename',200),isJpeg?'image/jpeg':'application/pdf',bytes.length,storageKey,b.visibility==='client'?'client':'internal',user.id,receivedAt,null,clientOpId||null,capturedAt,receivedAt);
+                await run('INSERT INTO files(id,property_id,inspection_id,work_order_id,name,mime,bytes,storage_key,visibility,created_by,created_at,answer_key,client_op_id,captured_at,received_at,capture_lat,capture_lon,capture_accuracy_m,capture_source) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',key,pRow.id,b.inspectionId||null,b.workId||null,text(b.name,'Filename',200),isJpeg?'image/jpeg':'application/pdf',meta.bytes.length,storageKey,b.visibility==='client'?'client':'internal',user.id,receivedAt,null,clientOpId||null,meta.capturedAt||capturedAt,receivedAt,meta.lat,meta.lon,meta.accuracy,meta.source);
                 await audit(user,'file.uploaded',key);
             });
         } catch(e){if(stored)await deleteBytes(storageKey);throw e;}
@@ -1239,7 +1249,7 @@ const server = http.createServer(async (req, res) => {
             return res.end(url.pathname === '/sw.js' ? content.replace('__SHELL_VERSION__', shellVersion()) : content);
         }
         const appHome = url.pathname === '/' && (url.searchParams.has('invite') || url.searchParams.has('workspaceInvite') || await actor(req));
-        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/security':'security.html' };
+        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js','/visit-verification.js':'visit-verification.js','/visit-card.js':'visit-card.js', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/security':'security.html' };
         const file = names[url.pathname] || (url.pathname === '/client-login' || /^\/client\/[a-z0-9-]+$/i.test(url.pathname) ? 'live.html' : null);
         if (!file)
             fail(404, 'Page not found.');
@@ -1261,7 +1271,7 @@ const server = http.createServer(async (req, res) => {
         json(res, status, { error: status === 500 ? 'The action could not be saved. Check the server log.' : error.message });
     }
 });
-const SHELL_FILES = ['live.html','live.js','inspection-checklist.js','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png'];
+const SHELL_FILES = ['live.html','live.js','inspection-checklist.js','visit-verification.js','visit-card.js','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png'];
 let cachedShellVersion = null;
 function shellVersion() { if (!cachedShellVersion) { const digest = createHash('sha256'); for (const name of SHELL_FILES) { try { digest.update(name).update(fs.readFileSync(path.join(root, 'public', name))); } catch { digest.update(name + ':missing'); } } cachedShellVersion = digest.digest('hex').slice(0, 12); } return cachedShellVersion; }
 setInterval(() => offlineInspections.purge().catch(e => console.error('Idempotency cleanup:', e.message)), 3600000).unref();
@@ -1269,6 +1279,7 @@ const port = Number(process.env.PORT || 4317), host = process.env.ESTATEOS_HOST 
 if (host !== '127.0.0.1' && (!process.env.ESTATEOS_SETUP_KEY || process.env.ESTATEOS_SETUP_KEY.length < 24 || process.env.ESTATEOS_SECURE_COOKIES !== '1'))
     throw Error('Nonlocal hosting requires a strong setup key, HTTPS termination and secure cookies. Complete the production deployment review first.');
 server.listen(port, host, () => console.log(`EstateOS running at http://${host}:${server.address().port}`));
+visitVerification.startGeocoder();
 process.on('SIGTERM', () => server.close(async () => { await db.close(); process.exit(0); }));
 
 async function publishInspection(user,row,{key,route,requestHash}){
@@ -1280,12 +1291,15 @@ async function publishInspection(user,row,{key,route,requestHash}){
  if(linked&&EAChecklist.photoRequired(answers).length&&!(await get('SELECT id FROM files WHERE inspection_id=? LIMIT 1',row.id)))fail(422,'Add a photo for the failed items that require one before publishing.');
  if(!row.summary.trim())fail(422,'Add an inspection summary.');
  const pRow=await property(user,row.property_id);
+ await visitVerification.autoCheckOut(user,row);
  const fileIds=(await all('SELECT id FROM files WHERE inspection_id=? ORDER BY created_at',row.id)).map(f=>f.id);
  const completedAt=now();
  const report={id:row.id,completedAt,timezone:pRow.timezone||'UTC',company:(await get('SELECT name FROM organizations WHERE id=?',user.organization_id)).name,companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'',property:pRow.name,client:(await get('SELECT name FROM clients WHERE id=?',pRow.client_id)).name,date:row.inspection_date,inspector:(await get('SELECT name FROM users WHERE id=?',row.inspector_id)).name,overall:answers.some(a=>a.status==='attention'||a.status==='fail')?'Action needed':answers.some(a=>a.status==='monitor')?'Monitor':answers.every(a=>a.status==='na')?'Not assessed':'Passed',answers,summary:row.summary,notes:row.notes,fileIds,...(linked?{checklist:checklistLabel(linked)}:{})};
  let result={id:row.id,published:true};
  await transaction(async()=>{
-  const updated=await run("UPDATE inspections SET status='published',published_at=?,report_snapshot=?,report_email=?,version=version+1 WHERE id=? AND status IN ('draft','submitted') AND version=?",completedAt,JSON.stringify(report),pRow.inspection_report_email||'',row.id,row.version);
+  // Residence/company time zone, and (visit verification on) the verification marker and a human report number.
+  const extra=await visitVerification.publishFields(user,row,pRow);Object.assign(report,extra.fields);if(extra.number)report.reportNumber=extra.number;
+  const updated=await run("UPDATE inspections SET status='published',published_at=?,report_snapshot=?,report_email=?,report_number=COALESCE(?,report_number),version=version+1 WHERE id=? AND status IN ('draft','submitted') AND version=?",completedAt,JSON.stringify(report),pRow.inspection_report_email||'',extra.number,row.id,row.version);
   if(updated.changes!==1)fail(409,'This report changed or was already published.');
   // Publishing straight from a draft also completes the visit; a visit already alerted on submit is not alerted twice.
   await failAlerts.inspectionCompleted(row.id,{source:'publish',completedAt});
@@ -1297,7 +1311,7 @@ async function publishInspection(user,row,{key,route,requestHash}){
  await run('UPDATE idempotency SET response=? WHERE user_id=? AND key=? AND route=?',JSON.stringify(result),user.id,key,route);
  return result;
 }
-async function inspectionPhotos(user,report){const tz=report.timezone||'America/New_York';return mapAsync(report.fileIds||[],async fileId=>{const f=await readFile(user,fileId);return {name:f.name,bytes:await readBytes(f.storage_key),capturedAt:f.captured_at||null,timezone:tz};});}
+async function inspectionPhotos(user,report){const tz=report.timezone||'America/New_York';return mapAsync(report.fileIds||[],async fileId=>{const f=await readFile(user,fileId);return {name:f.name,bytes:await readBytes(f.storage_key),capturedAt:f.captured_at||null,timezone:tz,atResidence:visitVerification.photoAtResidence(f,report)};});}
 async function deliverInspection(user,inspectionId){
  if(await demos.lookup(user.organization_id))return {emailStatus:'demo_disabled'};
  const row=await entity(user,'inspections',inspectionId,'operate');
@@ -1309,7 +1323,7 @@ async function deliverInspection(user,inspectionId){
  if(!claimed.changes)return {emailStatus:'sending'};
  let result;
  try{
-  const report={...JSON.parse(row.report_snapshot),companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'',completedAt:JSON.parse(row.report_snapshot).completedAt||row.published_at};
+  const report=await visitVerification.reportForPdf(user,row,{...JSON.parse(row.report_snapshot),companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'',completedAt:JSON.parse(row.report_snapshot).completedAt||row.published_at});
   result=await sendInspectionEmail({to:row.report_email,report,pdf:inspectionPdf(report,await inspectionPhotos(user,report))});
  }catch{result={emailStatus:'failed'};}
  await run('UPDATE inspection_email_delivery SET email_status=? WHERE inspection_id=?',result.emailStatus,row.id);
