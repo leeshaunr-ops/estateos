@@ -23,11 +23,13 @@ const ICON={
 
 /* Which sign-in page is this? company = EstateAegis /login; client = generic /client-login;
    branded = /client/<company>; invite = ?invite= (company-branded); signup = ?workspaceInvite=. */
-function loginContext({configured=true,invitation=null,brand=null,path='/login',workspace=null}={}){
+function loginContext({configured=true,invitation=null,brand=null,path='/login',workspace=null,reset=false}={}){
  if(workspace)return {kind:'signup',configured,company:workspace.company||'',email:workspace.email||''};
  if(invitation)return {kind:'invite',configured,invitation,company:brand?.company||'',logo:brand?.logo||'',title:brand?.title||'',subtitle:brand?.subtitle||'',support:brand?.supportEmail||'',role:brand?.role||'client'};
  if(brand&&/^\/client\/[a-z0-9-]+$/i.test(path))return {kind:'branded',configured,company:brand.company||'',logo:brand.logo||'',title:brand.title||'',subtitle:brand.subtitle||'',support:brand.supportEmail||''};
  if(path==='/client-login')return {kind:'client',configured};
+ // Password-reset emails go to every role, clients included, so that page carries no sales links.
+ if(reset)return {kind:'account',configured};
  return {kind:'company',configured};
 }
 const isClientSide=ctx=>ctx.kind==='client'||ctx.kind==='branded'||ctx.kind==='invite';
@@ -40,7 +42,7 @@ function header(ctx){
  if(isCompanyBranded(ctx))return `<header class="login-header login-header-branded"><span class="login-company-brand">${companyLogo(ctx,'login-company-logo',40)}<span>${h(ctx.company)}</span></span>${ctx.support?`<nav class="login-header-links" aria-label="Help"><a href="mailto:${h(ctx.support)}">Need help?</a></nav>`:''}</header>`;
  const brand=`<a class="login-brand" href="/" aria-label="EstateAegis home">${eaLogo(40)}EstateAegis</a>`;
  if(isClientSide(ctx))return `<header class="login-header">${brand}<nav class="login-header-links" aria-label="Help"><a href="mailto:${EA_HELP}">Need help?</a></nav></header>`;
- return `<header class="login-header">${brand}<nav class="login-header-links" aria-label="Site"><a class="login-hide-sm" href="/"><span aria-hidden="true">←</span> Back to homepage</a><a class="login-hide-sm" href="mailto:${EA_HELP}">Need help?</a>${ctx.kind==='signup'?'':'<a class="login-cta" href="/demo">Start free demo</a>'}</nav></header>`;
+ return `<header class="login-header">${brand}<nav class="login-header-links" aria-label="Site"><a class="login-hide-sm" href="/"><span aria-hidden="true">←</span> Back to homepage</a><a class="login-hide-sm" href="mailto:${EA_HELP}">Need help?</a>${ctx.kind==='signup'||ctx.kind==='account'?'':'<a class="login-cta" href="/demo">Start free demo</a>'}</nav></header>`;
 }
 
 const ROLE_FEATURES={
@@ -95,7 +97,7 @@ function card(state,ctx){
  if(m==='setup')return cardHead('Company setup','Set up your company','Create the first administrator account. Your workspace starts empty, ready for your real records.')+messages(state)+`<form id="authForm" class="login-form" novalidate data-form="setup">${field('company','Company name',{autocomplete:'organization'})}<div class="login-field"><label for="f-companyLogo">Company logo (optional)</label><input id="f-companyLogo" name="companyLogo" type="file" accept="image/png,image/jpeg"></div>${field('setupKey','Setup key',{type:'password',autocomplete:'off',required:false,hint:'Required on hosted servers.'})}${field('name','Your name',{autocomplete:'name'})}${field('email','Email',{type:'email',autocomplete:'email',extra:'inputmode="email" autocapitalize="off" spellcheck="false"'})}${passwordField('password','Create password',{autocomplete:'new-password',newPassword:true})}<button class="login-submit" type="submit">Create company</button></form><p class="login-help">Setup is for the person running the workspace.</p>`;
  // log in
  const branded=isCompanyBranded(ctx);
- const head=ctx.kind==='company'?cardHead('Welcome back','Log in to EstateAegis','One login for company teams, clients and vendors. We’ll open the right portal for your account.'):branded?cardHead('Client portal','Log in',`See your homes, visit reports and requests from ${h(ctx.company)}.`):cardHead('Client portal','Client log in','See your homes, visit reports, arrivals and requests from your home watch company.');
+ const head=ctx.kind==='company'||ctx.kind==='account'?cardHead('Welcome back','Log in to EstateAegis','One login for company teams, clients and vendors. We’ll open the right portal for your account.'):branded?cardHead('Client portal','Log in',`See your homes, visit reports and requests from ${h(ctx.company)}.`):cardHead('Client portal','Client log in','See your homes, visit reports, arrivals and requests from your home watch company.');
  const extras=ctx.kind==='company'?`<div class="login-divider">New to EstateAegis?</div><div class="login-next"><a class="login-next-link" href="/demo"><span><strong>Start your free 7-day demo</strong><span>Sample residences to explore. No credit card.</span></span><span class="login-arrow" aria-hidden="true">→</span></a><a class="login-next-link" href="/pricing"><span><strong>See plans and pricing</strong><span>30-day free trial when you sign up for a paid plan.</span></span><span class="login-arrow" aria-hidden="true">→</span></a></div>`:'';
  return head+messages(state)+`<form id="authForm" class="login-form" novalidate data-form="login">${field('email','Email',{type:'email',autocomplete:'username',value:state.email,extra:'inputmode="email" autocapitalize="off" spellcheck="false"'})}${passwordField('password','Password',{value:state.password,link:'<button type="button" class="login-link" data-forgot>Forgot password?</button>'})}<button class="login-submit" type="submit">Log in</button></form>${secureLine()}${extras}${helpLine(ctx)}`;
 }
@@ -151,8 +153,8 @@ function mount(state,ctx){
 
 function portalAuth(configured,invitation,brand=null){
  const params=new URLSearchParams(location.search);
- const ctx=loginContext({configured,invitation,brand,path:location.pathname});
  const reset=params.get('reset');
+ const ctx=loginContext({configured,invitation,brand,path:location.pathname,reset:reset!==null});
  const mode=invitation?'invite':reset!==null?'reset':!configured&&ctx.kind==='company'?'setup':'login';
  return mount({mode,email:'',password:'',name:'',resetToken:reset||'',recovery:false,error:'',notice:''},ctx);
 }

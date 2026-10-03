@@ -139,6 +139,8 @@ test('company-branded client portal: company logo, name and headline up front, n
  const generic=view('login',{path:'/client-login'}).html;
  assert.match(generic,/Client log in/);assert.doesNotMatch(generic,/Start free demo|7-day|30-day|trial|pricing|Back to homepage/i);
  const company=view('login').html;assert.match(company,/Start free demo/);assert.match(company,/Back to homepage/);assert.match(company,/30-day free trial/);
+ const reset=view('reset',{reset:true},{resetToken:'x'});assert.equal(reset.ctx.kind,'account');assert.match(reset.html,/Set a new password/);assert.doesNotMatch(reset.html,/Start free demo|7-day|30-day|trial|pricing|login-cta/i,'reset links reach clients too: no sales links');
+ const afterReset=view('login',{reset:true}).html;assert.match(afterReset,/Log in to EstateAegis/);assert.doesNotMatch(afterReset,/Start free demo|7-day|30-day|trial|pricing/i);
  assert.doesNotMatch(company+generic,/Florida/i);
 });
 
