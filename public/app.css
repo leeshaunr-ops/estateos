@@ -306,10 +306,9 @@ body.signed-in,.shell{--muted:#5f6b76;--line:#e2e7eb}
  .shell .sched-dayitem{display:flex;flex-direction:column;gap:2px;margin-bottom:8px}
  .shell .sched-dayitem small{color:#5f6b76;font-size:12.5px;padding-left:4px}
  .shell .sched-dayitem .sched-item{font-size:13.5px;padding:8px 10px}
- .shell .sched-daycard>button{margin-top:4px}
+ .shell .sched-dayadd{min-height:44px;padding:0;margin-top:2px}
 }
 @media(max-width:760px){
  .shell .sched-nav{width:100%;justify-content:space-between}
  .shell .sched-range{flex:1}
- .shell .sched-daycard>button{width:100%}
 }
