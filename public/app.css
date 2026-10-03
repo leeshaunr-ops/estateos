@@ -422,3 +422,15 @@ body.signed-in,.shell{--muted:#5f6b76;--line:#e2e7eb}
  .shell .note-list .ov-day{padding-left:14px;padding-right:14px}
  .shell .message-inbox .msg-row{padding-left:14px;padding-right:14px}
 }
+
+/* ---------- Inspections (batch 4c) ---------- */
+.shell .inspection-screen .insp-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.shell .inspection-screen .insp-head .company-report-brand{display:flex;align-items:center;gap:10px;margin:0;padding:0;border:0}
+.shell .inspection-screen .insp-head .company-report-brand strong{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:20px;color:#1f2933}
+.shell .inspection-screen .insp-head .company-report-brand .company-logo{max-height:40px;width:auto}
+.shell .inspection-screen>.set-fields{margin:0 -1px 16px;border:1px solid #edf0f2;border-radius:8px;overflow:hidden}
+.shell .inspection-screen>.set-fields>div:nth-last-child(-n+2){border-bottom:0}
+.shell .insp-rooms-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:24px 0 10px;text-align:left}
+.shell .insp-rooms-head h2{margin:0;text-align:left}
+.shell .ck-meta:empty{display:none}
+@media(max-width:760px){.shell .insp-rooms-head{flex-direction:column;align-items:stretch}.shell .insp-rooms-head>button{width:100%}}
