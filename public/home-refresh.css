@@ -155,14 +155,10 @@ h3{font-size:20px;line-height:1.28;letter-spacing:-.35px;margin:14px 0 10px}
   .trust-grid{grid-template-columns:1fr 1fr}
   .faq{grid-template-columns:1fr;gap:10px}
 }
+/* Phones: the header is one compact row with a menu (marketing.css, .has-menu), so anchors need less room above them. */
+@media(max-width:760px){html{scroll-padding-top:80px}}
 @media(max-width:720px){
-  .site-header{padding:12px 18px;gap:10px}
   .brand{font-size:21px;gap:9px}.brand .ea-brand-icon{width:34px;height:34px}
-  .site-header nav{order:3;width:100%;justify-content:space-between;gap:6px;font-size:13px}
-  .site-header nav a{padding:6px 2px}
-  .site-header nav .hide-sm{display:none}
-  .site-header nav .login{padding:7px 12px}
-  .site-header .nav-cta-sm{min-height:38px;padding:9px 13px;font-size:12.5px}
   .hero{gap:30px}
   h1{font-size:39px;letter-spacing:-1.4px;text-wrap:balance}
   h2{font-size:31px;letter-spacing:-.8px}
