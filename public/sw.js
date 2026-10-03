@@ -4,7 +4,7 @@
    - A new version waits until the user taps "Reload" (never mid-inspection), then takes over.
    - Background Sync (Chrome/Android) replays the offline inspection outbox even after the tab is closed. */
 const VERSION='__SHELL_VERSION__',CACHE='estateaegis-shell-'+VERSION;
-const SHELL=['/login','/live.js','/inspection-checklist.js','/inspection-drafts.js','/proactive.js','/offline-core.js','/offline-store.js','/logo-background.js','/live.css','/company.css','/refresh.css','/checklist-editor.css','/proactive.css','/offline.css','/manifest.webmanifest','/icon-192.png','/icon-512.png','/icon-maskable-512.png','/ea-shield.png','/checklist-editor.mjs','/checklist-editor-model.mjs'];
+const SHELL=['/login','/live.js','/inspection-checklist.js','/visit-verification.js','/visit-card.js','/inspection-drafts.js','/proactive.js','/offline-core.js','/offline-store.js','/logo-background.js','/live.css','/company.css','/refresh.css','/checklist-editor.css','/proactive.css','/offline.css','/manifest.webmanifest','/icon-192.png','/icon-512.png','/icon-maskable-512.png','/ea-shield.png','/checklist-editor.mjs','/checklist-editor-model.mjs'];
 const APP_ROUTES=/^\/(login|client-login|client\/[a-z0-9-]+)?$/i;
 importScripts('/offline-core.js','/offline-store.js');
 

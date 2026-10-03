@@ -102,3 +102,27 @@
  .ck-total{padding:8px}
  .ck-total span{font-size:10px;letter-spacing:.02em}
 }
+/* Visit verification (GPS and timestamp proof of visit) */
+.visit-card{border-left:4px solid var(--refresh-wine,#7e202b);margin:12px 0}
+.visit-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.visit-head h2{margin:0;font-size:18px;color:var(--refresh-wine,#7e202b)}
+.visit-status-text{margin:8px 0 4px;font-size:15px}
+.visit-rows{display:grid;grid-template-columns:max-content 1fr;gap:6px 16px;margin:10px 0 4px;font-size:14px}
+.visit-rows dt{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#5f6b76;padding-top:2px}
+.visit-rows dd{margin:0;color:#1f2933}
+.visit-actions{margin-top:10px}
+.visit-actions button{min-height:44px;min-width:140px}
+.visit-help{background:#fff8e1;border-radius:8px;padding:8px 10px;font-size:13px;color:#6b4f0b;margin:10px 0 0}
+.visit-privacy{font-size:12px;margin:10px 0 0}
+.visit-details{margin-top:10px;font-size:13px}
+.visit-details summary{cursor:pointer;color:var(--refresh-wine,#7e202b);font-weight:600}
+.visit-table-wrap{overflow-x:auto}
+.visit-table{border-collapse:collapse;width:100%;margin-top:8px}
+.visit-table th,.visit-table td{border-bottom:1px solid #e2e7eb;padding:6px 8px;text-align:left;vertical-align:top}
+.visit-table thead th{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:#5f6b76}
+.visit-gate{margin:14px 0}
+.form>.vv-full{grid-column:1/-1}
+.visit-filter{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.visit-filter button{min-height:34px;padding:4px 12px;border-radius:999px;font-size:13px}
+.visit-filter button.active{background:var(--refresh-wine,#7e202b);border-color:var(--refresh-wine,#7e202b);color:#fff}
+@media(max-width:820px){.visit-rows{grid-template-columns:1fr;gap:2px}.visit-rows dd{margin-bottom:6px}.visit-actions button{width:100%}}
