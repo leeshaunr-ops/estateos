@@ -138,7 +138,7 @@ test('homepage refresh: new sections, nav links, open FAQ, and no placeholder or
   const nav = home.match(/<nav aria-label="Main navigation">([\s\S]*?)<\/nav>/)[1];
   assert.match(nav, /href="#whats-new">What’s new<\/a>/);
   assert.match(nav, /href="#storm-season">Storm season<\/a>/);
-  const header = home.match(/<header class="site-header">([\s\S]*?)<\/header>/)[1];
+  const header = home.match(/<header class="site-header has-menu">([\s\S]*?)<\/header>/)[1];
   const demoButtons = [...header.matchAll(/<a class="button primary nav-cta[^"]*" href="([^"]+)">Start free demo<\/a>/g)];
   assert.ok(demoButtons.length >= 1, 'header has a Start free demo button');
   for (const [, href] of demoButtons) assert.equal(href, '/demo');
@@ -223,4 +223,73 @@ test('storm report image uses credited real photos', () => {
     assert.ok(credits.includes(source), 'credit missing for ' + source);
   assert.match(credits, /Public domain/);
   assert.match(read('public/marketing.html'), /<div class="storm-shot bottom"><img src="\/img\/storm-report-page\.webp"/);
+});
+
+// Pages that share the marketing header and get the one-row phone header with a menu button (marketing.css + site-menu.js).
+const MENU_PAGES = ['marketing.html', 'about.html', 'faq.html', 'resources.html', 'signup.html', 'home-watch-software.html', 'inspection-report-software.html',
+  'private-residence-management.html', 'home-watch-checklist.html', 'arrival-preparation-checklist.html', 'example-workflow.html', '404.html'];
+
+test('phone header: compact Log in / Free demo / menu button markup, an external menu script and no inline script', async () => {
+  for (const file of MENU_PAGES) {
+    const html = read('public/' + file);
+    const header = html.match(/<header class="site-header has-menu">([\s\S]*?)<\/header>/)?.[1];
+    assert.ok(header, file + ' has the shared header with the phone menu');
+    const actions = header.match(/<div class="header-actions">([\s\S]*?)<\/div>/)?.[1];
+    assert.ok(actions, file + ' has the phone header actions');
+    assert.match(actions, /<a class="header-login" href="\/login">Log in<\/a>/, file);
+    assert.match(actions, /<a class="button primary nav-cta-phone" href="\/demo">Free demo<\/a>/, file);
+    const toggle = actions.match(/<button class="menu-toggle"[^>]*>/)?.[0];
+    assert.ok(toggle, file + ' has a menu button');
+    assert.match(toggle, /type="button"/, file);
+    assert.match(toggle, /aria-expanded="false"/, file);
+    assert.match(toggle, /aria-controls="site-menu"/, file);
+    assert.match(toggle, /aria-label="Open menu"/, file);
+    const panel = header.match(/<nav class="site-menu" id="site-menu" aria-label="Menu" hidden>([\s\S]*?)<\/nav>/)?.[1];
+    assert.ok(panel, file + ' has a hidden, labelled menu panel');
+    const links = [...panel.matchAll(/<a\b[^>]*>([^<]+)<\/a>/g)].map(m => m[1]);
+    assert.deepEqual(links, ['What’s new', 'Storm season', 'Pricing', 'FAQ', 'Log in'], file + ' menu links');
+    assert.match(panel, /<a class="menu-login" href="\/login">Log in<\/a>/, file);
+    assert.equal([...html.matchAll(/id="site-menu"/g)].length, 1, file + ' has one #site-menu');
+    assert.equal([...html.matchAll(/<script src="\/site-menu\.js" defer><\/script>/g)].length, 1, file + ' loads site-menu.js once, deferred');
+    const inlineScripts = [...html.matchAll(/<script(?![^>]*\bsrc=)([^>]*)>/g)].filter(m => !/type="application\/ld\+json"/.test(m[1]));
+    assert.equal(inlineScripts.length, 0, file + ' has an inline script');
+    assert.doesNotMatch(header, /\son[a-z]+="/, file + ' header has an inline event handler');
+  }
+  // The homepage menu stays on the page; the other pages link back to the homepage sections.
+  assert.match(read('public/marketing.html'), /<nav class="site-menu"[^>]*><a href="#whats-new">What’s new<\/a><a href="#storm-season">Storm season<\/a><a href="#pricing">Pricing<\/a><a href="#faq">FAQ<\/a>/);
+  assert.match(read('public/about.html'), /<nav class="site-menu"[^>]*><a href="\/#whats-new">What’s new<\/a><a href="\/#storm-season">Storm season<\/a><a href="\/pricing">Pricing<\/a><a href="\/faq">FAQ<\/a>/);
+  assert.match(read('public/faq.html'), /<a href="\/faq" aria-current="page">FAQ<\/a>/);
+  const css = read('public/marketing.css');
+  assert.match(css, /@media\(max-width:760px\)\{[\s\S]*\.site-header\.has-menu>nav:not\(\.site-menu\)/, 'phones hide the full navigation');
+  assert.match(css, /@media\(max-width:389px\)\{\s*\.site-header \.header-login\{display:none\}/, 'the narrowest phones move Log in into the menu');
+  const base = await start();
+  const res = await fetch(base + '/site-menu.js');
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-type'), /javascript/);
+  assert.match(await res.text(), /aria-expanded/);
+});
+
+test('phone menu script: opens and closes the panel, and closes on a link tap, Escape and an outside tap', async () => {
+  const {runInNewContext} = await import('node:vm');
+  const listeners = target => { const map = {}; target.addEventListener = (type, fn) => { (map[type] ||= []).push(fn); }; target.fire = (type, event = {}) => { for (const fn of map[type] || []) fn({preventDefault() {}, ...event}); }; return target; };
+  const attrs = {'aria-expanded': 'false', 'aria-controls': 'site-menu', 'aria-label': 'Open menu'};
+  const classes = new Set();
+  const header = {classList: {toggle: (name, on) => on ? classes.add(name) : classes.delete(name)}, contains: node => node === toggle || node === panel || node === link};
+  listeners(header);
+  const toggle = listeners({getAttribute: name => attrs[name], setAttribute: (name, value) => { attrs[name] = value; }, closest: () => header, focus() { document.activeElement = toggle; }});
+  const panel = listeners({hidden: true});
+  const link = {closest: selector => selector === 'a' ? link : null};
+  const outside = {closest: () => null};
+  const media = listeners({});
+  const document = listeners({activeElement: null, querySelector: selector => selector === '.site-header .menu-toggle' ? toggle : null, getElementById: id => id === 'site-menu' ? panel : null});
+  runInNewContext(read('public/site-menu.js'), {document, matchMedia: () => media});
+  const open = () => { toggle.fire('click'); assert.equal(attrs['aria-expanded'], 'true'); assert.equal(panel.hidden, false); assert.ok(classes.has('menu-open')); assert.equal(attrs['aria-label'], 'Close menu'); };
+  const closed = why => { assert.equal(attrs['aria-expanded'], 'false', why); assert.equal(panel.hidden, true, why); assert.ok(!classes.has('menu-open'), why); assert.equal(attrs['aria-label'], 'Open menu', why); };
+  open(); toggle.fire('click'); closed('toggle again');
+  open(); panel.fire('click', {target: link}); closed('link tap');
+  open(); document.activeElement = link; document.fire('keydown', {key: 'Escape'}); closed('Escape'); assert.equal(document.activeElement, toggle, 'Escape returns focus to the menu button');
+  open(); document.fire('pointerdown', {target: link}); assert.equal(panel.hidden, false, 'a tap inside the header keeps it open');
+  document.fire('pointerdown', {target: outside}); closed('outside tap');
+  open(); header.fire('focusout', {relatedTarget: outside}); closed('focus left the header');
+  open(); media.fire('change', {matches: true}); closed('grew past the phone layout');
 });
