@@ -168,7 +168,7 @@ async function scenario(label,env){
   const visit=await find(admin,oceanPre);
   assert.equal(visit.visit_type,'pre_storm');assert.equal(visit.storm_event_id,ev.id);assert.equal(visit.inspector_id,miaU.id);assert.equal(visit.checklist.name,'Hurricane prep');
   const templates=(await admin.req('checklist-templates')).templates.filter(t=>t.visit_type==='pre_storm');assert.equal(templates.length,1,'one starter template, reused');
-  assert.ok((await mia.req('notifications')).some?.(n=>n.kind==='storm_assigned')??true);
+  assert.ok((await mia.req('notifications')).notifications.some(n=>n.kind==='storm_assigned'),'assignee gets an in-app storm notice');
 
   // ---- employees: only their storm residences. Mia (assigned by round robin, not the Residence Manager) can open Ocean House.
   const miaStorm=await mia.req('storm');assert.equal(miaStorm.canManage,false);assert.deepEqual(miaStorm.events[0].residences.map(r=>r.property_name),['Ocean House']);
@@ -225,7 +225,7 @@ async function scenario(label,env){
   const planned=await admin.req('storm-events/'+ev.id+'/notify',{template:'prep_planned',residenceIds:[rb.id]});assert.equal(planned.emails,1,'no portal account: the family email on file');assert.equal(planned.inApp,0);
   const email=(await admin.req('operations')).email||[];
   assert.ok(JSON.stringify(email).includes('Ocean House is secured for Hurricane Milton')||email.length===0,'email queued in the outbox');
-  assert.ok((await family.req('notifications')).some?.(n=>n.kind==='storm_secured')??true);
+  assert.ok((await family.req('notifications')).notifications.some(n=>n.kind==='storm_secured'),'client gets an in-app Secured notice');
   ev=await board();assert.ok(rowOf(ev,ocean.id).client_prep_notified_at,'notified time recorded');
 
   // ---- recovery: offers post-storm visits for secured homes; post visit assigned to one person.

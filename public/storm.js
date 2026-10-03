@@ -70,15 +70,17 @@ function stormScheduleTargets(ev,phase,ids){const rows=(ev?.residences||[]).filt
 function stormScheduleFields(phase,targets){
  const staff=stormStaff(),type=ST.PHASE_VISIT[phase],options=(data.checklists||[]).filter(c=>c.visit_type===type);
  const starter=phase==='pre'?'Hurricane prep':'Post-storm';
- const checklist=options.length?`<option value="">Newest published ${esc(starter)} checklist (${esc(options[0].name)})</option>`+options.map(o=>`<option value="${esc(o.template_id)}">${esc(o.name)} · version ${esc(o.template_version)}</option>`).join(''):`<option value="">${esc(starter)} starter checklist (published automatically)</option>`;
+ const checklist=options.length?`<option value="">Newest published ${esc(starter)} checklist (automatic)</option>`+options.map(o=>`<option value="${esc(o.template_id)}">${esc(o.name)} · version ${esc(o.template_version)}</option>`).join(''):`<option value="">${esc(starter)} starter checklist (published automatically)</option>`;
  stormState.scheduleTargets=targets;
+ // Default: Residence Managers when every residence has one; otherwise share the visits among the staff.
+ const mode=targets.length&&targets.every(r=>r.account_manager_id)||!staff.some(u=>u.role==='employee')?'residence_manager':'round_robin';
  return `<input type="hidden" name="phase" value="${phase}"><p class="storm-lead">${targets.length?`Creates a ${stormPhaseName(phase)} visit at <strong>${targets.length}</strong> residence${targets.length===1?'':'s'} that ${targets.length===1?'does':'do'} not have one yet.`:`Every residence on this storm already has a ${stormPhaseName(phase)} visit.`}</p>
  ${input('date','Visit date','date',today())}
  ${select('templateId','Checklist',checklist)}
- <div class="field full"><label for="f-assignment">Assign the visits to</label><select id="f-assignment" name="assignment" data-storm-assignment><option value="residence_manager">Each residence's Residence Manager</option><option value="round_robin">Share evenly among chosen team members</option><option value="user">One team member</option></select></div>
- <fieldset class="field full storm-staff" data-storm-assign-group="round_robin" hidden><legend>Team members to share the visits</legend>${staff.map(u=>`<label class="check-row"><input type="checkbox" name="userIds" value="${esc(u.id)}" ${u.role==='employee'?'checked':''} data-storm-assign-input><span>${esc(u.name||u.email)} <small class="muted">${esc(label(u.role))}</small></span></label>`).join('')||'<p class="muted">Invite team members first.</p>'}</fieldset>
+ <div class="field full"><label for="f-assignment">Assign the visits to</label><select id="f-assignment" name="assignment" data-storm-assignment>${[['residence_manager','Each Residence Manager'],['round_robin','Share among team members'],['user','One team member']].map(([v,t])=>`<option value="${v}" ${v===mode?'selected':''}>${esc(t)}</option>`).join('')}</select></div>
+ <fieldset class="field full storm-staff" data-storm-assign-group="round_robin" ${mode==='round_robin'?'':'hidden'}><legend>Team members to share the visits</legend>${staff.map(u=>`<label class="check-row"><input type="checkbox" name="userIds" value="${esc(u.id)}" ${u.role==='employee'?'checked':''} data-storm-assign-input><span>${esc(u.name||u.email)} <small class="muted">${esc(label(u.role))}</small></span></label>`).join('')||'<p class="muted">Invite team members first.</p>'}</fieldset>
  <div class="field full" data-storm-assign-group="user" hidden><label for="f-userId">Team member</label><select id="f-userId" name="userId" data-storm-assign-input>${staff.map(u=>`<option value="${esc(u.id)}" ${u.id===data.user.id?'selected':''}>${esc(u.name||u.email)}</option>`).join('')}</select></div>
- <div class="field full"><span class="storm-preview-title">Who gets each visit</span><div id="stormAssignPreview" class="storm-assign-preview">${stormAssignPreview(targets,'residence_manager')}</div></div>`;
+ <div class="field full"><span class="storm-preview-title">Who gets each visit</span><div id="stormAssignPreview" class="storm-assign-preview">${stormAssignPreview(targets,mode,staff.filter(u=>u.role==='employee').map(u=>u.id))}</div></div>`;
 }
 function stormAssignPreview(targets,mode,userIds=[],userId=''){
  if(!targets.length)return '<p class="muted">Nothing to schedule.</p>';
