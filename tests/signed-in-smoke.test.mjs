@@ -55,6 +55,9 @@ before(async()=>{if(skip)return;await start();const admin=client();
  await family('arrivals',{propertyId:home.id,arrivalAt:day(5)+'T15:00',notes:'Arriving with grandchildren.'},201);
  const job=(await admin('data')).work.find(w=>w.title==='Replace pool light');
  await admin('operations/approval',{workId:job.id,amountMinor:12500,description:'New pool light fixture and labor.'},200);
+ // Batch 3a: a third home where the vendor has a job, so the vendor can open a residence.
+ const loft=await admin('properties',{clientId:fam.id,name:'Harbor Loft',streetAddress:'3 Harbor Way',city:'Stuart',state:'FL',postalCode:'34994',country:'United States'},201);
+ await admin('work',{propertyId:loft.id,title:'Service the pool pump',priority:'Normal',dueDate:day(4),vendorId:ven.id},201);
 });
 after(async()=>{if(proc&&!proc.killed){proc.kill();await new Promise(r=>proc.once('exit',r));}rmSync(dir,{recursive:true,force:true});});
 
@@ -230,9 +233,26 @@ async function headerChecks(page,mobile,role,ids,done){
 async function emptyCheck(page,role,id,title,action){await go(page,id);
  const e=await page.evaluate(()=>{const c=document.querySelector('.content .empty-state');return c&&{title:c.querySelector('.empty-title')?.textContent,detail:!!c.querySelector('.empty-detail'),action:c.querySelector('.empty-action [data-action]')?.dataset.action||''};});
  assert.ok(e,`${role}: ${id} shows an empty-state card`);assert.match(e.title,title,`${role}: ${id} empty-state title`);assert.ok(e.detail,`${role}: ${id} empty state explains the next step`);assert.equal(e.action,action,`${role}: ${id} empty-state action`);}
+// Batch 3a: residence detail has a facts strip and wrapping sections (no sideways tab strip), and the Summary shows
+// visits and work openly (no closed toggles). Old tab names still open the section that holds them.
+async function residenceChecks(page,role,name,expect,done){
+ await go(page,'properties');await page.evaluate(n=>action('property',data.properties.find(p=>p.name===n).id),name);await settle(page);
+ const r=await page.evaluate(()=>{const tabs=document.querySelector('.content .res-tabs');return {title:document.querySelector('.content .page-title')?.textContent,facts:document.querySelectorAll('.content .res-fact').length,
+  tabs:tabs?[...tabs.querySelectorAll('button')].map(b=>b.dataset.id):null,overflow:tabs?tabs.scrollWidth>tabs.clientWidth+1:false,closed:document.querySelectorAll('.content details.collapsible-panel:not([open])').length,
+  panels:[...document.querySelectorAll('.content .res-panel h2')].map(h=>h.textContent.replace(/\s*\d+$/,'').trim()),wide:document.documentElement.scrollWidth>innerWidth+1};});
+ assert.equal(r.title,name,`${role}: residence title`);assert.equal(r.wide,false,`${role}: residence page fits the screen`);
+ if(expect.tabs===null){assert.equal(r.tabs,null,`${role}: no lone tab strip`);done.push('residence');return;}
+ assert.deepEqual(r.tabs,expect.tabs,`${role}: residence sections`);assert.equal(r.overflow,false,`${role}: sections wrap instead of scrolling`);
+ assert.equal(r.facts,5,`${role}: facts strip`);assert.equal(r.closed,0,`${role}: nothing hidden behind closed toggles`);
+ for(const p of expect.panels)assert.ok(r.panels.includes(p),`${role}: Summary shows ${p} (got ${r.panels.join(', ')})`);
+ if(expect.alias){await page.evaluate(([t])=>action('tab',t),[expect.alias[0]]);await settle(page);
+  assert.equal(await page.locator('.content .res-tabs button.active').getAttribute('data-id'),expect.alias[1],`${role}: old tab ${expect.alias[0]} opens ${expect.alias[1]}`);}
+ done.push('residence');
+}
 const PAGE_CHECKS={
  admin:async(page,mobile,done)=>{
   await headerChecks(page,mobile,'admin',['properties','work','inspections','requests','maintenance','documents','assets','audit','billing','messages','notifications','storm'],done);
+  await residenceChecks(page,'admin','Ocean House',{tabs:['overview','inspections','services','arrivals','records','people','notes'],panels:['Needs attention here','Visits','Work orders','Owners & family','Next arrival','Home records','Latest note'],alias:['assets','records']},done);
   await emptyCheck(page,'admin','assets',/No assets yet/,'new-asset');await emptyCheck(page,'admin','documents',/No documents yet/,'new-document');await emptyCheck(page,'admin','billing',/No invoices yet/,'');done.push('empty-states');
   assert.equal(await page.locator('aside [data-id="platform"]').count(),0,'admin: no duplicate Platform Administration item');
   for(const id of ['arrivals','calendar']){const t=await go(page,id);assert.doesNotMatch(t,MACHINE_DATE,`admin: ${id} has no machine dates`);done.push(id);}
@@ -272,11 +292,13 @@ const PAGE_CHECKS={
  vendor:async(page,mobile,done)=>{
   await headerChecks(page,mobile,'vendor',['work','properties','messages'],done);
   await go(page,'work');assert.equal(await page.locator('.content .page-title').innerText(),'Your jobs','vendor: jobs title');
+  await residenceChecks(page,'vendor','Harbor Loft',{tabs:null},done);
   assert.match(await go(page,'messages'),/company that sends you jobs/,'vendor: messages subtitle for vendors');done.push('wording');
  },
  client:async(page,mobile,done)=>{
   await headerChecks(page,mobile,'client',['properties','work','inspections','requests','documents','messages','notifications'],done);
   await emptyCheck(page,'client','documents',/No documents yet/,'');
+  await residenceChecks(page,'client','Ocean House',{tabs:['overview','inspections','services','arrivals','records','people'],panels:['Needs attention here','Visits','Service updates','Owners & family','Next arrival','Home records'],alias:['shopping','arrivals']},done);
   // Batch 2 wording: written for the family, not for staff.
   const home=await go(page,'dashboard');assert.match(await page.locator('.content .page-title').innerText(),/^Good (morning|afternoon|evening)/,'client: home greets the family');
   assert.equal(await page.locator('details.action-needed').evaluate(d=>d.open),true,'client: Action needed starts open');assert.doesNotMatch(home,/\b1 work orders\b/,'client: singular work order');

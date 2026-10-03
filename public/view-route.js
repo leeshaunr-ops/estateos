@@ -8,12 +8,14 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;root.EARoute=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
  const PAGES=['dashboard','messages','properties','work','shopping','inspections','requests','arrivals','calendar','documents','maintenance','assets','routes','platform','staff-schedules','staff','workspace','clients','vendors','billing','users','audit','approvals','automation','email-activity','checklist-templates','profile','notifications','storm'];
- const RESIDENCE_TABS=['overview','inspections','shopping','arrivals','services','documents','assets','off_site_butler','access_codes','manual','notes'];
+ // Residence sections (batch 3a). Old tab names in saved links open the section that now holds them.
+ const RESIDENCE_TABS=['overview','inspections','services','arrivals','records','people','notes'];
+ const TAB_ALIAS={shopping:'arrivals',documents:'records',assets:'records',manual:'records',access_codes:'records',off_site_butler:'people',family:'people'};
  const SAVED_VIEW_MAX_AGE=12*60*60*1000;
  const enc=v=>encodeURIComponent(String(v));
  const dec=v=>{try{return decodeURIComponent(v);}catch{return '';}};
  const blank=()=>({page:'dashboard',propertyId:null,tab:'overview',activeInspection:null,activeAssetInspection:null,activeAssetInspectionRecord:null,assetInspectionReadOnly:false,activeArrival:null,arrivalFilter:'pending',activeClient:null,checklistTemplateId:null,activeMessageThread:null,inspectionUpcomingOnly:false,inspectionSubmittedOnly:false,stormEventId:null});
- function residenceTabs(role){if(role==='vendor')return ['services'];const t=['overview','inspections','shopping','arrivals','services','documents','assets'];if(role==='admin')t.push('off_site_butler');if(role==='admin'||role==='employee')t.push('access_codes','manual','notes');return t;}
+ function residenceTabs(role){if(role==='vendor')return ['services'];const t=['overview','inspections','services','arrivals','records','people'];if(role==='admin'||role==='employee')t.push('notes');return t;}
  /** View state -> hash ('' for Overview). Unknown pages and form-only screens map to the page that contains them. */
  function toHash(s){
   const page=s?.page||'dashboard';
@@ -35,7 +37,7 @@
   const parts=raw.slice(1).split('?')[0].split('/').filter(Boolean).map(dec);if(!parts.length)return null;
   const [head,a,b]=parts,s=blank();
   if(head==='overview'||head==='dashboard')return s;
-  if(head==='residence'&&a){s.page='property';s.propertyId=a;s.tab=b&&RESIDENCE_TABS.includes(b)?b:'overview';return s;}
+  if(head==='residence'&&a){s.page='property';s.propertyId=a;const t=TAB_ALIAS[b]||b;s.tab=t&&RESIDENCE_TABS.includes(t)?t:'overview';return s;}
   if(head==='inspection'&&a){s.page='inspection';s.activeInspection=a;return s;}
   if(head==='asset-inspection'&&a&&b){s.page='asset-inspection';s.activeAssetInspection=a;s.activeAssetInspectionRecord=b;s.assetInspectionReadOnly=true;return s;}
   if(head==='checklist-templates'&&a){s.page='checklist-editor';s.checklistTemplateId=a;return s;}
