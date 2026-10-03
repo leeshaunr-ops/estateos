@@ -8,3 +8,8 @@ p,li{line-height:1.42}li{margin:8px 0}
 .card{padding:22px;border-color:#e2e7eb}
 footer{padding:16px}
 @media(max-width:700px){main{gap:16px;margin-top:4px}h1{font-size:31px;margin-bottom:12px}.card{padding:18px}}
+/* Main call to action: refresh.css's generic white `button` rule loads after demo.css, so restate the site's wine primary button here. */
+#demoSignup button[type=submit]{background:#8b242b;border:1px solid #8b242b;color:#fff;border-radius:7px;min-height:48px}
+#demoSignup button[type=submit]:hover{background:#641621;border-color:#641621}
+#demoSignup button[type=submit]:focus-visible{outline:3px solid #b89452;outline-offset:3px}
+#demoSignup button[type=submit]:disabled{background:#8b242b;opacity:.65;cursor:progress}
