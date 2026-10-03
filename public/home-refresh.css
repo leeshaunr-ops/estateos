@@ -187,3 +187,114 @@ h3{font-size:20px;line-height:1.28;letter-spacing:-.35px;margin:14px 0 10px}
   .demo-actions{justify-items:start}
   .demo-actions .button{width:100%}
 }
+
+/* Compact phone homepage: hides repeated blocks, shortens screenshots and puts lists, fine print and the FAQ behind
+   tap-to-expand buttons. Everything is inside @media(max-width:760px), so tablet and desktop render exactly as before.
+   The buttons are added by home-compact.js on phones only; the content itself stays in the HTML. */
+@media(max-width:760px){
+  /* Hero: the three highlight bullets repeat the value strip and What's new. */
+  .hero-proof{display:none}
+  .hero .actions{margin-top:20px}
+  /* Value strip: the same five features as the What's new cards right below. */
+  .value-strip{display:none}
+
+  /* What's new: four shorter cards (the storm card is covered by the Storm section that follows). */
+  #whats-new{padding-top:30px}
+  #whats-new .section-heading{margin-bottom:18px}
+  #whats-new .section-heading>p:last-child{display:none}
+  .new-grid{gap:14px}
+  .new-card:nth-child(5){display:none}
+  .new-card .thumb,.new-card.wide .thumb{aspect-ratio:16/7.5}
+  .thumb.fit{padding-top:10px}
+  .new-body{padding:16px 18px 6px}
+  .new-body h3{margin:10px 0 6px}
+  .new-body p{margin:0 0 4px}
+  .fig-note{margin-top:12px}
+
+  /* Storm band: keep the three steps and real photos, shorter screenshots, details on tap. */
+  .storm-band{padding:34px 0}
+  .storm-season{display:none}
+  .storm-head{margin-bottom:20px}
+  .storm-head p{margin-bottom:0}
+  .storm-steps{gap:26px}
+  .storm-shot{aspect-ratio:16/9;padding:7px}
+  .storm-steps>li>.step-num{margin-top:14px}
+  .storm-steps h3{margin:8px 0 6px}
+  .storm-steps p{margin-bottom:0}
+  .storm-foot{margin-top:26px;padding-top:18px}
+
+  /* Everything in one workspace: six titles, each opens its paragraph. */
+  #features{padding-top:30px;padding-bottom:30px}
+  #features .section-heading{margin-bottom:18px}
+  .feature-grid article{padding:12px 16px 10px}
+  .feature-grid h3{margin:2px 0 0;font-size:17px}
+  .feature-grid article p{margin-top:2px;padding-bottom:6px}
+
+  /* Report: a shorter preview and the three key points. */
+  .report-section{padding:30px 0}
+  .report-preview{padding:10px}
+  .report-preview img{max-height:260px}
+  .report-section .checks{margin:14px 0 18px}
+  .report-section .checks li{padding:9px 0 9px 26px}
+  .report-section .checks li:nth-child(n+4){display:none}
+
+  /* Trust: three compact rows. Branded reports and the phone line already appear above and in the final call to action. */
+  #trust{padding-top:30px;padding-bottom:30px}
+  #trust .section-heading{margin-bottom:16px}
+  .trust-grid{gap:10px}
+  .trust-item:nth-child(n+4){display:none}
+  .trust-item{display:grid;grid-template-columns:34px 1fr;column-gap:12px;align-items:center;padding:8px 14px}
+  .trust-item .icon{grid-row:1}
+  .trust-item h3{margin:0;font-size:16.5px}
+  .trust-item p{grid-column:2;padding:0 0 10px}
+
+  /* Tutorial: the PDF link is already offered in the report section. */
+  .tutorial-heading .text-link{display:none}
+  .tutorial-heading{margin-bottom:18px}
+
+  /* Pricing: one intro paragraph, two compact offer tiles, plan cards, fine print on tap. */
+  #pricing{padding-top:30px}
+  .pricing-intro p.signup-small{display:none}
+  .offers{gap:10px;margin-bottom:18px}
+  .offer{padding:14px 16px}
+  .offer .big{font-size:32px;min-width:44px}
+  .offer>p:not(.meta){display:none}
+  .offer h3{font-size:17px}
+  .offer .meta{margin:0}
+  .price-card .signup-small{display:none}
+  .pricing-cards{gap:18px}
+  .price-card{display:grid;grid-template-columns:1fr auto;column-gap:12px;align-items:center;padding:18px 18px 16px}
+  .price-card h3{grid-column:1;margin:0;font-size:21px}
+  .price-card>p:not([class]){grid-column:1;margin:0;font-size:14px}
+  .price-card .plan-price{grid-column:2;grid-row:1/span 2;margin:0;font-size:34px;text-align:right;letter-spacing:-1px}
+  .price-card .plan-price del{display:block;font-size:15px;margin:0 0 -4px}
+  .price-card .plan-price small{font-size:13px}
+  .price-card .trial-badge{grid-column:1/-1;justify-self:start;margin:10px 0 0;padding:4px 9px;font-size:11px}
+  .price-card ul{grid-column:1/-1;margin:8px 0 12px;line-height:1.65;font-size:14.5px}
+  .price-card .button{grid-column:1/-1;min-height:44px;padding-top:10px;padding-bottom:10px}
+  .price-tag{position:absolute;top:-11px;left:16px;right:auto}
+
+  /* FAQ: questions only; each opens its answer. */
+  #faq{padding-top:30px;padding-bottom:30px}
+  .faq-item{padding:4px 0}
+  .faq-item h3{margin:0;font-size:16px}
+  .faq-item p{padding-bottom:12px;margin:0}
+
+  /* Explore the workflows: lighter link rows instead of three tall buttons. */
+  #main>nav.section{padding-top:26px;padding-bottom:26px}
+  #main>nav.section h2{font-size:24px;margin-bottom:6px}
+  #main>nav.section .actions{gap:0;margin:0}
+  #main>nav.section .button{justify-content:flex-start;min-height:44px;padding:10px 0;border:0;border-bottom:1px solid var(--refresh-line);border-radius:0;background:none;color:#7e202b;width:100%}
+
+  /* Tap-to-expand controls (home-compact.js) */
+  .m-acc{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;min-height:44px;padding:0;margin:0;border:0;background:none;font:inherit;letter-spacing:inherit;color:inherit;text-align:left;cursor:pointer}
+  .m-acc:after,.m-more:after{content:"";flex-shrink:0;width:8px;height:8px;margin:0 4px 4px 0;border-right:2px solid #7e202b;border-bottom:2px solid #7e202b;transform:rotate(45deg);transition:transform .2s}
+  .m-acc[aria-expanded="true"]:after,.m-more[aria-expanded="true"]:after{transform:rotate(-135deg);margin-bottom:-4px}
+  .m-collapsed>p,.m-hidden{display:none!important}
+  .m-more{display:inline-flex;align-items:center;gap:10px;min-height:44px;padding:0;margin:0;border:0;background:none;font:inherit;font-size:14px;font-weight:650;color:#7e202b;cursor:pointer}
+  .storm-band .m-more{color:var(--gold-on-dark)}
+  .storm-band .m-more:after{border-color:var(--gold-on-dark)}
+  #pricing>.m-more{margin-top:10px}
+  .m-acc:focus-visible,.m-more:focus-visible{outline:3px solid #b89452;outline-offset:3px}
+}
+@media(max-width:760px) and (prefers-reduced-motion:reduce){.m-acc:after,.m-more:after{transition:none}}

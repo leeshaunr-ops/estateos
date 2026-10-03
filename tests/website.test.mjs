@@ -148,7 +148,8 @@ test('homepage refresh: new sections, nav links, open FAQ, and no placeholder or
   assert.match(home, /Hurricanes, winter storms, floods and severe thunderstorms/);
   assert.match(home, /Your clients trust you with their homes\. We take that seriously\./);
   assert.match(home, /A Visit verification box shows arrival, departure and GPS distance\./);
-  // Every FAQ answer is visible: no collapsed <details>, and all five questions from the quick-fix pass remain.
+  // Every FAQ answer stays in the HTML and is visible on tablet and desktop: no <details>, and all five questions from the quick-fix pass remain.
+  // On phones (760px and below) home-compact.js may turn them into tap-to-expand rows; see the compact phone homepage test.
   assert.doesNotMatch(home, /<details|<summary/);
   assert.equal([...home.matchAll(/<div class="faq-item">/g)].length, 5);
   for (const q of ['Can we use our own company branding?', 'What can clients and vendors see?', 'Can we try it before deciding?', 'What’s the difference between the free demo and the 30-day trial?', 'What does it cost, and how do we get support?'])
@@ -292,4 +293,32 @@ test('phone menu script: opens and closes the panel, and closes on a link tap, E
   document.fire('pointerdown', {target: outside}); closed('outside tap');
   open(); header.fire('focusout', {relatedTarget: outside}); closed('focus left the header');
   open(); media.fire('change', {matches: true}); closed('grew past the phone layout');
+});
+
+test('compact phone homepage: phone-only CSS, an external tap-to-expand script, and content kept in the HTML', async () => {
+  const home = read('public/marketing.html');
+  assert.equal([...home.matchAll(/<script src="\/home-compact\.js" defer><\/script>/g)].length, 1, 'homepage loads home-compact.js once, deferred');
+  const inlineScripts = [...home.matchAll(/<script(?![^>]*\bsrc=)([^>]*)>/g)].filter(m => !/type="application\/ld\+json"/.test(m[1]));
+  assert.equal(inlineScripts.length, 0, 'homepage has an inline script');
+  // Collapsed and hidden content is still in the page: the FAQ answers, the What's new lists and the pricing fine print.
+  for (const text of ['The <strong>free 7-day demo</strong> is a private practice workspace', 'Field staff only see a checklist once you publish it', 'Additional admin/staff users: $15 each/month.', 'Talk to a real person.'])
+    assert.ok(home.includes(text), 'missing from the HTML: ' + text);
+  // Every compact rule lives in a phone media query, so tablet and desktop are untouched.
+  const css = read('public/home-refresh.css');
+  const block = css.slice(css.indexOf('/* Compact phone homepage'));
+  assert.match(block, /^\/\* Compact phone homepage[\s\S]*?\*\/\n@media\(max-width:760px\)\{/, 'compact rules start with the phone media query');
+  let depth = 0, outside = '';
+  const rules = block.slice(block.indexOf('*/') + 2);
+  for (const ch of rules) { if (ch === '{') depth++; if (depth === 0) outside += ch; if (ch === '}') depth--; }
+  assert.doesNotMatch(outside.replace(/@media\([^)]*\)( and \([^)]*\))*/g, '').replace(/\/\*[\s\S]*?\*\//g, ''), /[{}a-z]/i, 'no compact rule outside a phone media query');
+  for (const query of rules.match(/@media[^{]*/g)) assert.match(query, /max-width:760px/, query);
+  assert.doesNotMatch(block, /overflow(-[xy])?:(auto|scroll)|scroll-snap/, 'no scrolling boxes or carousels');
+  const js = read('public/home-compact.js');
+  assert.match(js, /matchMedia\('\(max-width: 760px\)'\)/);
+  assert.match(js, /aria-expanded/);
+  assert.match(js, /aria-controls/);
+  const base = await start();
+  const res = await fetch(base + '/home-compact.js');
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-type'), /javascript/);
 });
