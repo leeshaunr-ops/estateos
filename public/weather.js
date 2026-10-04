@@ -121,8 +121,10 @@ function wxBanner(){
 }
 function wxAlertsFor(propertyId){return wxLive().filter(a=>a.property_ids.includes(propertyId));}
 
-const wxBaseStormStrip=ovStormStrip;
-ovStormStrip=function(...args){return wxBanner()+wxBaseStormStrip(...args);};
+// overview.js loads after this file (overview.js and view-route.js stay last), so the Overview strip is wrapped once
+// every script has run. The banner sits above the storm strip on the Overview.
+function wxHookOverview(){if(typeof ovStormStrip!=='function'||ovStormStrip.wxWrapped)return;const base=ovStormStrip;ovStormStrip=function(...args){return wxBanner()+base(...args);};ovStormStrip.wxWrapped=true;}
+wxHookOverview();if(typeof document!=='undefined'&&document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{wxHookOverview();if(typeof page!=='undefined'&&page==='dashboard'&&typeof data!=='undefined'&&data?.weather?.alerts?.length)render();});
 
 const wxBaseResidenceSummary=residenceSummary;
 residenceSummary=function(p,...rest){

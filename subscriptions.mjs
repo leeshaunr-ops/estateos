@@ -1,6 +1,7 @@
-import {subscriptionQuote} from './stripe-plans.mjs';
+import {subscriptionQuote,PLANS,ADDONS,SEAT_ROLE_SQL,GOOD_STANDING} from './stripe-plans.mjs';
 export const GB=1000000000;
-export function planPrice(seats,packs=0){return 5900+Math.max(0,seats-2)*1500+packs*500;}
+// Manual (non-Stripe) invoices price a company as Essentials plus extra seats beyond the Essentials allowance.
+export function planPrice(seats,packs=0){const p=PLANS.essentials;return p.monthlyMinor+Math.max(0,seats-p.seats)*ADDONS.seats.monthlyMinor+packs*ADDONS.storage.monthlyMinor;}
 export function createSubscriptions({get,all,run,transaction,id,now,fail,json,body,audit,platformOwner,communications}){
  async function summary(org){
   const stripe=await get('SELECT * FROM stripe_billing WHERE organization_id=?',org);
@@ -8,10 +9,10 @@ export function createSubscriptions({get,all,run,transaction,id,now,fail,json,bo
   const packs=paidPlan?paidPlan.storagePacks:Number((await get('SELECT storage_packs FROM company_plans WHERE organization_id=?',org))?.storage_packs||0);
   // Linked evidence may have multiple file records pointing at one stored object.
   const used=Number((await get('SELECT COALESCE(SUM(bytes),0) bytes FROM (SELECT f.storage_key,MAX(f.bytes) bytes FROM files f JOIN properties p ON p.id=f.property_id WHERE p.organization_id=? GROUP BY f.storage_key) objects',org))?.bytes||0);
-  const seats=Number((await get("SELECT COUNT(*) n FROM users WHERE organization_id=? AND active=1 AND role IN ('admin','employee')",org))?.n||0);
-  const limit=(paidPlan?paidPlan.storageGB:10+20*packs)*GB,percent=used/limit*100;
+  const seats=Number((await get(`SELECT COUNT(*) n FROM users WHERE organization_id=? AND active=1 AND ${SEAT_ROLE_SQL}`,org))?.n||0);
+  const limit=(paidPlan?paidPlan.storageGB:PLANS.essentials.storageGB+ADDONS.storage.gb*packs)*GB,percent=used/limit*100;
   const prior=await get('SELECT bytes,day FROM storage_history WHERE organization_id=? AND day<=? ORDER BY day DESC LIMIT 1',org,new Date(Date.now()-30*86400000).toISOString().slice(0,10));
-  return {stripeConnected:!!stripe?.subscription_id,stripeStatus:stripe?.status||null,paidPlan,used,limit,percent,packs,seats,extraSeats:paidPlan?paidPlan.extraSeats:Math.max(0,seats-2),monthlyMinor:paidPlan?paidPlan.monthlyMinor:planPrice(seats,packs),level:percent>=100?100:percent>=90?90:percent>=75?75:0,growthBytes:prior?used-Number(prior.bytes):null,growthSince:prior?.day||null,pending:await get("SELECT id,created_at FROM storage_requests WHERE organization_id=? AND status='pending' ORDER BY created_at LIMIT 1",org),invoices:await all('SELECT * FROM platform_invoices WHERE organization_id=? ORDER BY period DESC LIMIT 12',org)};
+  return {stripeConnected:!!stripe?.subscription_id,stripeStatus:stripe?.status||null,paidPlan,used,limit,percent,packs,seats,extraSeats:paidPlan?paidPlan.extraSeats:Math.max(0,seats-PLANS.essentials.seats),monthlyMinor:paidPlan?paidPlan.monthlyMinor:planPrice(seats,packs),level:percent>=100?100:percent>=90?90:percent>=75?75:0,growthBytes:prior?used-Number(prior.bytes):null,growthSince:prior?.day||null,pending:await get("SELECT id,created_at FROM storage_requests WHERE organization_id=? AND status='pending' ORDER BY created_at LIMIT 1",org),invoices:await all('SELECT * FROM platform_invoices WHERE organization_id=? ORDER BY period DESC LIMIT 12',org)};
  }
  async function monitor(org){
   const s=await summary(org),day=now().slice(0,10);
@@ -27,7 +28,7 @@ export function createSubscriptions({get,all,run,transaction,id,now,fail,json,bo
   }
   return s;
  }
- async function ensureSpace(org,bytes){const s=await summary(org);if(s.stripeConnected&&s.stripeStatus!=='active')fail(409,'Resolve your subscription payment before uploading new files. Existing files remain available.');if(s.used+bytes>s.limit)fail(413,'Company storage is full or this file would exceed the allowance. Ask your administrator to request another 20 GB for $5/month in Company settings. Existing files remain available.');}
+ async function ensureSpace(org,bytes){const s=await summary(org);if(s.stripeConnected&&!GOOD_STANDING.includes(s.stripeStatus))fail(409,'Resolve your subscription payment before uploading new files. Existing files remain available.');if(s.used+bytes>s.limit)fail(413,'Company storage is full or this file would exceed the allowance. Ask your administrator to request another 20 GB for $5/month in Company settings. Existing files remain available.');}
  async function handle(req,res,url,user){
   if(!['/api/subscription','/api/subscription/request','/api/platform/storage','/api/platform/storage/decide','/api/platform/subscription-invoice'].includes(url.pathname))return false;
   if(!user)fail(401,'Please sign in.');if(user.role!=='admin')fail(403,'Administrator access required.');
