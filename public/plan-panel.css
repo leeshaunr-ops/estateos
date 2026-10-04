@@ -1,0 +1,18 @@
+/* Billing page: "Your EstateAegis plan" panel. Palette and type match the Oct 2026 app refresh; no scrolling boxes. */
+.shell .plan-panel{padding:22px 24px}
+.shell .plan-panel .res-panel-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.shell .plan-panel h2{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:22px;color:#1f2933;margin:0}
+.shell .plan-status{margin:12px 0 4px;color:#1f2933;font-size:15px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.shell .plan-name{font-size:17px}
+.shell .plan-rows{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:14px 0 6px}
+.shell .plan-row{border:1px solid #e2e7eb;border-radius:10px;padding:14px 16px;background:#fff;display:flex;flex-direction:column;gap:6px}
+.shell .plan-row-text{display:flex;flex-direction:column;gap:2px}
+.shell .plan-row-text strong{font-size:14px;color:#1f2933}
+.shell .plan-row-text small{color:#5f6b76;font-size:13px;line-height:1.4}
+.shell .plan-row-value{font-size:22px;font-weight:650;color:#1f2933}
+.shell .plan-unlimited{color:#8b242b}
+.shell .plan-meter{width:100%;height:8px}
+.shell .plan-note{color:#5f6b76;font-size:14px;line-height:1.5;margin:10px 0 0;max-width:80ch}
+.shell .plan-link{color:#8b242b;font-weight:600}
+.shell .plan-error{color:#8b242b;margin:8px 0 0}
+@media(max-width:760px){.shell .plan-panel{padding:18px}.shell .plan-rows{grid-template-columns:1fr}.shell .plan-panel .res-panel-head button{width:100%}}
