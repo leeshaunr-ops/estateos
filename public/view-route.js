@@ -7,7 +7,7 @@
    - Dialogs and half-filled forms are never put in the URL: a refresh lands on the page that contains them. */
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;root.EARoute=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
- const PAGES=['dashboard','messages','properties','work','shopping','inspections','requests','arrivals','calendar','documents','maintenance','assets','routes','platform','staff-schedules','staff','workspace','clients','vendors','billing','users','audit','approvals','automation','email-activity','checklist-templates','profile','notifications','storm'];
+ const PAGES=['dashboard','messages','properties','work','shopping','inspections','requests','arrivals','calendar','documents','maintenance','assets','routes','platform','staff-schedules','staff','workspace','clients','vendors','billing','users','audit','approvals','automation','email-activity','checklist-templates','profile','notifications','storm','insurance'];
  // Residence sections (batch 3a). Old tab names in saved links open the section that now holds them.
  const RESIDENCE_TABS=['overview','inspections','services','arrivals','records','people','notes'];
  const TAB_ALIAS={shopping:'arrivals',documents:'records',assets:'records',manual:'records',access_codes:'records',off_site_butler:'people',family:'people'};
@@ -64,6 +64,7 @@
    case 'checklist-editor':if(role!=='admin'||!has(data.checklistTemplates?.templates,s.checklistTemplateId))return bad();break;
    case 'clients':if(s.activeClient&&(role!=='admin'||!has(data.clients,s.activeClient)))return bad();break;
    case 'arrivals':if(s.activeArrival&&!has(data.arrivals,s.activeArrival))return bad();break;
+   case 'insurance':if(role==='vendor'||role==='client')return bad();break;
    case 'storm':if(role==='vendor'||role==='client')return bad();if(s.stormEventId&&!has(data.storm?.events,s.stormEventId))s.stormEventId=null;break;
    default:if(s.page!=='dashboard'&&!PAGES.includes(s.page))return bad();
   }
