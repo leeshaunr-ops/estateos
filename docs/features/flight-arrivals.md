@@ -32,4 +32,4 @@ The family (or the team) adds the flights for an arrival. The arrival plan is a 
 Rough cost: polling one flight over its last 48 hours is about 10–30 lookups ≈ $0.05–$0.15. Alerts add about $0.02 per event (typically 4–6 per flight).
 
 ## Code
-`flights.mjs` (rules, API, alerts, close-down, webhook), `flight-providers.mjs` (AeroAPI client, manual, test service), `integration-core.mjs` (time zones, HMAC tokens; shared with smart locks), `migrations/038_flight_arrivals.sql`, `public/flights.js` / `.css`, tests in `tests/flights.test.mjs` plus the signed-in smoke test.
+`flights.mjs` (rules, API, alerts, close-down, webhook), `flight-providers.mjs` (AeroAPI client, manual, test service), `integration-core.mjs` (time zones, HMAC tokens; shared with smart locks), `migrations/039_flight_arrivals.sql`, `public/flights.js` / `.css`, tests in `tests/flights.test.mjs` plus the signed-in smoke test.
