@@ -1,0 +1,47 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.ut-ws-2",
+   "type": "Feature",
+   "geometry": null,
+   "properties": {
+    "id": "urn:oid:2.49.0.1.840.0.ut-ws-2",
+    "areaDesc": "Wasatch Back",
+    "geocode": {
+     "UGC": [
+      "UTZ110"
+     ],
+     "SAME": []
+    },
+    "sent": "{{-1h}}",
+    "effective": "{{-1h}}",
+    "onset": "{{+4h}}",
+    "expires": "{{+6h}}",
+    "ends": "{{+28h}}",
+    "status": "Actual",
+    "messageType": "Cancel",
+    "category": "Met",
+    "severity": "Severe",
+    "certainty": "Likely",
+    "urgency": "Expected",
+    "event": "Winter Storm Warning",
+    "sender": "w-nws.webmaster@noaa.gov",
+    "senderName": "NWS Salt Lake City UT",
+    "headline": "Winter Storm Warning issued by NWS Salt Lake City UT",
+    "description": "* WHAT...Winter Storm Warning conditions expected.\n* WHERE...Wasatch Back.",
+    "instruction": "Prepare now. Follow local officials.",
+    "references": [
+     {
+      "identifier": "urn:oid:2.49.0.1.840.0.ut-ws-1",
+      "sender": "w-nws.webmaster@noaa.gov",
+      "sent": "{{-2h}}"
+     }
+    ],
+    "parameters": {
+     "VTEC": []
+    }
+   }
+  }
+ ]
+}

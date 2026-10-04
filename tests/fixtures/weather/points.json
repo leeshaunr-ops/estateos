@@ -1,0 +1,86 @@
+{
+ "26.142,-81.7948": {
+  "state": "FL",
+  "zone": "FLZ069",
+  "county": "FLC021",
+  "fire": "FLZ069",
+  "grid": [
+   "MFL",
+   61,
+   88
+  ],
+  "tz": "America/New_York"
+ },
+ "33.4942,-111.9261": {
+  "state": "AZ",
+  "zone": "AZZ548",
+  "county": "AZC013",
+  "fire": "AZZ548",
+  "grid": [
+   "PSR",
+   166,
+   58
+  ],
+  "tz": "America/Phoenix"
+ },
+ "44.3876,-68.2039": {
+  "state": "ME",
+  "zone": "MEZ029",
+  "county": "MEC009",
+  "fire": "MEZ029",
+  "grid": [
+   "CAR",
+   71,
+   12
+  ],
+  "tz": "America/New_York"
+ },
+ "40.6461,-111.498": {
+  "state": "UT",
+  "zone": "UTZ110",
+  "county": "UTC043",
+  "fire": "UTZ478",
+  "grid": [
+   "SLC",
+   117,
+   165
+  ],
+  "tz": "America/Denver"
+ },
+ "32.4316,-80.6698": {
+  "state": "SC",
+  "zone": "SCZ050",
+  "county": "SCC013",
+  "fire": "SCZ050",
+  "grid": [
+   "CHS",
+   37,
+   26
+  ],
+  "tz": "America/New_York"
+ },
+ "32.2163,-80.7526": {
+  "state": "SC",
+  "zone": "SCZ050",
+  "county": "SCC013",
+  "fire": "SCZ050",
+  "grid": [
+   "CHS",
+   34,
+   20
+  ],
+  "tz": "America/New_York"
+ },
+ "42.5917,-88.4334": {
+  "state": "WI",
+  "zone": "WIZ070",
+  "county": "WIC127",
+  "fire": "WIZ070",
+  "grid": [
+   "MKX",
+   44,
+   30
+  ],
+  "tz": "America/Chicago"
+ }
+}

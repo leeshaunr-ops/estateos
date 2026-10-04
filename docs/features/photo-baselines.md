@@ -35,7 +35,7 @@ Home watch reports are most useful when this week's photo of the sink cabinet ca
 - `/api/data` adds `photoSpots: {canEdit, canArchive, limit, spots, shots}`.
 
 ## Data
-Migration `040_photo_spots.sql`:
+Migration `041_photo_spots.sql`:
 - `photo_spots`: the spot, its current baseline, and the version used for edit conflicts.
 - `photo_spot_shots`: one row per photo, with the spot, the visit, `kind` (visit or baseline) and the baseline in effect when it was taken.
 

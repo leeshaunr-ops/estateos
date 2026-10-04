@@ -7,7 +7,7 @@
    items answer pass|monitor|attention|na. */
 (function(root){
  'use strict';
- const TYPES={hurricane:'Hurricane',tropical_storm:'Tropical storm',freeze:'Freeze',flood:'Flood',wildfire:'Wildfire',other:'Other'};
+ const TYPES={hurricane:'Hurricane',tropical_storm:'Tropical storm',freeze:'Freeze',flood:'Flood',wildfire:'Wildfire',winter_storm:'Winter storm',severe_storm:'Severe storm',extreme_heat:'Extreme heat',other:'Other'};
  const EVENT_STATUSES={preparing:'Preparing',active:'Storm active',recovery:'Recovery',closed:'Closed'};
  const PREP={not_started:'Not started',scheduled:'Scheduled',in_progress:'In progress',secured:'Secured',client_declined:'Client declined',not_needed:'Not needed',unreachable:'Unreachable'};
  const POST={not_started:'Not started',scheduled:'Scheduled',in_progress:'In progress',no_damage:'No damage',damage_found:'Damage found',inaccessible:'Inaccessible'};

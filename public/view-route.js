@@ -7,14 +7,14 @@
    - Dialogs and half-filled forms are never put in the URL: a refresh lands on the page that contains them. */
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;root.EARoute=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
- const PAGES=['dashboard','messages','properties','work','shopping','inspections','requests','arrivals','calendar','documents','maintenance','assets','routes','platform','staff-schedules','staff','workspace','clients','vendors','billing','users','audit','approvals','automation','email-activity','checklist-templates','profile','notifications','storm','insurance','platform-owner'];
+ const PAGES=['dashboard','messages','properties','work','shopping','inspections','requests','arrivals','calendar','documents','maintenance','assets','routes','platform','staff-schedules','staff','workspace','clients','vendors','billing','users','audit','approvals','automation','email-activity','checklist-templates','profile','notifications','storm','insurance','platform-owner','weather'];
  // Residence sections (batch 3a). Old tab names in saved links open the section that now holds them.
  const RESIDENCE_TABS=['overview','inspections','services','arrivals','records','people','notes'];
  const TAB_ALIAS={shopping:'arrivals',documents:'records',assets:'records',manual:'records',access_codes:'records',off_site_butler:'people',family:'people'};
  const SAVED_VIEW_MAX_AGE=12*60*60*1000;
  const enc=v=>encodeURIComponent(String(v));
  const dec=v=>{try{return decodeURIComponent(v);}catch{return '';}};
- const blank=()=>({page:'dashboard',propertyId:null,tab:'overview',activeInspection:null,activeAssetInspection:null,activeAssetInspectionRecord:null,assetInspectionReadOnly:false,activeArrival:null,arrivalFilter:'pending',activeClient:null,checklistTemplateId:null,activeMessageThread:null,inspectionUpcomingOnly:false,inspectionSubmittedOnly:false,stormEventId:null});
+ const blank=()=>({page:'dashboard',propertyId:null,tab:'overview',activeInspection:null,activeAssetInspection:null,activeAssetInspectionRecord:null,assetInspectionReadOnly:false,activeArrival:null,arrivalFilter:'pending',activeClient:null,checklistTemplateId:null,activeMessageThread:null,inspectionUpcomingOnly:false,inspectionSubmittedOnly:false,stormEventId:null,weatherAlertId:null});
  function residenceTabs(role){if(role==='vendor')return ['services'];const t=['overview','inspections','services','arrivals','records','people'];if(role==='admin'||role==='employee')t.push('notes');return t;}
  /** View state -> hash ('' for Overview). Unknown pages and form-only screens map to the page that contains them. */
  function toHash(s){
@@ -29,6 +29,7 @@
   if(page==='inspections')return s.inspectionUpcomingOnly?'#/inspections/upcoming':s.inspectionSubmittedOnly?'#/inspections/submitted':'#/inspections';
   if(page==='messages')return s.activeMessageThread?'#/messages/'+enc(s.activeMessageThread):'#/messages';
   if(page==='storm')return s.stormEventId?'#/storm/'+enc(s.stormEventId):'#/storm';
+  if(page==='weather')return s.weatherAlertId?'#/weather/'+enc(s.weatherAlertId):'#/weather';
   return PAGES.includes(page)?'#/'+page:'';
  }
  /** Hash -> requested view state (not yet checked against the user's data). Returns null for an empty or unknown hash. */
@@ -46,6 +47,7 @@
   if(head==='inspections'&&(a==='upcoming'||a==='submitted')){s.page='inspections';s.inspectionUpcomingOnly=a==='upcoming';s.inspectionSubmittedOnly=a==='submitted';return s;}
   if(head==='messages'&&a){s.page='messages';s.activeMessageThread=a;return s;}
   if(head==='storm'){if(a){s.page='storm';s.stormEventId=a;return s;}}
+  if(head==='weather'&&a){s.page='weather';s.weatherAlertId=a;return s;}
   if(PAGES.includes(head)){s.page=head;return s;}
   return null;
  }
@@ -67,6 +69,8 @@
    case 'insurance':if(role==='vendor'||role==='client')return bad();break;
    case 'platform-owner':if(role!=='admin'||!data.user.platformOwner)return bad();break;
    case 'storm':if(role==='vendor'||role==='client')return bad();if(s.stormEventId&&!has(data.storm?.events,s.stormEventId))s.stormEventId=null;break;
+   // Recent (ended) alerts are not in data, so an alert id is kept and the Weather page checks it with the server.
+   case 'weather':if(role==='vendor'||role==='client'||!data.weather)return bad();break;
    default:if(s.page!=='dashboard'&&!PAGES.includes(s.page))return bad();
   }
   return {state:s,fellBack:false};
@@ -86,13 +90,14 @@
 if(typeof window!=='undefined'&&typeof document!=='undefined'&&typeof render==='function')(()=>{
  const R=globalThis.EARoute,VIEW_KEY='estateos:last-view';
  let restoredFor=null,mode=null; // mode: 'replace' while restoring (first screen, back/forward), otherwise new screens push
- const current=()=>R.toHash({page,propertyId,tab,activeInspection,activeAssetInspection,activeAssetInspectionRecord,assetInspectionReadOnly,activeArrival,arrivalFilter,activeClient,checklistTemplateId:checklistEditor?.templateId||null,activeMessageThread,inspectionUpcomingOnly,inspectionSubmittedOnly,stormEventId:typeof stormState!=='undefined'&&page==='storm'&&stormState.view==='board'?stormState.eventId:null});
+ const current=()=>R.toHash({page,propertyId,tab,activeInspection,activeAssetInspection,activeAssetInspectionRecord,assetInspectionReadOnly,activeArrival,arrivalFilter,activeClient,checklistTemplateId:checklistEditor?.templateId||null,activeMessageThread,inspectionUpcomingOnly,inspectionSubmittedOnly,stormEventId:typeof stormState!=='undefined'&&page==='storm'&&stormState.view==='board'?stormState.eventId:null,weatherAlertId:typeof weatherState!=='undefined'&&page==='weather'?weatherState.alertId:null});
  R.current=current;
  const urlFor=hash=>location.pathname+location.search+hash;
  function apply(s){
   page=s.page;propertyId=s.propertyId;tab=s.tab||'overview';activeInspection=s.activeInspection;activeAssetInspection=s.activeAssetInspection;activeAssetInspectionRecord=s.activeAssetInspectionRecord;assetInspectionReadOnly=!!s.assetInspectionReadOnly;activeArrival=s.activeArrival;arrivalFilter=s.arrivalFilter||'pending';activeClient=s.activeClient;inspectionUpcomingOnly=!!s.inspectionUpcomingOnly;inspectionSubmittedOnly=!!s.inspectionSubmittedOnly;
   checklistEditor=s.page==='checklist-editor'?{templateId:s.checklistTemplateId}:null;
   if(s.page==='storm'&&typeof stormState!=='undefined'){stormState.view=s.stormEventId?'board':'list';stormState.eventId=s.stormEventId||null;stormState.wizard=null;}
+  if(s.page==='weather'&&typeof weatherState!=='undefined'&&weatherState.alertId!==(s.weatherAlertId||null)){weatherState.alertId=s.weatherAlertId||null;weatherState.detail=null;}
   if(s.activeMessageThread!==activeMessageThread){activeMessageThread=s.activeMessageThread||null;messageDetail=null;}
   if(activeMessageThread&&!messageDetail){const thread=activeMessageThread;api('messages/thread?id='+encodeURIComponent(thread)).then(detail=>{if(activeMessageThread!==thread)return;messageDetail=detail;render();}).catch(()=>{if(activeMessageThread!==thread)return;activeMessageThread=null;messageDetail=null;mode='replace';render();});}
  }

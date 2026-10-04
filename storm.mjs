@@ -192,6 +192,30 @@ export function createStorm({get,all,run,transaction,id,now,fail,text,note,date,
  }
 
  /** Everything the storm report PDF needs for one residence. Only published storm visits are used. */
+ /** Creates a storm event (admin). Used by the storm page and by "Start storm event" on a weather alert. */
+ async function createEvent(user,b){
+  roles(user,'admin');const key=id(),at=now();
+  await run('INSERT INTO storm_events(id,organization_id,name,type,status,expected_impact_at,prep_deadline_at,post_check_target_at,notes,created_by,version,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',key,user.organization_id,text(b.name,'Storm name',160),oneOf(b.type||'hurricane',S.TYPES,'storm type'),'preparing',when(b.expectedImpactAt,'Expected impact'),when(b.prepDeadlineAt,'Preparation deadline'),when(b.postCheckTargetAt,'Post-storm check target'),note(b.notes),user.id,1,at,at);
+  await audit(user,'storm.created',key);
+  return key;
+ }
+ /** Adds residences (already checked to be active residences in the user's company) to a storm. Returns how many were new. */
+ async function insertResidences(user,ev,propertyIds){
+  let added=0;const at=now();
+  await transaction(async()=>{for(const pid of propertyIds){const r=await run('INSERT INTO storm_event_residences(id,organization_id,storm_event_id,property_id,created_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(storm_event_id,property_id) DO NOTHING',id(),user.organization_id,ev.id,pid,at,at);added+=r.changes||0;}await audit(user,'storm.residences_added',ev.id);});
+  return added;
+ }
+ /** For the weather module: add residences to an open storm in the admin's company. */
+ async function addResidences(user,eventId,propertyIds){
+  roles(user,'admin');const ev=await eventFor(user,eventId);open(ev);
+  const ok=new Set((await all('SELECT id FROM properties WHERE organization_id=? AND archived_at IS NULL',user.organization_id)).map(r=>r.id));
+  const list=[...new Set(propertyIds)].filter(x=>ok.has(x));
+  const added=await insertResidences(user,ev,list);return {event:ev,added,alreadyIncluded:list.length-added};
+ }
+ let reportExtras=null;
+ /** Optional hook (weather alerts) that adds facts to the storm report. fn(user,event,residenceRow) -> {alert} */
+ function setReportExtras(fn){reportExtras=fn;}
+
  async function reportData(user,ev,r){
   const pRow=await get('SELECT * FROM properties WHERE id=?',r.property_id),s=await tzSettings(user.organization_id),tz=tzOf(pRow,s);
   const org=await get('SELECT name FROM organizations WHERE id=?',user.organization_id),logo=(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'';
@@ -201,14 +225,15 @@ export function createStorm({get,all,run,transaction,id,now,fail,text,note,date,
    let snap={};try{snap=JSON.parse(i.report_snapshot||'{}');}catch{}
    const rep=await visitVerification.reportForPdf(user,i,{...snap});
    for(const fileId of snap.fileIds||[]){try{const f=await readFile(user,fileId);photos.set(f.id,{id:f.id,name:f.name,bytes:await readBytes(f.storage_key),capturedAt:f.captured_at||null,timezone:tz,atResidence:visitVerification.photoAtResidence(f,rep)});meta[phase].push({id:f.id,name:f.name,answer_key:f.answer_key,captured_at:f.captured_at,created_at:f.created_at});}catch{}}
-   return {id:i.id,date:i.inspection_date,dateLabel:visitDate(i.inspection_date),completedAt:i.submitted_at||snap.completedAt||i.published_at,inspector:snap.inspector,reportNumber:snap.reportNumber||i.report_number||'',checklistName:snap.checklist?`${snap.checklist.name} (version ${snap.checklist.template_version})`:'Standard checklist',summary:snap.summary||'',notes:snap.notes||'',answers:snap.answers||[],verification:rep.visit||null,photoIds:meta[phase].map(p=>p.id)};
+   return {id:i.id,date:i.inspection_date,dateLabel:visitDate(i.inspection_date),completedAt:i.submitted_at||snap.completedAt||i.published_at,inspector:snap.inspector,reportNumber:snap.reportNumber||i.report_number||'',checklistName:snap.checklist?`${snap.checklist.name} (version ${snap.checklist.template_version})`:'Standard checklist',summary:snap.summary||'',notes:snap.notes||'',answers:snap.answers||[],verification:rep.visit||null,weatherLine:snap.weather?.line||'',weatherSource:snap.weather?.attribution||'',photoIds:meta[phase].map(p=>p.id)};
   };
   const pre=await visit('pre'),post=await visit('post');
   // Photo spots first (the same spot photographed before and after), then the usual pairing for the other photos.
   const spot=pre&&post&&spotPairs?await spotPairs(user.organization_id,meta.pre.map(p=>p.id),meta.post.map(p=>p.id)):[],used=new Set(spot.flatMap(p=>[p.beforeId,p.afterId]));
   const pairs=pre&&post?[...spot.map(p=>({beforeId:p.beforeId,afterId:p.afterId,match:'spot',spot:p.spot})),...S.pairPhotos(meta.pre.filter(p=>!used.has(p.id)),meta.post.filter(p=>!used.has(p.id))).map(p=>({beforeId:p.before?.id||null,afterId:p.after?.id||null,match:p.match}))]:[];
   const jobs=(await all('SELECT w.title,w.status,v.name vendor FROM work_orders w LEFT JOIN vendors v ON v.id=w.vendor_id WHERE w.storm_event_id=? AND w.property_id=? ORDER BY w.created_at',ev.id,r.property_id)).map(w=>({title:w.title,status:titleCase(w.status),vendor:w.vendor||''}));
-  return {report:{company:org?.name||'',companyLogo:logo,timezone:tz,preparedAt:now(),reference:`Storm report reference ${r.id}`,event:{name:ev.name,typeLabel:S.TYPES[ev.type]||titleCase(ev.type),expectedImpactAt:ev.expected_impact_at,prepDeadlineAt:ev.prep_deadline_at},residence:{name:pRow.name,address:pRow.address||''},family:(await get('SELECT name FROM clients WHERE id=?',pRow.client_id))?.name||'',prepLabel:S.prepLabel(r.prep_status,r.prep_issues),prepTone:S.tone('prep',r.prep_status,r.prep_issues),postLabel:S.postLabel(r.post_status),postTone:S.tone('post',r.post_status),severity:r.damage_severity?S.SEVERITY[r.damage_severity]:'',pre,post,pairs,workOrders:jobs},photos,pRow};
+  const extras=reportExtras?await reportExtras(user,ev,r).catch(()=>null):null;
+  return {report:{weatherAlert:extras?.alert||null,weatherNote:extras?.note||[...new Set([pre?.weatherSource,post?.weatherSource].filter(Boolean))].join(' ')||'',company:org?.name||'',companyLogo:logo,timezone:tz,preparedAt:now(),reference:`Storm report reference ${r.id}`,event:{name:ev.name,typeLabel:S.TYPES[ev.type]||titleCase(ev.type),expectedImpactAt:ev.expected_impact_at,prepDeadlineAt:ev.prep_deadline_at},residence:{name:pRow.name,address:pRow.address||''},family:(await get('SELECT name FROM clients WHERE id=?',pRow.client_id))?.name||'',prepLabel:S.prepLabel(r.prep_status,r.prep_issues),prepTone:S.tone('prep',r.prep_status,r.prep_issues),postLabel:S.postLabel(r.post_status),postTone:S.tone('post',r.post_status),severity:r.damage_severity?S.SEVERITY[r.damage_severity]:'',pre,post,pairs,workOrders:jobs},photos,pRow};
  }
 
  function csv(event){
@@ -229,9 +254,7 @@ export function createStorm({get,all,run,transaction,id,now,fail,text,note,date,
    return json(res,200,{events:out,canManage:user.role==='admin'});
   }
   if(p==='/api/storm-events'&&method==='POST'){
-   roles(user,'admin');const b=await body(req),key=id(),at=now();
-   await run('INSERT INTO storm_events(id,organization_id,name,type,status,expected_impact_at,prep_deadline_at,post_check_target_at,notes,created_by,version,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',key,user.organization_id,text(b.name,'Storm name',160),oneOf(b.type||'hurricane',S.TYPES,'storm type'),'preparing',when(b.expectedImpactAt,'Expected impact'),when(b.prepDeadlineAt,'Preparation deadline'),when(b.postCheckTargetAt,'Post-storm check target'),note(b.notes),user.id,1,at,at);
-   await audit(user,'storm.created',key);
+   roles(user,'admin');const key=await createEvent(user,await body(req));
    return json(res,201,{event:await eventOut(user,await eventFor(user,key))});
   }
   const m=p.match(ROUTE);if(!m)return false;
@@ -300,8 +323,7 @@ export function createStorm({get,all,run,transaction,id,now,fail,text,note,date,
    if(b.propertyIds!==undefined){const wanted=ids(b.propertyIds);chosen=props.filter(x=>wanted.includes(x.id));if(chosen.length!==wanted.length)fail(422,'Choose active residences from your company.');}
    else if(b.filter&&typeof b.filter==='object'){const f=b.filter;chosen=S.selectResidences(props,{city:note(f.city,120),zip:note(f.zip,24),managerId:note(f.managerId,100),search:note(f.search,160)});}
    else fail(422,'Choose the residences this storm affects.');
-   let added=0;const at=now();
-   await transaction(async()=>{for(const x of chosen){const r=await run('INSERT INTO storm_event_residences(id,organization_id,storm_event_id,property_id,created_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(storm_event_id,property_id) DO NOTHING',id(),user.organization_id,ev.id,x.id,at,at);added+=r.changes||0;}await audit(user,'storm.residences_added',ev.id);});
+   const added=await insertResidences(user,ev,chosen.map(x=>x.id));
    return json(res,200,{added,alreadyIncluded:chosen.length-added,event:await eventOut(user,ev)});
   }
   if(sub==='residences/remove'){
@@ -348,5 +370,5 @@ export function createStorm({get,all,run,transaction,id,now,fail,text,note,date,
  }
  /** True when an employee is assigned to the residence on a storm that is not closed (grants visit access). */
  async function assigned(user,propertyId){return !!(await get("SELECT 1 FROM storm_event_residences r JOIN storm_events e ON e.id=r.storm_event_id WHERE r.property_id=? AND r.assigned_user_id=? AND r.organization_id=? AND e.status<>'closed'",propertyId,user.id,user.organization_id));}
- return {handle,inspectionChanged,inspectionDeleted,assigned,clientCards};
+ return {handle,inspectionChanged,inspectionDeleted,assigned,clientCards,createEvent,addResidences,eventOut,eventFor,setReportExtras};
 }
