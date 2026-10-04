@@ -157,6 +157,7 @@ async function scenario(label,pg){
  const hook=async(flightId,payload={},token=signToken(FAKE_SECRET,'flight:'+flightId))=>(await fetch(`${srv.base}/api/webhooks/flightaware/${flightId}/${token}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)})).status;
  try{
   const {admin,leo,mia,family,family2,vendor,outsider,leoU,home,other}=await company(srv,label);
+  for(const ep of ['add','eta','remove','refresh','tasks/add','tasks/done','settings']){const r=await client(srv).call('POST','flights/'+ep,{});assert.equal(r.status,401,`signed out: flights/${ep}`);}
   const arrival=await family.req('arrivals',{propertyId:home.id,arrivalAt:'2026-10-06T15:00',needs:'Two guests.'},201);
   const otherArrival=await family2.req('arrivals',{propertyId:other.id,arrivalAt:'2026-10-07T18:00'},201);
 
