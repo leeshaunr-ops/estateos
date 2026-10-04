@@ -1,5 +1,6 @@
 // Offline mobile inspections: replay-safe writes (Idempotency-Key) and the per-user offline visit snapshot.
 // Everything here is scoped to the caller's company and the residences their role can operate.
+import { inspectorRooms } from './inspector.mjs';
 import {EAChecklist, parseSnapshot, defaultChecklist} from './visit-checklists.mjs';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export const isUuid = value => typeof value === 'string' && UUID.test(value);
@@ -96,7 +97,7 @@ export function createOfflineInspections({ get, all, run, body, json, fail, role
     checklist: routine ? { source: 'template', template_id: routine.template_id, template_version: routine.template_version, template_version_id: routine.template_version_id, name: routine.name, items: routine.items } : { source: 'built-in', template_id: null, template_version: null, items: template },
     checklists,
     template,
-    properties: homes.map(h => field ? { id: h.id, name: h.name, address: h.address, timezone: h.timezone || '', room_profile: h.room_profile } : ({ id: h.id, name: h.name, address: h.address, client_id: h.client_id, client_name: client.get(h.client_id) || '', account_manager_id: h.account_manager_id, account_manager_name: names.get(h.account_manager_id) || '', timezone: h.timezone || '', room_profile: h.room_profile, inspection_report_email: h.inspection_report_email || '' })),
+    properties: homes.map(h => field ? { id: h.id, name: h.name, address: h.address, timezone: h.timezone || '', room_profile: inspectorRooms(h.room_profile) } : ({ id: h.id, name: h.name, address: h.address, client_id: h.client_id, client_name: client.get(h.client_id) || '', account_manager_id: h.account_manager_id, account_manager_name: names.get(h.account_manager_id) || '', timezone: h.timezone || '', room_profile: h.room_profile, inspection_report_email: h.inspection_report_email || '' })),
     inspections: visits,
     files
    };

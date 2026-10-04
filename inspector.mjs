@@ -38,6 +38,13 @@ const localDay = (timezone, at = Date.now()) => { try { return new Intl.DateTime
 // Residence fields an inspector needs to find the home and fill its room checklist. Never the manual, the family,
 // the residence manager, report recipients or notes.
 const HOME_FIELDS = ['id', 'name', 'address', 'street_address', 'address_line2', 'city', 'state', 'postal_code', 'country', 'timezone', 'room_profile', 'latitude', 'longitude', 'geofence_radius_m', 'timezone_source'];
+/** Room list for the checklist, without who each room is assigned to (family member or guest names). */
+export function inspectorRooms(value) {
+ try {
+  const p = typeof value === 'string' ? JSON.parse(value || '{}') : (value || {});
+  return JSON.stringify({...p, rooms: (Array.isArray(p.rooms) ? p.rooms : []).map(({assignment, assignedName, ...room}) => room)});
+ } catch { return JSON.stringify({rooms: []}); }
+}
 const FILE_FIELDS = 'id,property_id,inspection_id,name,mime,bytes,visibility,created_by,created_at';
 
 export function createInspectors({get, all, run, transaction, id, now, fail, json, body, roles, property, audit, date, communications, failAlerts, visitChecklists, visitVerification, demos, template, clock = () => Date.now()}) {
@@ -101,7 +108,7 @@ export function createInspectors({get, all, run, transaction, id, now, fail, jso
    demo: demos ? await demos.lookup(org) : null,
    user: {...safeUser(user), platformAccess: false, ...profile},
    company: (await get('SELECT name FROM organizations WHERE id=?', org))?.name || '',
-   properties: homes.map(h => Object.fromEntries(HOME_FIELDS.map(k => [k, h[k] ?? null]))),
+   properties: homes.map(h => ({...Object.fromEntries(HOME_FIELDS.map(k => [k, h[k] ?? null])), room_profile: inspectorRooms(h.room_profile)})),
    archivedProperties: [], invitations: [], clients: [], vendors: [], users: [], assets: [], asset_inspections: [], work: [], requests: [],
    inspections: visits.map(i => {
     const {report_snapshot, report_email, email_status, email_error, email_attempted_at, checklist_snapshot, ...visible} = i;
