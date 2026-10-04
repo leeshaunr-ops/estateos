@@ -13,6 +13,11 @@ export const ADDONS = Object.freeze({
 // Only these roles use an admin/staff seat. Client and vendor logins are unlimited on every plan.
 export const SEAT_ROLES = Object.freeze(['admin','employee']);
 export const UNLIMITED_ROLES = Object.freeze(['client','vendor']);
+// Subscription statuses in good standing. Checkout starts every new company on a 30-day trial (status 'trialing',
+// card collected, $0 first invoice), so a trial has the same access as a paid subscription.
+export const GOOD_STANDING = Object.freeze(['active','trialing']);
+// A completed Checkout with a trial reports payment_status 'no_payment_required' instead of 'paid'.
+export const CHECKOUT_SETTLED = Object.freeze(['paid','no_payment_required']);
 export const SEAT_ROLE_SQL = "role IN ('admin','employee')";
 export function subscriptionQuote(plan, extraSeats=0, storagePacks=0) {
   const p=PLANS[plan];
