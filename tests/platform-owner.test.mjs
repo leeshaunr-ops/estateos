@@ -98,8 +98,8 @@ for(const [label,envFor] of engines)test('webhook sync, backfill and overview nu
   assert.equal(o.failedPayments.length,1);assert.equal(o.failedPayments[0].company,'Gulf Breeze Home Watch');assert.equal(o.failedPayments[0].amountMinor,5900);
   const h=c('harbor');
   assert.equal(h.status,'trialing');assert.equal(h.kind,'trial');assert.equal(h.planName,'Growth');assert.equal(h.trialDaysLeft,5);assert.equal(h.trialEndEstimated,false);
-  assert.deepEqual(h.usage,{residences:11,seats:4,portalUsers:10,bytes:0},'archived homes, suspended staff and client/vendor logins are not counted as seats');
-  assert.deepEqual(h.limits,{residences:150,seats:10,storageBytes:30e9});assert.deepEqual(h.admin,{name:'Jordan Ellis',email:'jordan@harborline.example'});
+  assert.deepEqual(h.usage,{residences:11,seats:4,inspectors:0,portalUsers:10,bytes:0},'archived homes, suspended staff and client/vendor logins are not counted as seats');
+  assert.deepEqual(h.limits,{residences:150,seats:10,inspectors:20,storageBytes:30e9});assert.deepEqual(h.admin,{name:'Jordan Ellis',email:'jordan@harborline.example'});
   assert.equal(c('palm').cancelAtPeriodEnd,true);assert.equal(c('palm').addOns.storagePacks,2);assert.equal(c('palm').limits.storageBytes,90e9);
   assert.equal(c('coastal').limits.seats,11,'Growth 10 + 1 extra user');assert.equal(c('coastal').syncSource,'backfill');
   assert.equal(c('gulf').lastPaymentFailedMinor,5900);assert.equal(c('gulf').status,'past_due');
@@ -227,7 +227,7 @@ for(const [label,envFor] of engines)test('server: owner-only Platform endpoints,
 
   const overview=await owner.req('owner/overview');
   const harbor=overview.companies.find(c=>c.name==='Harborline Home Watch');assert.ok(harbor);
-  assert.deepEqual(harbor.usage,{residences:1,seats:2,portalUsers:2,bytes:0});assert.equal(harbor.status,'no_subscription');
+  assert.deepEqual(harbor.usage,{residences:1,seats:2,inspectors:0,portalUsers:2,bytes:0});assert.equal(harbor.status,'no_subscription');
   assert.equal(S(overview).includes('Sample family'),false,'no client records in the overview');
 
   // Signed webhook: wrong signature 400, correct one applied once.

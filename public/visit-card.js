@@ -49,7 +49,7 @@ function visitState(i){
  return {...(server||{}),status,check_in,check_out,duration_seconds:server?.duration_seconds??(Number.isFinite(start)&&Number.isFinite(end)?Math.max(0,Math.round((end-start)/1000)):null),pending:!!(check_in?.pending||check_out?.pending)};
 }
 const visitCheckedIn=i=>!!visitState(i).check_in;
-function visitGated(i,status){return vvOn()&&vvSettings().requireCheckIn&&isStaff()&&status==='draft'&&!visitCheckedIn(i);}
+function visitGated(i,status){return vvOn()&&vvSettings().requireCheckIn&&isField()&&status==='draft'&&!visitCheckedIn(i);}
 
 /* ---------- wording ---------- */
 const VV_PILL={pass:'ck-pass',fail:'ck-fail',monitor:'ck-monitor',open:''};
@@ -76,7 +76,7 @@ function visitDetails(v,tz){
 
 /* ---------- inspection screen ---------- */
 function visitSection(i,status){
- const staff=isStaff(),v=visitState(i),p=vvResidence(i),tz=vvTimezone(p),geo=vvGeo(p);
+ const staff=isField(),v=visitState(i),p=vvResidence(i),tz=vvTimezone(p),geo=vvGeo(p);
  if(!staff){if(!i.visit)return '';return `<section class="panel visit-card visit-proof" aria-label="Visit verification"><div class="visit-head"><h2>Visit verification</h2>${visitPill(i.visit)}</div>${visitRows(i.visit,tz)}${VV.describe(i.visit,tz).notes.map(n=>`<p class="muted">${esc(n)}</p>`).join('')}</section>`;}
  if(!vvOn()&&!i.visit)return '';
  const draft=status==='draft',queued=!!offlineDraft(i.id)?.completeQueued;
@@ -92,7 +92,7 @@ function visitGateNotice(){return `<div class="notice visit-gate"><strong>Check 
 
 /* ---------- report list: badge + filter ---------- */
 function visitBadge(i){
- if(!isStaff())return '';const v=i.visit;
+ if(!isField())return '';const v=i.visit;
  if(!v){return vvOn()&&i.status!=='draft'?'<span class="badge amber visit-badge">Not checked in</span>':'';}
  const st=v.override?'verified':v.status;if(st==='pending')return i.status==='draft'?'':'<span class="badge amber visit-badge">Not checked in</span>';
  const cls={verified:'ck-pass',outside_geofence:'ck-fail',location_unavailable:'ck-monitor',no_residence_location:'ck-monitor'}[st]||'';
@@ -100,12 +100,12 @@ function visitBadge(i){
  return `<span class="badge visit-badge ${cls}" title="Visit verification">${esc(text)}</span>`;
 }
 function visitFilterBar(){
- if(!isStaff()||!vvOn())return '';
+ if(!isField()||!vvOn())return '';
  const options=[['','All visits'],['verified','Verified'],['outside_geofence','Outside area'],['location_unavailable','No location'],['pending','Not checked in']];
  return `<div class="visit-filter" role="group" aria-label="Filter by visit verification">${options.map(([v,t])=>`<button class="${visitFilterValue===v?'active':''}" data-action="visit-filter" data-id="${v}">${esc(t)}</button>`).join('')}</div>`;
 }
 function visitFilter(rows){
- if(!visitFilterValue||!isStaff())return rows;
+ if(!visitFilterValue||!isField())return rows;
  return rows.filter(i=>{const st=i.visit?(i.visit.override?'verified':i.visit.status):'pending';return visitFilterValue==='location_unavailable'?['location_unavailable','no_residence_location'].includes(st):st===visitFilterValue;});
 }
 
@@ -203,6 +203,6 @@ action=async function(name,key,button){
   $('f-latitude').value=pos.lat.toFixed(6);$('f-longitude').value=pos.lon.toFixed(6);$('f-source').value='device';toast(`Location filled in (GPS accuracy ±${Math.round(pos.accuracy)} m). Save to keep it.`);return;
  }
  if(name==='vv-geocode'){const r=await api('properties/location',{id:key,geocode:true});$('f-latitude').value=Number(r.latitude).toFixed(6);$('f-longitude').value=Number(r.longitude).toFixed(6);$('f-source').value='manual';await load();toast('Location found from the address.');return visitLocationDialog(data.properties.find(x=>x.id===key));}
- if(name==='inspection-publish'){const i=inspection();if(i&&vvOn()&&isStaff()){await visitAutoCheckOut(i);if(navigator.onLine)await offlineSync();}}
+ if(name==='inspection-publish'){const i=inspection();if(i&&vvOn()&&isField()){await visitAutoCheckOut(i);if(navigator.onLine)await offlineSync();}}
  return visitBaseAction(name,key,button);
 };

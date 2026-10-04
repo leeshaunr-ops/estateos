@@ -40,6 +40,7 @@ import { createStorm, portalLink } from './storm.mjs';
 import { createInsurance } from './insurance.mjs';
 import { createPhotoSpots } from './photo-spots.mjs';
 import { createSmartLocks } from './smart-locks.mjs';
+import { createInspectors } from './inspector.mjs';
 import { createFlights } from './flights.mjs';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const db = await openDatabase(root);
@@ -130,6 +131,9 @@ async function property(user, propertyId, operation = 'read') {
         return p;
     if (user.role === 'vendor' && operation === 'job' && (await get("SELECT 1 FROM work_orders WHERE property_id=? AND vendor_id=? AND status NOT IN ('cancelled')", p.id, user.vendor_id)))
         return p;
+    // Field inspectors reach a residence only through a visit or recurring schedule assigned to them (see inspector.mjs).
+    if (user.role === 'inspector' && (operation === 'read' || operation === 'operate') && await inspectors.assigned(user, p.id))
+        return p;
     fail(404, 'Residence not found.');
 }
 async function entity(user, table, entityId, operation = 'read') { const row = (await get(`SELECT * FROM ${table} WHERE id=?`, entityId)); if (!row)
@@ -210,7 +214,7 @@ async function fileAllowed(user, f, inspectionIds, jobIds) {
     return f.visibility === 'client';
 }
 async function readFile(user, fileId) { const f = (await get('SELECT * FROM files WHERE id=?', fileId)); if (!f)
-    fail(404, 'File not found.'); if(user.role==='employee'&&f.work_order_id){await work(user,f.work_order_id);return f;} (await property(user, f.property_id, user.role === 'vendor' ? 'job' : 'read')); const ins = new Set((await all("SELECT id FROM inspections WHERE property_id=? AND status='published'", f.property_id)).map(x => x.id)); const jobs = new Set((await all('SELECT * FROM work_orders WHERE property_id=?', f.property_id)).filter(x => user.role !== 'vendor' || x.vendor_id === user.vendor_id).map(x => x.id)); if (!(await fileAllowed(user, f, ins, jobs)))
+    fail(404, 'File not found.'); if(user.role==='inspector'){if(!(await inspectors.fileAllowed(user,f)))fail(404,'File not found.');return f;} if(user.role==='employee'&&f.work_order_id){await work(user,f.work_order_id);return f;} (await property(user, f.property_id, user.role === 'vendor' ? 'job' : 'read')); const ins = new Set((await all("SELECT id FROM inspections WHERE property_id=? AND status='published'", f.property_id)).map(x => x.id)); const jobs = new Set((await all('SELECT * FROM work_orders WHERE property_id=?', f.property_id)).filter(x => user.role !== 'vendor' || x.vendor_id === user.vendor_id).map(x => x.id)); if (!(await fileAllowed(user, f, ins, jobs)))
     fail(404, 'File not found.'); return f; }
 const communications=createCommunications({get,all,run,transaction,id,now,fail,text,json,body,rate,audit});
 const failAlerts=createFailAlerts({get,all,run,id,now,fail,json,body});
@@ -243,6 +247,7 @@ weather.extendReports(visitVerification);weather.hookCheckIn(visitVerification);
 const aiSummaries = createAiSummaries({get,all,run,transaction,id,now,fail,json,body,roles,property,audit,platformOwner,visitVerification});
 aiSummaries.extendReports(visitVerification);
 const insurance = createInsurance({get,all,run,transaction,id,now,fail,json,body,roles,property,audit,visitVerification,failAlerts,readFile,readBytes});
+const inspectors = createInspectors({get,all,run,transaction,id,now,fail,json,body,roles,property,audit,date,communications,failAlerts,visitChecklists,visitVerification,demos,template});
 const offlineInspections = createOfflineInspections({get,all,run,body,json,fail,roles,property,entity,hash,now,template,visitChecklists,visitVerification});
 async function assertWorkspaceActive(organizationId){if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',organizationId))?.status==='suspended')fail(403,'This company workspace is suspended. Contact support.');const d=await demos.lookup(organizationId);if(d&&Number(d.expires_at)<=Date.now())fail(403,'Your seven-day demo has ended. Contact sales@estateaegis.com for more time.');}
 const clientErrorWindows = new Map();
@@ -269,9 +274,12 @@ async function api(req, res, url, user) {
     if(await demoSignup.handle(req,res,url))return;
     if(await paidSignup.handle(req,res,url))return;
     if(user&&!['/api/login','/api/logout','/api/status'].includes(p))await assertWorkspaceActive(user.organization_id);
+    // Field inspectors: explicit allow-list, checked before any other handler (inspector.mjs).
+    await inspectors.gate(req,url,user);
     if(await demos.handle(req,res,url,user))return;
     if(user&&await demos.lookup(user.organization_id)&&method!=='GET'&&(p.startsWith('/api/billing/')||p==='/api/subscription/request'))fail(403,'Billing is disabled in private demos. Contact sales@estateaegis.com to subscribe.');
     if(await stripeSandbox.handle(req,res,url,user))return;
+    if(await inspectors.handle(req,res,url,user))return;
     if(await billing.handle(req,res,url,user))return;
     if(await platformGoogle.handle(req,res,url,user))return;
     if(await master.handle(req,res,url,user))return;
@@ -400,6 +408,7 @@ async function api(req, res, url, user) {
             const family = invitation.role === 'client' ? await lockFamily({get,run}, invitation.organization_id, invitation.client_id) : null;
             if (!await claimInvitation(run, invitation.token_hash, now())) fail(409, 'Invitation expired, cancelled, or already accepted.');
             if(['admin','employee'].includes(invitation.role))await billing.assertCapacity(invitation.organization_id,'seats');
+            if(invitation.role==='inspector')await billing.assertCapacity(invitation.organization_id,'inspectors');
             await run('INSERT INTO users VALUES(?,?,?,?,?,?,?,?,?,?)', uid, invitation.organization_id, text(b.name, 'Name', 160), invitation.email, pw, invitation.role, invitation.client_id, invitation.vendor_id, 1, now());
             await linkAcceptedMember({run}, invitation, uid, family);
         });
@@ -416,6 +425,8 @@ async function api(req, res, url, user) {
         res.setHeader('Set-Cookie', 'estateos_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0');
         return json(res, 200, { ok: true });
     }
+    if (p === '/api/data' && method === 'GET' && user.role === 'inspector')
+        return json(res, 200, await visitVerification.decorate(user, await inspectors.snapshot(user, {safeUser, profile: await get('SELECT phone,preferred_contact FROM user_profiles WHERE user_id=?', user.id) || {phone:'',preferred_contact:'Email'}})));
     if (p === '/api/data' && method === 'GET')
         return json(res, 200, await aiSummaries.decorate(user, await photoSpots.decorate(user, await flights.decorate(user, await weather.decorate(user, await insurance.decorate(user, await smartLocks.decorate(user, await visitVerification.decorate(user, await snapshot(user)))))))));
     if (p.startsWith('/api/files/') && method === 'GET') {
@@ -603,7 +614,8 @@ async function api(req, res, url, user) {
         result = { id: row.id, archived: false };
     }
     else if (p === '/api/access-codes/read' || p === '/api/access-codes/save') {
-        roles(user, 'admin', 'employee');
+        // Inspectors only read, and only on the day of an assigned visit (checked in inspectors.gate).
+        if (p.endsWith('/read')) roles(user, 'admin', 'employee', 'inspector'); else roles(user, 'admin', 'employee');
         result = await transaction(async()=>{
             const home = await property(user, b.propertyId, 'operate');
             const context = home.organization_id + ':' + home.id;
@@ -710,8 +722,10 @@ async function api(req, res, url, user) {
     else if (p === '/api/invitations') {
         roles(user, 'admin');
         const role = b.role;
-        if (!['admin', 'employee', 'client', 'vendor'].includes(role))
+        if (!['admin', 'employee', 'inspector', 'client', 'vendor'].includes(role))
             fail(422, 'Invalid role.');
+        // Field inspectors have their own allowance (never an admin/staff seat); check it before sending the invitation.
+        if (role === 'inspector') await billing.assertCapacity(user.organization_id, 'inspectors');
         if (role === 'client' && !(await get('SELECT 1 FROM clients WHERE id=? AND organization_id=?', b.clientId, user.organization_id)))
             fail(422, 'Select the client family.');
         if (role === 'vendor' && !(await get('SELECT 1 FROM vendors WHERE id=? AND organization_id=?', b.vendorId, user.organization_id)))
@@ -756,7 +770,7 @@ async function api(req, res, url, user) {
         if (!member || member.id === user.id)
             fail(422, 'Cannot reactivate this account.');
         // Reactivating an admin or staff account takes a seat again; client and vendor logins never count.
-        await transaction(async()=>{if(!member.active&&['admin','employee'].includes(member.role))await billing.assertCapacity(user.organization_id,'seats');
+        await transaction(async()=>{if(!member.active&&['admin','employee'].includes(member.role))await billing.assertCapacity(user.organization_id,'seats');if(!member.active&&member.role==='inspector')await billing.assertCapacity(user.organization_id,'inspectors');
         await run('UPDATE users SET active=1 WHERE id=? AND organization_id=?', member.id, user.organization_id);});
         await audit(user, 'user.reactivated', member.id);
         result = { ok: true };
@@ -940,7 +954,7 @@ async function api(req, res, url, user) {
         result={deleted:true};
     }
     else if (p === '/api/inspections/save') {
-        roles(user, 'admin', 'employee');
+        roles(user, 'admin', 'employee', 'inspector');
         const row = (await entity(user, 'inspections', b.id, 'operate'));
         assertVersion(row, b);
         if (row.status !== 'draft')
@@ -963,7 +977,7 @@ async function api(req, res, url, user) {
     }
     else if (p === '/api/inspections/submit') {
         // Field techs (and admins) mark a visit complete, often from an offline queue. It waits as `submitted` for an admin to publish.
-        roles(user, 'admin', 'employee');
+        roles(user, 'admin', 'employee', 'inspector');
         const row = (await entity(user, 'inspections', b.id, 'operate'));
         if (row.status === 'submitted' || row.status === 'published') result = { id: row.id, status: row.status, version: row.version, alreadyCompleted: true };
         else {
@@ -1019,7 +1033,8 @@ async function api(req, res, url, user) {
         result = await publishInspection(user, row, { key, route: p, requestHash });
     }
     else if (p === '/api/files') {
-        roles(user, 'admin', 'employee', 'vendor');
+        roles(user, 'admin', 'employee', 'vendor', 'inspector');
+        if (user.role === 'inspector') b.visibility = 'internal';
         const authorizedJob=b.workId?await work(user,b.workId):null;
         const pRow = authorizedJob&&authorizedJob.property_id===b.propertyId?await get('SELECT * FROM properties WHERE id=? AND organization_id=?',b.propertyId,user.organization_id):(await property(user, b.propertyId, user.role === 'vendor' ? 'job' : 'operate'));
         // Offline photo uploads carry the outbox operation ID so a retried upload never creates a second file.
@@ -1027,7 +1042,7 @@ async function api(req, res, url, user) {
         if (clientOpId != null && !isUuid(clientOpId)) fail(422, 'Upload ID must be a UUID.');
         if (clientOpId) { const existing = await get('SELECT id,inspection_id,work_order_id FROM files WHERE created_by=? AND client_op_id=?', user.id, clientOpId); if (existing) { if ((existing.inspection_id || null) !== (b.inspectionId || null) || (existing.work_order_id || null) !== (b.workId || null)) fail(422, 'This upload ID was already used for another record.'); return json(res, 201, { id: existing.id, existing: true }); } }
         if (b.inspectionId) {
-            roles(user, 'admin', 'employee');
+            roles(user, 'admin', 'employee', 'inspector');
             const inspection = (await entity(user, 'inspections', b.inspectionId, 'operate'));
             if (inspection.property_id !== pRow.id || inspection.status !== 'draft')
                 fail(422, 'Photos require a draft at this residence.');
@@ -1320,7 +1335,7 @@ const server = http.createServer(async (req, res) => {
             return res.end(url.pathname === '/sw.js' ? content.replace('__SHELL_VERSION__', shellVersion()) : content);
         }
         const appHome = url.pathname === '/' && (url.searchParams.has('invite') || url.searchParams.has('workspaceInvite') || await actor(req));
-        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/home-refresh.css':'home-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js','/visit-verification.js':'visit-verification.js','/visit-card.js':'visit-card.js','/storm-core.js':'storm-core.js','/smart-locks.js':'smart-locks.js','/smart-locks.css':'smart-locks.css','/flights.js':'flights.js','/flights.css':'flights.css', '/weather-core.js':'weather-core.js', '/weather.js':'weather.js', '/weather.css':'weather.css','/ai-summaries.js':'ai-summaries.js','/ai-summaries.css':'ai-summaries.css','/storm.js':'storm.js','/storm.css':'storm.css','/insurance.js':'insurance.js','/insurance.css':'insurance.css','/photo-spots.js':'photo-spots.js','/photo-spots.css':'photo-spots.css','/certificate.js':'certificate.js','/certificate.css':'certificate.css','/view-route.js':'view-route.js', '/sidebar-core.js':'sidebar-core.js','/overview-core.js':'overview-core.js','/app-format.js':'app-format.js','/app.css':'app.css', '/overview.js':'overview.js', '/overview.css':'overview.css', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/login.js':'login.js','/login.css':'login.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/faq.js':'faq.js','/site-menu.js':'site-menu.js','/home-compact.js':'home-compact.js','/plan-panel.js':'plan-panel.js','/platform-owner.js':'platform-owner.js','/platform-owner.css':'platform-owner.css','/plan-panel.css':'plan-panel.css','/security':'security.html' };
+        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/home-refresh.css':'home-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js','/visit-verification.js':'visit-verification.js','/visit-card.js':'visit-card.js','/storm-core.js':'storm-core.js','/smart-locks.js':'smart-locks.js','/smart-locks.css':'smart-locks.css','/flights.js':'flights.js','/flights.css':'flights.css', '/weather-core.js':'weather-core.js', '/weather.js':'weather.js', '/weather.css':'weather.css','/ai-summaries.js':'ai-summaries.js','/ai-summaries.css':'ai-summaries.css','/storm.js':'storm.js','/storm.css':'storm.css','/insurance.js':'insurance.js','/insurance.css':'insurance.css','/photo-spots.js':'photo-spots.js','/photo-spots.css':'photo-spots.css','/certificate.js':'certificate.js','/certificate.css':'certificate.css','/view-route.js':'view-route.js', '/sidebar-core.js':'sidebar-core.js','/overview-core.js':'overview-core.js','/app-format.js':'app-format.js','/app.css':'app.css', '/overview.js':'overview.js', '/overview.css':'overview.css', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/login.js':'login.js','/login.css':'login.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/faq.js':'faq.js','/site-menu.js':'site-menu.js','/home-compact.js':'home-compact.js','/plan-panel.js':'plan-panel.js','/inspector.js':'inspector.js','/inspector.css':'inspector.css','/platform-owner.js':'platform-owner.js','/platform-owner.css':'platform-owner.css','/plan-panel.css':'plan-panel.css','/security':'security.html' };
         const file = names[url.pathname] || (url.pathname === '/client-login' || /^\/client\/[a-z0-9-]+$/i.test(url.pathname) ? 'live.html' : /^\/certificate\/[A-Za-z0-9_-]{43}$/.test(url.pathname) ? 'certificate.html' : null);
         if (!file) {
             // Unknown pages get a friendly HTML 404 with the site navigation; /api/* keeps its JSON errors above.
@@ -1350,7 +1365,7 @@ const server = http.createServer(async (req, res) => {
         json(res, status, { error: status === 500 ? 'The action could not be saved. Check the server log.' : error.message, ...(status !== 500 && error.extra ? error.extra : {}) });
     }
 });
-const SHELL_FILES = ['live.html','live.js','login.js','login.css','inspection-checklist.js','visit-verification.js','visit-card.js','view-route.js','sidebar-core.js','overview-core.js','overview.js','overview.css','app-format.js','app.css','storm-core.js','storm.js','storm.css','weather-core.js','weather.js','weather.css','ai-summaries.js','ai-summaries.css','smart-locks.js','smart-locks.css','flights.js','flights.css','insurance.js','insurance.css','photo-spots.js','photo-spots.css','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png','ea-shield-80.png','ea-shield-120.png','plan-panel.js','plan-panel.css','platform-owner.js','platform-owner.css'];
+const SHELL_FILES = ['live.html','live.js','login.js','login.css','inspection-checklist.js','visit-verification.js','visit-card.js','view-route.js','sidebar-core.js','overview-core.js','overview.js','overview.css','app-format.js','app.css','storm-core.js','storm.js','storm.css','weather-core.js','weather.js','weather.css','ai-summaries.js','ai-summaries.css','smart-locks.js','smart-locks.css','flights.js','flights.css','insurance.js','insurance.css','photo-spots.js','photo-spots.css','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png','ea-shield-80.png','ea-shield-120.png','plan-panel.js','plan-panel.css','platform-owner.js','platform-owner.css','inspector.js','inspector.css'];
 let cachedShellVersion = null;
 function shellVersion() { if (!cachedShellVersion) { const digest = createHash('sha256'); for (const name of SHELL_FILES) { try { digest.update(name).update(fs.readFileSync(path.join(root, 'public', name))); } catch { digest.update(name + ':missing'); } } cachedShellVersion = digest.digest('hex').slice(0, 12); } return cachedShellVersion; }
 setInterval(() => offlineInspections.purge().catch(e => console.error('Idempotency cleanup:', e.message)), 3600000).unref();

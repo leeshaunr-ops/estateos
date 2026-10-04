@@ -19,15 +19,15 @@ export const INVOICE_EVENTS=['invoice.payment_failed','invoice.paid','invoice.pa
 
 /** Monitoring fields from a Stripe subscription object. Lenient: unknown items still count toward the amount. */
 export function subscriptionFields(sub){
- const items=Array.isArray(sub?.items?.data)?sub.items.data:[];let plan=null,extraSeats=0,storagePacks=0,amount=0;
+ const items=Array.isArray(sub?.items?.data)?sub.items.data:[];let plan=null,extraSeats=0,storagePacks=0,extraInspectors=0,amount=0;
  for(const item of items){
   const price=item.price||item.plan||{},product=ref(price.product),qty=Number.isSafeInteger(item.quantity)?item.quantity:1;
   const monthly=price.recurring?.interval==='year'?Math.round(Number(price.unit_amount||0)/12):Number(price.unit_amount||0);amount+=monthly*qty;
   const match=Object.entries(PLANS).find(([,p])=>p.product===product);
-  if(match)plan=match[0];else if(product===ADDONS.seats.product)extraSeats=qty;else if(product===ADDONS.storage.product)storagePacks=qty;
+  if(match)plan=match[0];else if(product===ADDONS.seats.product)extraSeats=qty;else if(product===ADDONS.storage.product)storagePacks=qty;else if(ADDONS.inspectors.product&&product===ADDONS.inspectors.product)extraInspectors=qty;
  }
  const first=items[0]||{};
- return {subscription_id:sub.id,customer_id:ref(sub.customer),organization_id:sub.metadata?.organization_id||null,status:String(sub.status||'unknown'),plan,extra_seats:extraSeats,storage_packs:storagePacks,amount_minor:items.length?amount:null,currency:String(sub.currency||first.price?.currency||'usd'),
+ return {subscription_id:sub.id,customer_id:ref(sub.customer),organization_id:sub.metadata?.organization_id||null,status:String(sub.status||'unknown'),plan,extra_seats:extraSeats,storage_packs:storagePacks,extra_inspectors:extraInspectors,amount_minor:items.length?amount:null,currency:String(sub.currency||first.price?.currency||'usd'),
   current_period_start:iso(sub.current_period_start??first.current_period_start),current_period_end:iso(sub.current_period_end??first.current_period_end),trial_start:iso(sub.trial_start),trial_end:iso(sub.trial_end),
   cancel_at_period_end:sub.cancel_at_period_end?1:0,canceled_at:iso(sub.canceled_at),ended_at:iso(sub.ended_at),livemode:sub.livemode?1:0};
 }
@@ -36,7 +36,7 @@ export function createPlatformMonitor({get,all,run,transaction,json,fail,now,pla
  const liveBilling=()=>env.STRIPE_BILLING_ENABLED==='1'&&String(env.STRIPE_SECRET_KEY||'').startsWith('sk_live_');
  // Production (live key) accepts only live events; anything else (staging, local) accepts only test events.
  const expectLive=()=>String(env.STRIPE_SECRET_KEY||'').startsWith('sk_live_');
- const COLS=['organization_id','customer_id','status','plan','extra_seats','storage_packs','amount_minor','currency','current_period_start','current_period_end','trial_start','trial_end','cancel_at_period_end','canceled_at','ended_at','livemode'];
+ const COLS=['organization_id','customer_id','status','plan','extra_seats','storage_packs','extra_inspectors','amount_minor','currency','current_period_start','current_period_end','trial_start','trial_end','cancel_at_period_end','canceled_at','ended_at','livemode'];
  async function orgFor(subscriptionId,customerId,hinted){
   if(hinted)return hinted;
   const row=(subscriptionId&&await get('SELECT organization_id FROM stripe_billing WHERE subscription_id=?',subscriptionId))||(customerId&&await get('SELECT organization_id FROM stripe_billing WHERE customer_id=?',customerId))||(subscriptionId&&await get('SELECT organization_id FROM stripe_subscription_sync WHERE subscription_id=?',subscriptionId));
@@ -46,7 +46,7 @@ export function createPlatformMonitor({get,all,run,transaction,json,fail,now,pla
  async function upsert(fields,source,created){
   const existing=await get('SELECT event_created FROM stripe_subscription_sync WHERE subscription_id=?',fields.subscription_id);
   if(existing&&Number(existing.event_created)>created)return false;
-  const values=COLS.map(c=>fields[c]??(['extra_seats','storage_packs','cancel_at_period_end','livemode'].includes(c)?0:c==='currency'?'usd':null));
+  const values=COLS.map(c=>fields[c]??(['extra_seats','storage_packs','extra_inspectors','cancel_at_period_end','livemode'].includes(c)?0:c==='currency'?'usd':null));
   await run(`INSERT INTO stripe_subscription_sync(subscription_id,${COLS.join(',')},source,event_created,updated_at) VALUES(?,${COLS.map(()=>'?').join(',')},?,?,?) ON CONFLICT(subscription_id) DO UPDATE SET ${COLS.map(c=>`${c}=excluded.${c}`).join(',')},source=excluded.source,event_created=excluded.event_created,updated_at=excluded.updated_at`,fields.subscription_id,...values,source,created,now());
   return true;
  }
@@ -98,10 +98,10 @@ export function createPlatformMonitor({get,all,run,transaction,json,fail,now,pla
  async function backfill({fromStripe=liveBilling()}={}){
   let local=0,stripe=0,failed=0;
   for(const b of await all('SELECT * FROM stripe_billing WHERE subscription_id IS NOT NULL')){
-   let q=null;try{if(b.plan)q=subscriptionQuote(b.plan,Number(b.extra_seats||0),Number(b.storage_packs||0));}catch{}
+   let q=null;try{if(b.plan)q=subscriptionQuote(b.plan,Number(b.extra_seats||0),Number(b.storage_packs||0),Number(b.extra_inspectors||0));}catch{}
    const existing=await get('SELECT source FROM stripe_subscription_sync WHERE subscription_id=?',b.subscription_id);
    if(!existing||existing.source==='backfill'){
-    await upsert({subscription_id:b.subscription_id,organization_id:b.organization_id,customer_id:b.customer_id,status:b.status,plan:b.plan,extra_seats:Number(b.extra_seats||0),storage_packs:Number(b.storage_packs||0),amount_minor:q?q.monthlyMinor:null},'backfill',0);local++;
+    await upsert({subscription_id:b.subscription_id,organization_id:b.organization_id,customer_id:b.customer_id,status:b.status,plan:b.plan,extra_seats:Number(b.extra_seats||0),storage_packs:Number(b.storage_packs||0),extra_inspectors:Number(b.extra_inspectors||0),amount_minor:q?q.monthlyMinor:null},'backfill',0);local++;
    }else await run('UPDATE stripe_subscription_sync SET organization_id=COALESCE(organization_id,?) WHERE subscription_id=?',b.organization_id,b.subscription_id);
    if(fromStripe&&stripeClient)try{
     const sub=await stripeClient.request('subscriptions/'+encodeURIComponent(b.subscription_id));
@@ -116,6 +116,7 @@ export function createPlatformMonitor({get,all,run,transaction,json,fail,now,pla
   const byOrg=(rows,key='organization_id')=>new Map(rows.map(r=>[r[key],r]));
   const residences=byOrg(await all('SELECT organization_id,COUNT(*) n FROM properties WHERE archived_at IS NULL GROUP BY organization_id'));
   const seats=byOrg(await all(`SELECT organization_id,COUNT(*) n FROM users WHERE active=1 AND ${SEAT_ROLE_SQL} GROUP BY organization_id`));
+  const inspectorUsers=byOrg(await all("SELECT organization_id,COUNT(*) n FROM users WHERE active=1 AND role='inspector' GROUP BY organization_id"));
   const portal=byOrg(await all("SELECT organization_id,COUNT(*) n FROM users WHERE active=1 AND role IN ('client','vendor') GROUP BY organization_id"));
   const storage=byOrg(await all('SELECT org organization_id,COALESCE(SUM(bytes),0) bytes FROM (SELECT f.storage_key,MAX(f.bytes) bytes,MAX(p.organization_id) org FROM files f JOIN properties p ON p.id=f.property_id GROUP BY f.storage_key) q GROUP BY org'));
   const packs=byOrg(await all('SELECT organization_id,storage_packs FROM company_plans'));
@@ -125,8 +126,8 @@ export function createPlatformMonitor({get,all,run,transaction,json,fail,now,pla
   const admins=byOrg(await all("SELECT id,organization_id,name,email FROM users WHERE role='admin'"),'id');
   const companies=orgs.map(o=>{
    const b=billingRows.get(o.id),s=syncRows.get(o.id),demo=demosByOrg.get(o.id);
-   const plan=s?.plan||b?.plan||null,extraSeats=Number(s?.plan?s.extra_seats:b?.extra_seats||0),storagePacks=Number(s?.plan?s.storage_packs:b?.storage_packs||0);
-   let q=null;try{if(plan)q=subscriptionQuote(plan,extraSeats,storagePacks);}catch{}
+   const plan=s?.plan||b?.plan||null,extraSeats=Number(s?.plan?s.extra_seats:b?.extra_seats||0),storagePacks=Number(s?.plan?s.storage_packs:b?.storage_packs||0),extraInspectors=Number(s?.plan?s.extra_inspectors:b?.extra_inspectors||0)||0;
+   let q=null;try{if(plan)q=subscriptionQuote(plan,extraSeats,storagePacks,extraInspectors);}catch{}
    const status=demo?'demo':(s&&s.status!=='unknown'?s.status:b?.subscription_id?b.status:'no_subscription');
    const legacyPacks=Number(packs.get(o.id)?.storage_packs||0);
    const trialEnd=s?.trial_end||(status==='trialing'?new Date(Date.parse(o.created_at)+30*DAY).toISOString():null);
@@ -138,9 +139,9 @@ export function createPlatformMonitor({get,all,run,transaction,json,fail,now,pla
     periodEnd:s?.current_period_end||null,cancelAtPeriodEnd:!!Number(s?.cancel_at_period_end||0),canceledAt:s?.canceled_at||null,endedAt:s?.ended_at||null,
     lastPaymentFailedAt:s?.last_payment_failed_at||null,lastPaymentFailedMinor:s?.last_payment_failed_minor??null,lastInvoiceStatus:s?.last_invoice_status||null,
     demoExpiresAt:demo?new Date(Number(demo.expires_at)).toISOString():null,syncedAt:s?.updated_at||b?.verified_at||null,syncSource:s?.source||null,
-    usage:{residences:Number(residences.get(o.id)?.n||0),seats:Number(seats.get(o.id)?.n||0),portalUsers:Number(portal.get(o.id)?.n||0),bytes:Number(storage.get(o.id)?.bytes||0)},
-    limits:q?{residences:q.residences,seats:q.seats,storageBytes:q.storageGB*GB}:{residences:null,seats:null,storageBytes:(PLANS.essentials.storageGB+ADDONS.storage.gb*legacyPacks)*GB},
-    addOns:{extraSeats:q?extraSeats:0,storagePacks:q?storagePacks:legacyPacks}};
+    usage:{residences:Number(residences.get(o.id)?.n||0),seats:Number(seats.get(o.id)?.n||0),inspectors:Number(inspectorUsers.get(o.id)?.n||0),portalUsers:Number(portal.get(o.id)?.n||0),bytes:Number(storage.get(o.id)?.bytes||0)},
+    limits:q?{residences:q.residences,seats:q.seats,inspectors:q.inspectors,storageBytes:q.storageGB*GB}:{residences:null,seats:null,inspectors:null,storageBytes:(PLANS.essentials.storageGB+ADDONS.storage.gb*legacyPacks)*GB},
+    addOns:{extraSeats:q?extraSeats:0,storagePacks:q?storagePacks:legacyPacks,extraInspectors:q?extraInspectors:0}};
   });
   const real=companies.filter(c=>c.kind!=='demo');
   const sum=list=>list.reduce((n,c)=>n+Number(c.amountMinor||0),0);

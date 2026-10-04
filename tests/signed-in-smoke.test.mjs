@@ -74,6 +74,13 @@ before(async()=>{if(skip)return;await start();const admin=client();
  await admin('work',{propertyId:loft.id,title:'Rinse the pool deck',priority:'Normal',dueDate:day(3)},201);
  // Insurance compliance: Ocean House has a 7-day unoccupancy rule and nothing scheduled, so it is At risk; the family may share the certificate.
  await admin('insurance/'+home.id,{carrier:'Example Mutual',policy_number:'EM-1001',renewal_date:day(20),inspect_every_days:7,devices:[{key:'water_shutoff',required:true,installed:true}],client_share:true});
+ // Field inspector: a visit-only login with today's visit at Harbor Loft (door codes open today) and one next week.
+ // (Not at Ocean House: its insurance check expects nothing scheduled there.)
+ const inspector=await accept('inspector','inspector@example.test');sessions['inspector@example.test']=inspector.cookie();
+ const inspectorId=(await admin('data')).users.find(u=>u.email==='inspector@example.test').id;
+ await admin('access-codes/save',{propertyId:loft.id,version:0,details:{gate:'1357',door:'5678',alarm:'2468',lockbox:'',instructions:'Use the side door.'}},201);
+ await admin('inspectors/assign',{propertyId:loft.id,inspectorId,date:day(0)},201);
+ await admin('inspectors/assign',{propertyId:cottage.id,inspectorId,date:day(6)},201);
  // Photo spots: Ocean House has one spot with a baseline and one still waiting for its first photo.
  const sink=(await admin('photo-spots',{propertyId:home.id,name:'Kitchen sink cabinet',location:'Kitchen',notes:'Door open, from the left.'},201)).id;
  await admin('photo-spots',{propertyId:home.id,name:'Water heater',location:'Garage'},201);
@@ -611,6 +618,49 @@ for(const [name,launch,options] of browsers.length?browsers:[['browser',null,nul
  });
 }
 
+// Field inspector: a visit-only login. Today page, door codes on the visit day, the visit checklist without office
+// actions, a three-item menu, and admin screens falling back to Today. The admin sees the Field inspectors panel.
+async function inspectorJourney(launch,contextOptions){
+ const browser=await launch();
+ try{
+  const ctx=await browser.newContext({...contextOptions,serviceWorkers:'block'});const {page,errors,toasts}=await watch(ctx);
+  const [name,value]=sessions['inspector@example.test'].split('=');await ctx.addCookies([{name,value,url:base}]);
+  await page.goto(base+'/login');await page.waitForSelector('.shell .fi-today',{timeout:15000});await settle(page);
+  assert.match(await page.locator('.content .page-title').innerText(),/^Good (morning|afternoon|evening)/);
+  assert.deepEqual(await page.evaluate(()=>[...document.querySelectorAll('aside [data-action="navigate"]')].map(b=>b.dataset.id).sort()),['dashboard','notifications','profile']);
+  assert.equal(await page.locator('.topbar-messages').count(),0,'inspector: no Messages button');
+  const today=await page.locator('.fi-today').innerText();assert.match(today,/Harbor Loft/);assert.doesNotMatch(today,/Bay Cottage/);
+  assert.match(await page.locator('.content').innerText(),/Coming up · next 14 days[\s\S]*Bay Cottage/);
+  assert.match(await page.locator('.fi-route').getAttribute('href'),/^https:\/\/www\.google\.com\/maps\/dir\/\?api=1/);
+  for(const w of ['Rivera Family','Ocean House','Service the pool pump','Replace pool light','Bluewater Pools'])assert.ok(!(await page.locator('.shell').innerText()).includes(w),'inspector never sees '+w);
+  await click(page,'.fi-today [data-action="inspector-codes"]');await page.locator('#modal[open] .fi-codes').waitFor({timeout:5000});
+  assert.match(await page.locator('#modalBody').innerText(),/Door & alarm codes[\s\S]*5678/);
+  await click(page,'#modal [data-action="close"]');await settle(page);
+  await click(page,'.fi-today [data-action="inspection"]');await settle(page);
+  assert.equal(await page.evaluate(()=>page),'inspection');
+  assert.equal(await page.locator('.inspection-actionbar [data-action="inspection-complete"]').count(),1,'inspector can mark the visit complete');
+  for(const a of ['inspection-delete','inspection-publish','inspector-reassign'])assert.equal(await page.locator(`[data-action="${a}"]`).count(),0,'no '+a);
+  // Office screens are not reachable, by menu action or by URL.
+  for(const id of ['clients','billing','users','work','properties']){await page.evaluate(i=>action('navigate',i),id);await settle(page);assert.equal(await page.evaluate(()=>page),'dashboard',id+' falls back to Today');}
+  await page.goto(base+'/login#/billing');await page.waitForSelector('.shell .fi-today',{timeout:15000});assert.equal(await page.evaluate(()=>page),'dashboard');
+  await page.waitForTimeout(300);
+  assert.deepEqual(errors,[],'inspector: page errors');assert.deepEqual((await toasts()).filter(t=>ERROR_TOAST.test(t)),[],'inspector: error toasts');
+  // Admin: Team & access lists the inspector, the free allowance and Assign a visit; the invite dialog offers the role.
+  const actx=await browser.newContext({...contextOptions,serviceWorkers:'block'});const admin=await watch(actx);
+  const [an,av]=sessions['admin@example.test'].split('=');await actx.addCookies([{name:an,value:av,url:base}]);
+  await admin.page.goto(base+'/login');await admin.page.waitForSelector('.shell',{timeout:15000});
+  await admin.page.evaluate(()=>action('navigate','users'));await admin.page.locator('.fi-team').waitFor({timeout:5000});
+  const team=await admin.page.locator('.fi-team').innerText();assert.match(team,/Field inspectors/);assert.match(team,/inspector@example\.test/);assert.match(team,/never use an admin\/staff seat/);
+  assert.equal(await admin.page.locator('.fi-team [data-action="inspector-assign"]').count(),1);
+  await click(admin.page,'.fi-team [data-action="inspector-invite"]');await admin.page.locator('#modal[open] #f-role').waitFor({timeout:5000});
+  assert.equal(await admin.page.locator('#f-role').inputValue(),'inspector');assert.match(await admin.page.locator('#modalBody').innerText(),/never use an admin\/staff seat/);
+  await admin.page.waitForTimeout(300);
+  assert.deepEqual(admin.errors,[],'admin: page errors on the field inspector panel');
+ }finally{await browser.close();}
+}
+for(const [name,launch,options] of browsers.length?browsers:[['browser',null,null]]){
+ test(`signed in (${name}): a field inspector sees only Today and their assigned visit`,{skip,timeout:120000},async()=>{await inspectorJourney(launch,options);});
+}
 // Weather alerts (off by default, so the menus above do not list it). Turned on here, last: admin and staff open the
 // Weather page (Active, Recent, admin Settings) with no errors, the menu item appears, and axe finds no serious or
 // critical accessibility problems. axe-core is optional: set AXE_CORE to axe.min.js, or it looks in node_modules.

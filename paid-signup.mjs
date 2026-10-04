@@ -18,7 +18,7 @@ export function createPaidSignup({get,all,run,transaction,id,now,hash,randomByte
   await run('UPDATE workspace_invites SET expires_at=? WHERE token_hash=? AND used_at IS NULL',Date.now()+48*3600000,row.invite_hash);
   await run('UPDATE paid_signups SET next_email_at=? WHERE id=? AND invite_hash=?',Date.now()+300000,row.id,row.invite_hash);
   const stored=JSON.parse(row.selection),q=subscriptionQuote(stored.plan,stored.extraSeats,stored.storagePacks);
-  const result=await send({to:row.email,company:row.company,invitePath:'/?workspaceInvite='+secrets.inviteToken,planDescription:`${PLANS[q.plan].name}, $${(q.monthlyMinor/100).toFixed(2)} USD/month, up to ${q.residences} active residences, ${q.seats} admin/staff users, ${q.storageGB} GB shared storage, unlimited client and vendor logins`});
+  const result=await send({to:row.email,company:row.company,invitePath:'/?workspaceInvite='+secrets.inviteToken,planDescription:`${PLANS[q.plan].name}, $${(q.monthlyMinor/100).toFixed(2)} USD/month, up to ${q.residences} active residences, ${q.seats} admin/staff users, ${q.freeInspectors} free field inspector logins, ${q.storageGB} GB shared storage, unlimited client and vendor logins`});
   await run('UPDATE paid_signups SET email_status=? WHERE id=? AND invite_hash=?',result.emailStatus==='sent'?'sent':'pending',row.id,row.invite_hash);
  }
  async function reconcile(signupId){
