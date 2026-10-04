@@ -3,7 +3,7 @@
 Staff finish a visit, tap **Draft summary with AI**, read the draft next to the checklist, edit it, and use it. Nothing AI-written reaches a family until a person has reviewed it. Off by default (server switch **and** per-company switch).
 
 ## What I found in the repo
-| Topic | Reality in `stability-baseline` (3653456, after weather alerts) |
+| Topic | Reality in `stability-baseline` (47487ac, after weather, flights and photo spots) |
 |---|---|
 | Summary | `inspections.summary` (text). Required before publish (`publishInspection`: "Add an inspection summary."). Edited in the inspection screen (`<div data-sync-key="summary">`) and saved through the offline draft queue (`syncInspectionDraft` → `/api/inspections/save` or the offline sync route), so the server never sets the summary text itself here. |
 | Publish | `/api/inspections/publish` (admin, idempotency key) and `/api/inspections/submit` with `autoPublish`; both go through `publishInspection(user,row,…)`, which freezes `report_snapshot`. |
@@ -25,7 +25,7 @@ Staff finish a visit, tap **Draft summary with AI**, read the draft next to the 
 - **Reports:** the PDF shows the summary as written. Optional company setting **"Note AI assistance on reports"** (default off) adds "Summary drafted with AI assistance and reviewed by <company>." under the summary.
 - **Privacy wording:** "When a team member asks for a draft summary, we send the visit's checklist results, notes to the client and weather at the visit, with names, addresses and access codes removed, to OpenAI, our AI subprocessor, to write the draft. OpenAI does not keep the data for training (API data, store off). A team member reviews every draft before it reaches a family."
 
-## Schema `migrations/041_ai_summaries.sql` (additive, both engines)
+## Schema `migrations/043_ai_summaries.sql` (additive, both engines)
 - `ai_settings(organization_id PK, enabled, label_reports, monthly_cap, platform_cap_override, updated_by, updated_at)`
 - `ai_summary_drafts(id PK, organization_id, inspection_id, user_id, idempotency_key, status (ready|used|discarded|blocked|failed), text, mentioned_items, missing_items, model, prompt_version, input_hash, tokens_in, tokens_out, latency_ms, error, created_at, used_at, discarded_at)` + unique `(user_id, idempotency_key)`
 - `ai_usage_events(id PK, organization_id, user_id, inspection_id, draft_id, kind, status, model, tokens_in, tokens_out, latency_ms, created_at)`

@@ -44,7 +44,7 @@ settingsView=function(...args){
 
 async function aiSettingsDialog(){
  const r=await api('settings/ai'),s=r.settings;
- dialog('AI inspection summaries',`<label class="check-row full"><input type="checkbox" name="enabled" ${s.enabled?'checked':''}> Let the team ask for AI-drafted inspection summaries</label><label class="check-row full"><input type="checkbox" name="label_reports" ${s.label_reports?'checked':''}> Add \u201cSummary drafted with AI assistance and reviewed by ${esc(data.company)}\u201d to PDF reports</label><div class="field"><label for="ai-cap">Monthly drafts limit</label><input id="ai-cap" name="monthly_cap" type="number" min="0" max="${Number(r.ceiling)}" step="1" inputmode="numeric" value="${s.monthly_cap??''}" placeholder="${Number(r.ceiling)}" aria-describedby="ai-cap-help"><small id="ai-cap-help" class="muted">Leave blank for the plan limit (${Number(r.ceiling)}). Used this month: ${Number(r.used)}.</small></div><div class="full ai-privacy"><strong>What is shared</strong><p>${esc(r.privacy)}</p></div>${r.configured?'':'<p class="notice full">AI drafting is not set up on this server yet.</p>'}`,'Save',async v=>{
+ dialog('AI inspection summaries',`<label class="check-row full ai-full"><input type="checkbox" name="enabled" ${s.enabled?'checked':''}> Let the team ask for AI-drafted inspection summaries</label><label class="check-row full ai-full"><input type="checkbox" name="label_reports" ${s.label_reports?'checked':''}> Add \u201cSummary drafted with AI assistance and reviewed by ${esc(data.company)}\u201d to PDF reports</label><div class="field full"><label for="ai-cap">Monthly drafts limit</label><input id="ai-cap" name="monthly_cap" type="number" min="0" max="${Number(r.ceiling)}" step="1" inputmode="numeric" value="${s.monthly_cap??''}" placeholder="${Number(r.ceiling)}" aria-describedby="ai-cap-help"><small id="ai-cap-help" class="muted">Leave blank for the plan limit (${Number(r.ceiling)}). Used this month: ${Number(r.used)}.</small></div><div class="full ai-full ai-privacy"><strong>What is shared</strong><p>${esc(r.privacy)}</p></div>${r.configured?'':'<p class="notice full ai-full">AI drafting is not set up on this server yet.</p>'}`,'Save',async v=>{
   await api('settings/ai',{enabled:v.enabled==='on',label_reports:v.label_reports==='on',monthly_cap:String(v.monthly_cap||'').trim()===''?null:Number(v.monthly_cap)});
   toast('AI settings saved.');
  });
@@ -74,7 +74,7 @@ action=async function(name,key,button){
   if(i?.summary_source==='ai_draft'){
    const local=document.getElementById('f-summary')?.value;
    const text=local??(typeof offlineDraft==='function'&&offlineDraft(i.id)?.summary)??i.summary??'';
-   dialog('Confirm the AI-assisted summary',`<p class="full">This summary started from an AI draft. Read it once more before it goes to the family.</p><div class="ai-draft-text full">${esc(text||'No summary yet.')}</div><label class="check-row full"><input type="checkbox" name="confirm" required> I have read this summary and it is accurate</label>`,'Confirm and publish',async()=>{
+   dialog('Confirm the AI-assisted summary',`<p class="full ai-full">This summary started from an AI draft. Read it once more before it goes to the family.</p><div class="ai-draft-text full ai-full">${esc(text||'No summary yet.')}</div><label class="check-row full ai-full"><input type="checkbox" name="confirm" required> I have read this summary and it is accurate</label>`,'Confirm and publish',async()=>{
     if(typeof syncInspectionDraft==='function'&&i.status==='draft')await syncInspectionDraft({requireSynced:true});
     await api(`inspections/${encodeURIComponent(key)}/ai-summary/review`,{});
     await aiBaseAction(name,key,button);
@@ -105,7 +105,7 @@ action=async function(name,key,button){
      toast('Draft added to the summary. Edit it as needed; you confirm it before publishing.');
      document.getElementById('f-summary')?.focus();
     };
-    if(current){dialog('Replace your summary?','<p class="full">The summary box already has text. Using the AI draft replaces it.</p>','Replace summary',async()=>{await apply();});return;}
+    if(current){dialog('Replace your summary?','<p class="full ai-full">The summary box already has text. Using the AI draft replaces it.</p>','Replace summary',async()=>{await apply();});return;}
     return await apply();
    }
    case 'ai-settings':return await aiSettingsDialog();
