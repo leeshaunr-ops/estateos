@@ -39,4 +39,5 @@
 .shell .owner-foot{color:#5f6b76;font-size:13px;line-height:1.5;max-width:90ch;margin:0}
 @media(max-width:1100px){.shell .owner-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.shell .owner-usage-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.shell .owner-lists{grid-template-columns:1fr}.shell .owner-kpi b{font-size:24px}.shell .owner-list li{align-items:flex-start;flex-direction:column;gap:4px}.shell .owner-li-end{text-align:left;max-width:none}}
-@media(max-width:420px){.shell .owner-kpis,.shell .owner-usage-grid{grid-template-columns:1fr}}
+@media(max-width:480px){.shell .owner-kpis,.shell .owner-usage-grid{gap:8px}.shell .owner-kpi{padding:12px}.shell .owner-kpi b{font-size:22px}.shell .owner-kpi small{font-size:12px}.shell .owner-usage{padding:10px}}
+@media(max-width:340px){.shell .owner-kpis,.shell .owner-usage-grid{grid-template-columns:1fr}}
