@@ -32,7 +32,7 @@ export function renderStormEmail(d){
  return {subject,text,html};
 }
 
-export function createStorm({get,all,run,transaction,id,now,fail,text,note,date,json,body,roles,property,audit,visitChecklists,visitVerification,readFile,readBytes,checklistLabel},{env=process.env}={}){
+export function createStorm({get,all,run,transaction,id,now,fail,text,note,date,json,body,roles,property,audit,visitChecklists,visitVerification,readFile,readBytes,checklistLabel,spotPairs=null},{env=process.env}={}){
  const ROUTE=/^\/api\/storm-events\/([^/]+)(?:\/(residences|residences\/remove|residences\/update|visits|recovery|notify|export\.csv|summary\.pdf|residences\/([^/]+)\/report\.pdf))?$/;
  const isStaff=u=>['admin','employee'].includes(u.role);
  function when(value,label){if(value==null||value==='')return null;const t=Date.parse(String(value));if(Number.isNaN(t))fail(422,`${label} is not a valid date and time.`);return new Date(t).toISOString();}
@@ -204,7 +204,9 @@ export function createStorm({get,all,run,transaction,id,now,fail,text,note,date,
    return {id:i.id,date:i.inspection_date,dateLabel:visitDate(i.inspection_date),completedAt:i.submitted_at||snap.completedAt||i.published_at,inspector:snap.inspector,reportNumber:snap.reportNumber||i.report_number||'',checklistName:snap.checklist?`${snap.checklist.name} (version ${snap.checklist.template_version})`:'Standard checklist',summary:snap.summary||'',notes:snap.notes||'',answers:snap.answers||[],verification:rep.visit||null,photoIds:meta[phase].map(p=>p.id)};
   };
   const pre=await visit('pre'),post=await visit('post');
-  const pairs=pre&&post?S.pairPhotos(meta.pre,meta.post).map(p=>({beforeId:p.before?.id||null,afterId:p.after?.id||null,match:p.match})):[];
+  // Photo spots first (the same spot photographed before and after), then the usual pairing for the other photos.
+  const spot=pre&&post&&spotPairs?await spotPairs(user.organization_id,meta.pre.map(p=>p.id),meta.post.map(p=>p.id)):[],used=new Set(spot.flatMap(p=>[p.beforeId,p.afterId]));
+  const pairs=pre&&post?[...spot.map(p=>({beforeId:p.beforeId,afterId:p.afterId,match:'spot',spot:p.spot})),...S.pairPhotos(meta.pre.filter(p=>!used.has(p.id)),meta.post.filter(p=>!used.has(p.id))).map(p=>({beforeId:p.before?.id||null,afterId:p.after?.id||null,match:p.match}))]:[];
   const jobs=(await all('SELECT w.title,w.status,v.name vendor FROM work_orders w LEFT JOIN vendors v ON v.id=w.vendor_id WHERE w.storm_event_id=? AND w.property_id=? ORDER BY w.created_at',ev.id,r.property_id)).map(w=>({title:w.title,status:titleCase(w.status),vendor:w.vendor||''}));
   return {report:{company:org?.name||'',companyLogo:logo,timezone:tz,preparedAt:now(),reference:`Storm report reference ${r.id}`,event:{name:ev.name,typeLabel:S.TYPES[ev.type]||titleCase(ev.type),expectedImpactAt:ev.expected_impact_at,prepDeadlineAt:ev.prep_deadline_at},residence:{name:pRow.name,address:pRow.address||''},family:(await get('SELECT name FROM clients WHERE id=?',pRow.client_id))?.name||'',prepLabel:S.prepLabel(r.prep_status,r.prep_issues),prepTone:S.tone('prep',r.prep_status,r.prep_issues),postLabel:S.postLabel(r.post_status),postTone:S.tone('post',r.post_status),severity:r.damage_severity?S.SEVERITY[r.damage_severity]:'',pre,post,pairs,workOrders:jobs},photos,pRow};
  }

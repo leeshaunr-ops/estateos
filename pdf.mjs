@@ -95,6 +95,19 @@ export function inspectionPdf(report,photos=[]){
   const taken=photoTakenAt(photo)||(photo.atResidence?'Taken at the residence':'');need(h+(i===0?101:66)+(taken?15:0));if(i===0)heading('Photo evidence');text('PHOTO '+(i+1),40,y,9,C.brand,true);y+=19;
   const image=add(Buffer.concat([Buffer.from(`<< /Type /XObject /Subtype /Image /Width ${d.width} /Height ${d.height} /ColorSpace /${d.channels===1?'DeviceGray':'DeviceRGB'} /BitsPerComponent 8 /Filter /DCTDecode /Length ${photo.bytes.length} >>\nstream\n`),photo.bytes,Buffer.from('\nendstream')]));const name='Im'+image;page.images.push([name,image]);page.stream+=`q ${w} 0 0 ${h} ${40+(532-w)/2} ${792-y-h} cm /${name} Do Q\n`;y+=h+9;paragraph(photo.name||'Inspection evidence',9,C.muted,520,40);if(taken)paragraph(taken,9,C.muted,520,40);y+=12;
  }}
+ // Photo spots (photo-spots.mjs): each spot photo next to the baseline that was in effect when it was taken.
+ const pairs=(report.comparisons||[]).map(c=>({...c,sides:[['BASELINE',c.before],['THIS VISIT',c.after]].map(([label,ph])=>{let d=null;try{d=jpegSize(ph.bytes);}catch{}return {label,ph,d};})})).filter(c=>c.sides.every(x=>x.d));
+ if(pairs.length){
+  const embedded=new Map(),embed=(ph,d)=>{if(!embedded.has(ph.id))embedded.set(ph.id,add(Buffer.concat([Buffer.from(`<< /Type /XObject /Subtype /Image /Width ${d.width} /Height ${d.height} /ColorSpace /${d.channels===1?'DeviceGray':'DeviceRGB'} /BitsPerComponent 8 /Filter /DCTDecode /Length ${ph.bytes.length} >>\nstream\n`),ph.bytes,Buffer.from('\nendstream')])));return embedded.get(ph.id);};
+  for(const [n,c] of pairs.entries()){
+   const boxes=c.sides.map(x=>{const scale=Math.min(254/x.d.width,190/x.d.height);return {...x,w:x.d.width*scale,h:x.d.height*scale,taken:photoTakenAt({capturedAt:x.ph.capturedAt,timezone:x.ph.timezone}).replace(/^Taken /,'')};});
+   const h=Math.max(...boxes.map(b=>b.h));need(h+(n===0?120:72));
+   if(n===0){heading('Photo comparisons');paragraph('Each photo spot is photographed from the same angle on every visit. The baseline is on the left and this visit\'s photo on the right.',9,C.muted,520,40);y+=6;}
+   text(clean(c.spot+(c.location?' \u00b7 '+c.location:'')).slice(0,95),40,y,11,C.ink,true);y+=18;
+   boxes.forEach((b,j)=>{const x=40+j*278;text(b.label+(b.taken?' \u00b7 '+b.taken:''),x,y,8,C.brand,true);const im=embed(b.ph,b.d),name='Im'+im;if(!page.images.some(([nm])=>nm===name))page.images.push([name,im]);page.stream+=`q ${b.w} 0 0 ${b.h} ${x} ${792-(y+13)-b.h} cm /${name} Do Q\n`;});
+   y+=h+28;
+  }
+ }
  heading('Notes to the client');paragraph(report.notes||'No additional notes.');
  const pageIds=[];for(let index=0;index<pages.length;index++){page=pages[index];rect(40,750,532,1,C.line);text('Powered by EstateAegis  |  Confidential client report',40,762,8,C.muted);if(report.reportNumber&&report.id)text('Reference '+report.id,40,773,6,C.muted);text(`Page ${index+1} of ${pages.length}`,500,762,8,C.muted);const bytes=Buffer.from(page.stream,'latin1'),content=add(Buffer.concat([Buffer.from(`<< /Length ${bytes.length} >>\nstream\n`),bytes,Buffer.from('\nendstream')]));pageIds.push(add(`<< /Type /Page /Parent ${root} 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${regular} 0 R /F2 ${bold} 0 R >> /XObject << ${page.images.map(([name,id])=>`/${name} ${id} 0 R`).join(' ')} >> >> /Contents ${content} 0 R >>`));}
  objects[catalog-1]=`<< /Type /Catalog /Pages ${root} 0 R >>`;objects[root-1]=`<< /Type /Pages /Count ${pageIds.length} /Kids [${pageIds.map(id=>id+' 0 R').join(' ')}] >>`;

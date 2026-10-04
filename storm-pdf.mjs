@@ -134,12 +134,12 @@ export function stormReportPdf(r,photos=new Map()){
  const pairs=(r.pairs||[]).filter(p=>p.beforeId&&p.afterId);
  if(pairs.length){
   doc.heading('Before and after',260);
-  doc.paragraph('Photos are paired by checklist item or by the same photo name. Photos without a match are shown side by side in the order they were taken.',{size:9,color:C.muted});doc.y+=4;
+  doc.paragraph('Photos are paired by photo spot (the same angle photographed before and after the storm), then by checklist item or by the same photo name. Photos without a match are shown side by side in the order they were taken.',{size:9,color:C.muted});doc.y+=4;
   const how={item:'Same checklist item',name:'Same photo name',order:'Shown in the order taken'};
   for(const pair of pairs){
    const sides=[['BEFORE (PRE-STORM)',photos.get(pair.beforeId)],['AFTER (POST-STORM)',photos.get(pair.afterId)]].map(([title,p])=>{const img=p?doc.image(p.id,p.bytes):null,w=img?Math.min(258,258*Math.min(1,img.width/img.height*180/258)):258,h=img?Math.min(180,w*img.height/img.width):30;return {title,p,img,w,h,cap:[...(p?.name?wrap(p.name,258,8):[]),...(p&&photoTakenAt(p)?wrap(photoTakenAt(p),258,8):[])]};});
    const height=16+Math.max(...sides.map(s=>s.h+s.cap.length*10))+22;doc.need(height);
-   doc.text(how[pair.match]||how.order,40,doc.y,8,C.muted,true);doc.y+=13;
+   doc.text(pair.match==='spot'?clean('Same photo spot'+(pair.spot?': '+pair.spot:'')).slice(0,90):how[pair.match]||how.order,40,doc.y,8,C.muted,true);doc.y+=13;
    sides.forEach((s,j)=>{const x=40+j*274;doc.text(s.title,x,doc.y,8,C.brand,true);if(s.img)doc.draw(s.img,x,doc.y+12,s.w,s.h);else doc.rect(x,doc.y+12,258,s.h,BG.na);let top=doc.y+16+s.h;s.cap.forEach(c=>{doc.text(c,x,top,8,C.muted);top+=10;});});
    doc.y+=height-13;
   }

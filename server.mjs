@@ -34,6 +34,7 @@ import { inspectionPdf, jpegSize } from './pdf.mjs';
 import { createVisitVerification } from './visit-verification.mjs';
 import { createStorm } from './storm.mjs';
 import { createInsurance } from './insurance.mjs';
+import { createPhotoSpots } from './photo-spots.mjs';
 import { createSmartLocks } from './smart-locks.mjs';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const db = await openDatabase(root);
@@ -226,7 +227,8 @@ const checklistTemplates = createChecklistTemplates({get,all,run,transaction,bod
 const visitVerification = createVisitVerification({get,all,run,transaction,id,now,fail,json,body,roles,property,entity,audit,captureTime});
 const smartLocks = createSmartLocks({get,all,run,transaction,id,now,fail,text,note,json,body,roles,property,audit,communications,timezoneFor:async p=>visitVerification.timezoneFor(p,await visitVerification.settings(p.organization_id))});
 smartLocks.extendReports(visitVerification);
-const storm = createStorm({get,all,run,transaction,id,now,fail,text,note,date,json,body,roles,property,audit,visitChecklists,visitVerification,readFile,readBytes,checklistLabel});
+const storm = createStorm({get,all,run,transaction,id,now,fail,text,note,date,json,body,roles,property,audit,visitChecklists,visitVerification,readFile,readBytes,checklistLabel,spotPairs:(organizationId,pre,post)=>photoSpots.stormPairs(organizationId,pre,post)});
+const photoSpots = createPhotoSpots({get,all,run,transaction,id,now,fail,json,body,roles,property,audit,visitVerification,readBytes});
 const insurance = createInsurance({get,all,run,transaction,id,now,fail,json,body,roles,property,audit,visitVerification,failAlerts,readFile,readBytes});
 const offlineInspections = createOfflineInspections({get,all,run,body,json,fail,roles,property,entity,hash,now,template,visitChecklists,visitVerification});
 async function assertWorkspaceActive(organizationId){if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',organizationId))?.status==='suspended')fail(403,'This company workspace is suspended. Contact support.');const d=await demos.lookup(organizationId);if(d&&Number(d.expires_at)<=Date.now())fail(403,'Your seven-day demo has ended. Contact sales@estateaegis.com for more time.');}
@@ -270,6 +272,7 @@ async function api(req, res, url, user) {
     if(await visitVerification.handle(req,res,url,user))return;
     if(await storm.handle(req,res,url,user))return;
     if(await insurance.handle(req,res,url,user))return;
+    if(await photoSpots.handle(req,res,url,user))return;
     if(await smartLocks.handle(req,res,url,user))return;
     if(await communications.handle(req,res,url,user))return;
     if(await operations.handle(req,res,url,user))return;
@@ -397,7 +400,7 @@ async function api(req, res, url, user) {
         return json(res, 200, { ok: true });
     }
     if (p === '/api/data' && method === 'GET')
-        return json(res, 200, await insurance.decorate(user, await smartLocks.decorate(user, await visitVerification.decorate(user, await snapshot(user)))));
+        return json(res, 200, await photoSpots.decorate(user, await insurance.decorate(user, await smartLocks.decorate(user, await visitVerification.decorate(user, await snapshot(user))))));
     if (p.startsWith('/api/files/') && method === 'GET') {
         const f = (await readFile(user, p.split('/')[3]));
         const bytes = (await readBytes(f.storage_key));
@@ -409,6 +412,7 @@ async function api(req, res, url, user) {
         if (row.status !== 'published')
             fail(409, 'Publish the inspection first.');
         const report = await visitVerification.reportForPdf(user, row, {...JSON.parse(row.report_snapshot),companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'', completedAt:JSON.parse(row.report_snapshot).completedAt||row.published_at});
+        report.comparisons = await photoSpots.comparisons(user.organization_id, row.id, report.timezone || 'America/New_York');
         const pdf = inspectionPdf(report, await inspectionPhotos(user, report));
         res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="EstateAegis-Inspection-${row.id}.pdf"`, 'Cache-Control': 'no-store' });
         return res.end(pdf);
@@ -1025,6 +1029,8 @@ async function api(req, res, url, user) {
             jpegSize(bytes);
         else if (bytes.subarray(0, 5).toString() !== '%PDF-' || b.inspectionId || b.workId)
             fail(422, 'Use JPEG photos or PDF documents.');
+        // Photo spots: a photo taken for a spot is tied to it in the same transaction (photo-spots.mjs).
+        const spot = await photoSpots.checkUpload(user, pRow, b, isJpeg);
         // Location privacy: EXIF GPS / XMP are always removed from stored JPEGs; with visit verification on, the photo's
         // position (device, else EXIF) and EXIF capture time are kept as columns instead.
         const meta = await visitVerification.uploadMeta(user, pRow, b, bytes, isJpeg);
@@ -1037,6 +1043,7 @@ async function api(req, res, url, user) {
                 const receivedAt=now();
                 await run('INSERT INTO files(id,property_id,inspection_id,work_order_id,name,mime,bytes,storage_key,visibility,created_by,created_at,answer_key,client_op_id,captured_at,received_at,capture_lat,capture_lon,capture_accuracy_m,capture_source) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',key,pRow.id,b.inspectionId||null,b.workId||null,text(b.name,'Filename',200),isJpeg?'image/jpeg':'application/pdf',meta.bytes.length,storageKey,b.visibility==='client'?'client':'internal',user.id,receivedAt,null,clientOpId||null,meta.capturedAt||capturedAt,receivedAt,meta.lat,meta.lon,meta.accuracy,meta.source);
                 await audit(user,'file.uploaded',key);
+                await photoSpots.linkUpload(user,pRow,key,b,spot);
             });
         } catch(e){if(stored)await deleteBytes(storageKey);throw e;}
         await subscriptions.monitor(user.organization_id).catch(e=>console.error('Storage monitoring:',e.message));
@@ -1287,7 +1294,7 @@ const server = http.createServer(async (req, res) => {
             return res.end(url.pathname === '/sw.js' ? content.replace('__SHELL_VERSION__', shellVersion()) : content);
         }
         const appHome = url.pathname === '/' && (url.searchParams.has('invite') || url.searchParams.has('workspaceInvite') || await actor(req));
-        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/home-refresh.css':'home-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js','/visit-verification.js':'visit-verification.js','/visit-card.js':'visit-card.js','/storm-core.js':'storm-core.js','/smart-locks.js':'smart-locks.js','/smart-locks.css':'smart-locks.css','/storm.js':'storm.js','/storm.css':'storm.css','/insurance.js':'insurance.js','/insurance.css':'insurance.css','/certificate.js':'certificate.js','/certificate.css':'certificate.css','/view-route.js':'view-route.js', '/sidebar-core.js':'sidebar-core.js','/overview-core.js':'overview-core.js','/app-format.js':'app-format.js','/app.css':'app.css', '/overview.js':'overview.js', '/overview.css':'overview.css', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/login.js':'login.js','/login.css':'login.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/faq.js':'faq.js','/site-menu.js':'site-menu.js','/home-compact.js':'home-compact.js','/plan-panel.js':'plan-panel.js','/plan-panel.css':'plan-panel.css','/security':'security.html' };
+        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/home-refresh.css':'home-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js','/visit-verification.js':'visit-verification.js','/visit-card.js':'visit-card.js','/storm-core.js':'storm-core.js','/smart-locks.js':'smart-locks.js','/smart-locks.css':'smart-locks.css','/storm.js':'storm.js','/storm.css':'storm.css','/insurance.js':'insurance.js','/insurance.css':'insurance.css','/photo-spots.js':'photo-spots.js','/photo-spots.css':'photo-spots.css','/certificate.js':'certificate.js','/certificate.css':'certificate.css','/view-route.js':'view-route.js', '/sidebar-core.js':'sidebar-core.js','/overview-core.js':'overview-core.js','/app-format.js':'app-format.js','/app.css':'app.css', '/overview.js':'overview.js', '/overview.css':'overview.css', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/login.js':'login.js','/login.css':'login.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/faq.js':'faq.js','/site-menu.js':'site-menu.js','/home-compact.js':'home-compact.js','/plan-panel.js':'plan-panel.js','/plan-panel.css':'plan-panel.css','/security':'security.html' };
         const file = names[url.pathname] || (url.pathname === '/client-login' || /^\/client\/[a-z0-9-]+$/i.test(url.pathname) ? 'live.html' : /^\/certificate\/[A-Za-z0-9_-]{43}$/.test(url.pathname) ? 'certificate.html' : null);
         if (!file) {
             // Unknown pages get a friendly HTML 404 with the site navigation; /api/* keeps its JSON errors above.
@@ -1317,7 +1324,7 @@ const server = http.createServer(async (req, res) => {
         json(res, status, { error: status === 500 ? 'The action could not be saved. Check the server log.' : error.message, ...(status !== 500 && error.extra ? error.extra : {}) });
     }
 });
-const SHELL_FILES = ['live.html','live.js','login.js','login.css','inspection-checklist.js','visit-verification.js','visit-card.js','view-route.js','sidebar-core.js','overview-core.js','overview.js','overview.css','app-format.js','app.css','storm-core.js','storm.js','storm.css','smart-locks.js','smart-locks.css','insurance.js','insurance.css','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png','ea-shield-80.png','ea-shield-120.png','plan-panel.js','plan-panel.css'];
+const SHELL_FILES = ['live.html','live.js','login.js','login.css','inspection-checklist.js','visit-verification.js','visit-card.js','view-route.js','sidebar-core.js','overview-core.js','overview.js','overview.css','app-format.js','app.css','storm-core.js','storm.js','storm.css','smart-locks.js','smart-locks.css','insurance.js','insurance.css','photo-spots.js','photo-spots.css','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png','ea-shield-80.png','ea-shield-120.png','plan-panel.js','plan-panel.css'];
 let cachedShellVersion = null;
 function shellVersion() { if (!cachedShellVersion) { const digest = createHash('sha256'); for (const name of SHELL_FILES) { try { digest.update(name).update(fs.readFileSync(path.join(root, 'public', name))); } catch { digest.update(name + ':missing'); } } cachedShellVersion = digest.digest('hex').slice(0, 12); } return cachedShellVersion; }
 setInterval(() => offlineInspections.purge().catch(e => console.error('Idempotency cleanup:', e.message)), 3600000).unref();
@@ -1371,7 +1378,7 @@ async function deliverInspection(user,inspectionId){
  let result;
  try{
   const report=await visitVerification.reportForPdf(user,row,{...JSON.parse(row.report_snapshot),companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'',completedAt:JSON.parse(row.report_snapshot).completedAt||row.published_at});
-  result=await sendInspectionEmail({to:row.report_email,report,pdf:inspectionPdf(report,await inspectionPhotos(user,report))});
+  report.comparisons=await photoSpots.comparisons(user.organization_id,row.id,report.timezone||'America/New_York');result=await sendInspectionEmail({to:row.report_email,report,pdf:inspectionPdf(report,await inspectionPhotos(user,report))});
  }catch{result={emailStatus:'failed'};}
  await run('UPDATE inspection_email_delivery SET email_status=? WHERE inspection_id=?',result.emailStatus,row.id);
  return result;
