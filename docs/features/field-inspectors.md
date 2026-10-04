@@ -83,10 +83,10 @@ recurring schedule assigned to them. Once the office publishes the report it dro
 
 ## Database
 
-- `040_field_inspector_role.sqlite.sql` / `.postgres.sql`: `users.role` accepts `inspector`. The migration runner
+- `043_field_inspector_role.sqlite.sql` / `.postgres.sql`: `users.role` accepts `inspector`. The migration runner
   now supports engine-specific files (`NNN.sqlite.sql`, `NNN.postgres.sql`); the SQLite file rebuilds `users` with
   foreign keys off and checks `PRAGMA foreign_key_check` before committing.
-- `041_inspector_addon.sql`: `extra_inspectors` on `stripe_billing` and `stripe_subscription_sync`.
+- `044_inspector_addon.sql`: `extra_inspectors` on `stripe_billing` and `stripe_subscription_sync`.
 
 ## Tests
 
