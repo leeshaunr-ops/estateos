@@ -1,0 +1,36 @@
+/* Field inspector screens (Today page, codes) and the admin field inspector panel. App palette; no scrolling boxes. */
+.shell .fi-section{padding:20px 22px}
+.shell .fi-section-head{display:flex;justify-content:space-between;align-items:center;gap:10px 16px;flex-wrap:wrap}
+.shell .fi-section h2,.shell .fi-team h2{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:22px;color:#1f2933;margin:0}
+.shell .fi-note{color:#5f6b76;font-size:14px;line-height:1.5;margin:8px 0 0;max-width:80ch}
+.shell .fi-route{color:#8b242b;font-weight:600;text-decoration:none;border:1px solid #d8c3c5;border-radius:999px;padding:7px 14px;background:#fff}
+.shell .fi-route:hover{background:#f8f1f1}
+.shell .fi-visits{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
+.shell .fi-visit{border:1px solid #e2e7eb;border-radius:10px;background:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px 18px;flex-wrap:wrap}
+.shell .fi-visit-text{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1 1 260px}
+.shell .fi-visit-home{font-size:16px;color:#1f2933}
+.shell .fi-visit-address{color:#1f2933;font-size:14px;overflow-wrap:anywhere}
+.shell .fi-visit-meta{color:#5f6b76;font-size:13px}
+.shell .fi-visit-text .badge{align-self:flex-start;margin-top:4px}
+.shell .fi-visit-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.shell .fi-link{color:#8b242b;font-weight:600;padding:8px 4px}
+.shell .fi-empty{margin:-6px 0 14px 4px}
+.shell .fi-help{font-size:13px;line-height:1.5;max-width:80ch;margin:14px 4px}
+.shell .fi-team{padding:20px 22px}
+.shell .fi-allowance{margin:12px 0 0;padding:12px 14px;border-radius:10px;background:#f6f8f9;border:1px solid #e2e7eb;color:#1f2933;font-size:14px;line-height:1.5}
+.shell .fi-allowance.fi-full{background:#fbf3f3;border-color:#e6c9cb}
+.shell .fi-people{list-style:none;margin:12px 0 0;padding:0}
+.shell .fi-person{display:flex;justify-content:space-between;align-items:center;gap:10px 16px;flex-wrap:wrap;padding:12px 0;border-top:1px solid #eef1f3}
+.shell .fi-person>div:first-child{display:flex;flex-direction:column;gap:2px}
+.fi-invite-hint{color:#5f6b76;font-size:13px;line-height:1.5;margin:0}
+.fi-codes{display:grid;gap:10px;margin:12px 0}
+.fi-codes div{border:1px solid #e2e7eb;border-radius:10px;padding:10px 14px;background:#fff}
+.fi-codes dt{color:#5f6b76;font-size:13px}
+.fi-codes dd{margin:2px 0 0;font-size:20px;font-weight:650;color:#1f2933;letter-spacing:.02em;overflow-wrap:anywhere}
+@media(max-width:760px){
+ .shell .fi-section,.shell .fi-team{padding:16px}
+ .shell .fi-visit{padding:12px 14px}
+ .shell .fi-visit-actions{width:100%}
+ .shell .fi-visit-actions button{flex:1 1 auto;min-height:44px}
+ .shell .fi-route{width:100%;text-align:center}
+}

@@ -32,7 +32,7 @@ test('plan catalog: new user limits, unchanged prices, add-on prices and seat ro
  // Stripe product IDs are unchanged: existing subscriptions keep matching their plan.
  assert.deepEqual(Object.values(PLANS).map(p=>p.product),['prod_VFtm9ebEAmXkPc','prod_VFtn294ZmM6pd4','prod_VFtoQSXsffoRnV']);
  assert.equal(ADDONS.seats.monthlyMinor,1500);assert.equal(ADDONS.storage.monthlyMinor,500);assert.equal(ADDONS.storage.gb,20);
- assert.deepEqual(subscriptionQuote('growth',2,1),{plan:'growth',extraSeats:2,storagePacks:1,monthlyMinor:10900+3000+500,residences:150,seats:12,storageGB:50});
+ assert.deepEqual(subscriptionQuote('growth',2,1),{plan:'growth',extraSeats:2,storagePacks:1,extraInspectors:0,monthlyMinor:10900+3000+500,residences:150,seats:12,freeInspectors:20,inspectors:20,storageGB:50});
  assert.deepEqual([...SEAT_ROLES],['admin','employee']);assert.deepEqual([...UNLIMITED_ROLES],['client','vendor']);
  // Manual (non-Stripe) invoices: Essentials price plus $15 for each admin/staff user beyond 4.
  assert.equal(planPrice(4),5900);assert.equal(planPrice(6,1),5900+3000+500);
@@ -84,8 +84,8 @@ test('in-app plan panel: allowances vs usage, add-ons, unlimited client/vendor l
  assert.match(html,/2 extra admin\/staff users \(\$15 each\/month\)/);assert.match(html,/1 extra 20 GB storage pack \(\$5 each\/month\)/);
  assert.match(html,/data-plan-action="portal"/);assert.doesNotMatch(html,/style=|<script/);
  const none=P.panel({user:{role:'admin'},users,billing:{status:'not_subscribed',catalog,usage:{residences:2,seats:2,bytes:0}},subscription:{limit:10e9}});
- assert.match(none,/No paid subscription is connected/);assert.match(none,/Essentials<\/strong> \$59\/month · up to 50 residences · 4 admin\/staff users · 10 GB/);
- assert.match(none,/Professional<\/strong> \$179\/month · up to 300 residences · 20 admin\/staff users · 50 GB/);assert.doesNotMatch(none,/data-plan-action/);
+ assert.match(none,/No paid subscription is connected/);assert.match(none,/Essentials<\/strong> \$59\/month · up to 50 residences · 4 admin\/staff users · 8 free field inspector logins · 10 GB/);
+ assert.match(none,/Professional<\/strong> \$179\/month · up to 300 residences · 20 admin\/staff users · 40 free field inspector logins · 50 GB/);assert.doesNotMatch(none,/data-plan-action/);
  assert.equal(P.panel({user:{role:'employee'}}),'','staff never see the plan panel');
  const live=read('public/live.js'),shell=read('public/live.html'),server=read('server.mjs'),sw=read('public/sw.js'),pkg=read('package.json');
  assert.match(live,/window\.EAPlan\?window\.EAPlan\.panel\(data\):''/);
@@ -147,7 +147,7 @@ test('a paid signup started before the limit change verifies and its invitation 
   paid=true;await signup.reconcile(row.id);
   row=await db.get('SELECT * FROM paid_signups WHERE id=?',row.id);assert.equal(row.status,'invited');
   assert.equal((await billing.state(row.organization_id)).quote.seats,11,'Growth 10 + 1 extra user');
-  assert.match(sent.at(-1).planDescription,/Growth, \$124\.00 USD\/month, up to 150 active residences, 11 admin\/staff users, 30 GB shared storage, unlimited client and vendor logins/);
+  assert.match(sent.at(-1).planDescription,/Growth, \$124\.00 USD\/month, up to 150 active residences, 11 admin\/staff users, 20 free field inspector logins, 30 GB shared storage, unlimited client and vendor logins/);
  }finally{await db.close();}
 });
 

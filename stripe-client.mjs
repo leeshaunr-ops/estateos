@@ -32,15 +32,16 @@ export function createStripeClient({secret=process.env.STRIPE_SECRET_KEY, origin
     if(matches.length!==1 || result.has_more) throw new Error('Stripe catalog price needs review.');
     return matches[0].id;
   }
-  async function checkout({organizationId, customer, email, plan, extraSeats=0, storagePacks=0, attemptId,successPath='/login?billing=success',cancelPath='/login?billing=canceled'}) {
-    const quote=subscriptionQuote(plan,extraSeats,storagePacks);
+  async function checkout({organizationId, customer, email, plan, extraSeats=0, storagePacks=0, extraInspectors=0, attemptId,successPath='/login?billing=success',cancelPath='/login?billing=canceled'}) {
+    const quote=subscriptionQuote(plan,extraSeats,storagePacks,extraInspectors);
+    if(extraInspectors&&!addons.inspectors?.product)throw new Error('The field inspector add-on is not configured.');
     const site=new URL(origin);
     if(site.protocol!=='https:' || site.username || site.password || site.search || site.hash) throw new Error('A secure public URL is required.');
     if(!organizationId || !attemptId) throw new Error('Checkout identity required.');
     if(![successPath,cancelPath].every(p=>p.startsWith('/')&&!p.startsWith('//')&&new URL(p,site.origin).origin===site.origin))throw Error('Invalid checkout return URL.');
     const fields={mode:'subscription',success_url:site.origin+successPath,cancel_url:site.origin+cancelPath,client_reference_id:organizationId,'subscription_data[metadata][organization_id]':organizationId,'subscription_data[trial_period_days]':'30','metadata[organization_id]':organizationId,'metadata[attempt_id]':attemptId,'payment_method_types[0]':'card',billing_address_collection:'required'};
     if(customer)fields.customer=customer;else fields.customer_email=email;
-    const items=[[plans[plan],1],...(extraSeats?[[addons.seats,extraSeats]]:[]),...(storagePacks?[[addons.storage,storagePacks]]:[])];
+    const items=[[plans[plan],1],...(extraSeats?[[addons.seats,extraSeats]]:[]),...(storagePacks?[[addons.storage,storagePacks]]:[]),...(extraInspectors?[[addons.inspectors,extraInspectors]]:[])];
     for(let i=0;i<items.length;i++){fields[`line_items[${i}][price]`]=await price(items[i][0]);fields[`line_items[${i}][quantity]`]=String(items[i][1]);}
     const result=await request('checkout/sessions',fields,'estate-checkout-'+attemptId);
     if(!result.id || !result.url?.startsWith('https://checkout.stripe.com/'))throw new Error('Unexpected checkout response.');

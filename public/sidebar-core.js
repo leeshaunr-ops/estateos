@@ -5,6 +5,8 @@
  // Every screen a signed-in user can open from the menu, by role. Same rules and order as before the refresh.
  function navFor(user,{unreadMessages=0}={}){
   const role=user&&user.role,staff=role==='admin'||role==='employee';
+  // Field inspectors only run the visits assigned to them (see inspector.js).
+  if(role==='inspector')return [['dashboard','Today'],['notifications','Notifications'],['profile','My profile']];
   const nav=[['dashboard','Overview'],['messages','Messages'+(unreadMessages?' ('+unreadMessages+')':'')],['properties',role==='client'?'My residences':'Residences'],['work',role==='vendor'?'My jobs':'Work orders']];
   if(role==='client')nav.push(['shopping','Shopping list']);
   if(role!=='vendor')nav.push(['inspections','Inspection reports'],['requests','Service requests'],['arrivals','Arrival preparation'],['calendar','Calendar'],['documents','Documents']);
@@ -35,7 +37,7 @@
   client:{work:'Service updates',requests:'Requests',arrivals:'Arrivals',approvals:'Approvals',messages:'Messages'},
   vendor:{messages:'Messages'}
  };
- const SUBTITLE={admin:'Admin workspace',employee:'Staff workspace',client:'Client portal',vendor:'Vendor portal'};
+ const SUBTITLE={admin:'Admin workspace',employee:'Staff workspace',inspector:'Field inspector',client:'Client portal',vendor:'Vendor portal'};
  const kind=role=>role==='client'?'client':role==='vendor'?'vendor':'staff';
  // The flat menu: a top block, titled sections and a footer (profile). Anything in nav that no section lists
  // still gets a place under "More", so a screen can never drop out of the menu.

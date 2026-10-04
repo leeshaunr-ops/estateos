@@ -241,7 +241,7 @@ async function offlineComplete(i){
 
 /* ---------- offline snapshot (pre-download) ---------- */
 async function offlineDownload(propertyIds,{quiet=false}={}){
- if(!OFF.store||!isStaff())return;
+ if(!OFF.store||!isField())return;
  const ids=[...new Set(propertyIds.filter(Boolean))];if(!ids.length){if(!quiet)toast('Choose at least one residence.');return;}
  const r=await offlineSend('GET','/api/offline/visits?propertyIds='+encodeURIComponent(ids.join(',')));
  if(r.status!==200){if(!quiet)toast(r.status===0?'You are offline. Connect to download residences.':(r.body.error||'Could not download for offline use.'));return;}
@@ -253,7 +253,7 @@ async function offlineDownload(propertyIds,{quiet=false}={}){
  if(!quiet){toast(`${s.properties.length} residence${s.properties.length===1?'':'s'} available offline.`);render();}else offlineUpdateUi();
 }
 async function offlineAutoPreload(){
- if(!data||data.offline||!isStaff()||!OFF.store)return;
+ if(!data||data.offline||!isField()||!OFF.store)return;
  const soon=new Date(Date.now()+86400000).toLocaleDateString('en-CA');
  const ids=new Set([...OFF.snapshots.keys()].filter(id=>data.properties.some(p=>p.id===id)));
  for(const i of data.inspections)if(i.status==='draft'&&i.inspection_date<=soon)ids.add(i.property_id);
@@ -262,10 +262,10 @@ async function offlineAutoPreload(){
  OFF.lastPreload=Date.now();OFF.lastPreloadKey=key;
  await offlineDownload([...ids].slice(0,100),{quiet:true}).catch(()=>{});
 }
-function offlineAvailabilityBadge(propertyId){const s=OFF.snapshots.get(propertyId);if(!s||!isStaff())return '';return `<span class="badge offline-ready" title="Saved on this device">✓ Available offline · updated ${esc(new Date(s.savedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}))}</span>`;}
-function offlineDownloadButton(ids,text='Make available offline',action='offline-download'){return isStaff()&&!data.offline?`<button data-action="${action}" data-id="${esc(ids.join(','))}">${esc(text)}</button>`:'';}
+function offlineAvailabilityBadge(propertyId){const s=OFF.snapshots.get(propertyId);if(!s||!isField())return '';return `<span class="badge offline-ready" title="Saved on this device">✓ Available offline · updated ${esc(new Date(s.savedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}))}</span>`;}
+function offlineDownloadButton(ids,text='Make available offline',action='offline-download'){return isField()&&!data.offline?`<button data-action="${action}" data-id="${esc(ids.join(','))}">${esc(text)}</button>`:'';}
 function offlineDisplayStatus(i){const d=offlineDraft(i.id);return d&&d.status&&d.status!=='draft'&&i.status==='draft'?d.status:i.status;}
-function offlineRowBadges(i){if(!isStaff())return '';const ops=OFF.outbox.filter(o=>o.inspectionId===i.id),d=offlineDraft(i.id);let out='';if(ops.some(o=>o.state==='failed'||o.state==='conflict'))out+='<span class="badge red sync-badge">⚠ Needs attention</span>';else if(ops.length)out+=`<span class="badge amber sync-badge">↻ ${ops.length} waiting to sync</span>`;if(d?.completeQueued)out+='<span class="badge amber">Will submit when online</span>';if(i.status==='draft'&&OFF.snapshots.has(i.property_id))out+='<span class="badge offline-ready">✓ Offline</span>';return out;}
+function offlineRowBadges(i){if(!isField())return '';const ops=OFF.outbox.filter(o=>o.inspectionId===i.id),d=offlineDraft(i.id);let out='';if(ops.some(o=>o.state==='failed'||o.state==='conflict'))out+='<span class="badge red sync-badge">⚠ Needs attention</span>';else if(ops.length)out+=`<span class="badge amber sync-badge">↻ ${ops.length} waiting to sync</span>`;if(d?.completeQueued)out+='<span class="badge amber">Will submit when online</span>';if(i.status==='draft'&&OFF.snapshots.has(i.property_id))out+='<span class="badge offline-ready">✓ Offline</span>';return out;}
 let offlinePriorCache={source:null,map:new Map()};
 function offlinePriorAnswer(i,key){
  if(offlineDisplayStatus(i)!=='draft')return null;
@@ -293,7 +293,7 @@ async function offlineBoot(error){
 }
 /* Merge visits started offline (not on the server yet) into the data the views read. */
 function offlineMergeLocal(){
- if(!data||!isStaff())return;
+ if(!data||!isField())return;
  for(const d of OFF.drafts.values()){
   if(data.inspections.some(i=>i.id===d.inspectionId))continue;
   if(!d.localOnly&&!OFF.outbox.some(o=>o.inspectionId===d.inspectionId))continue;
@@ -341,14 +341,14 @@ function offlineIndicatorHtml(){
 }
 function offlineUpdateUi(){
  if(!data||!document.querySelector('.shell'))return;
- if(isStaff()){
+ if(isField()){
   const top=document.querySelector('.topbar');let live=$('syncStatusLive');
   if(top&&!live){top.insertAdjacentHTML('beforeend','<div id="syncStatusLive" class="sync-status-live" aria-live="polite"></div>');live=$('syncStatusLive');}
   if(live){const html=offlineIndicatorHtml();if(live.innerHTML!==html)live.innerHTML=html;}
  }
  const main=document.querySelector('.shell main');let banner=$('offlineBanner');const offline=!offlineIsOnline();
  if(main&&offline&&!banner){main.querySelector('.topbar')?.insertAdjacentHTML('afterend','<div id="offlineBanner" class="offline-banner" role="status"></div>');banner=$('offlineBanner');}
- if(banner){if(!offline)banner.remove();else{const t=`<strong>You’re offline.</strong> ${isStaff()?'Keep working — inspections and photos are saved on this device and sync when you’re back online.':'Reconnect to see the latest updates.'}`;if(banner.innerHTML!==t)banner.innerHTML=t;}}
+ if(banner){if(!offline)banner.remove();else{const t=`<strong>You’re offline.</strong> ${isField()?'Keep working — inspections and photos are saved on this device and sync when you’re back online.':'Reconnect to see the latest updates.'}`;if(banner.innerHTML!==t)banner.innerHTML=t;}}
  if(page==='inspection'){const id=activeInspection;const el=$('draft-status');if(el){const d=offlineDraft(id);const problem=!!(d?.conflict||OFF.outbox.some(o=>o.inspectionId===id&&o.state==='failed'));el.classList.toggle('error',problem);const t=el.querySelector('.draft-status-text');const msg=offlineStatusText(id);if(t&&t.textContent!==msg)t.textContent=msg;if(d?.conflict&&!el.querySelector('[data-action="sync-resolve"]'))el.insertAdjacentHTML('beforeend',btn(d.conflict.type==='locked'?'Review':'Resolve','sync-resolve',id));}offlineRefreshItemBadges();}
  offlineUpdateInstallBanner();
 }
@@ -399,7 +399,7 @@ const offlineIsIos=()=>/iphone|ipad|ipod/i.test(navigator.userAgent)&&!window.MS
 const offlineStandalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
 function offlineUpdateInstallBanner(){
  const existing=$('installBanner');let dismissed=false;try{dismissed=localStorage.getItem('estateaegis-install-dismissed')==='1';}catch{}
- const show=data&&isStaff()&&!offlineStandalone()&&!dismissed&&matchMedia('(max-width: 820px)').matches&&(OFF.installEvent||offlineIsIos())&&page!=='inspection';
+ const show=data&&isField()&&!offlineStandalone()&&!dismissed&&matchMedia('(max-width: 820px)').matches&&(OFF.installEvent||offlineIsIos())&&page!=='inspection';
  if(!show){existing?.remove();return;}if(existing)return;
  document.querySelector('.shell main .content')?.insertAdjacentHTML('afterbegin',`<div id="installBanner" class="install-banner" role="region" aria-label="Install the app"><span>${OFF.installEvent?'Install EstateAegis on this phone for one-tap, offline inspections.':'Install EstateAegis: tap <b>Share</b>, then <b>Add to Home Screen</b>.'}</span><span class="actions">${OFF.installEvent?btn('Install app','install-app','',true):''}${btn('Not now','install-dismiss')}</span></div>`);
 }
@@ -411,7 +411,7 @@ async function offlineProfilePanel(){
 }
 const baseProfileView=profileView;
 profileView=function(){
- let html=baseProfileView();if(!isStaff()||data.offline)return html;
+ let html=baseProfileView();if(!isField()||data.offline)return html;
  const install=offlineStandalone()?'<p>EstateAegis is installed on this device.</p>':OFF.installEvent?`<p>Install the app for one-tap access and offline inspections.</p>${btn('Install app','install-app','',true)}`:offlineIsIos()?'<p>On iPhone or iPad: open this page in Safari, tap <b>Share</b>, then <b>Add to Home Screen</b>.</p>':'<p class="muted">Use your browser menu’s “Install app” or “Add to Home screen” option.</p>';
  setTimeout(offlineProfilePanel,0);
  return html+`<div class="two"><section class="panel"><h2>Install app</h2>${install}</section><section class="panel" id="offlineDataPanel"><h2>Offline data</h2><div class="offline-data-body"><p class="muted">Checking this device…</p></div>${btn('Clear offline data','offline-clear')}</section></div>`;
@@ -436,7 +436,7 @@ function offlineShowUpdate(){
 const offlineBaseAction=action;
 action=async function(name,key,button){
  const inspectionFor=id=>data.inspections.find(i=>i.id===(id||activeInspection));
- if(name==='inspection'){const r=await offlineBaseAction(name,key,button);const i=inspectionFor(key);if(i&&i.status==='draft'&&isStaff()&&!data.offline&&!OFF.snapshots.has(i.property_id))offlineDownload([i.property_id],{quiet:true}).catch(()=>{});return r;}
+ if(name==='inspection'){const r=await offlineBaseAction(name,key,button);const i=inspectionFor(key);if(i&&i.status==='draft'&&isField()&&!data.offline&&!OFF.snapshots.has(i.property_id))offlineDownload([i.property_id],{quiet:true}).catch(()=>{});return r;}
  if(name==='inspection-save'){await offlineFlushNow();if(navigator.onLine)await offlineSync();const pending=OFF.outbox.filter(o=>o.inspectionId===activeInspection);toast(!pending.length?'All changes saved.':offlineIsOnline()&&!pending.some(o=>o.state!=='pending')?'Saved on this device. Syncing…':!offlineIsOnline()?'Saved on this device. It will sync automatically when you’re back online.':'Saved on this device. Some changes need attention — open Sync.');render();return;}
  if(name==='inspection-photo'){await offlineFlushNow();const i=inspectionFor(key);if(!i)throw Error('Inspection unavailable.');return offlinePhotoDialog(i);}
  if(name==='inspection-complete'){const i=inspectionFor(key);if(!i)throw Error('Inspection unavailable.');return offlineComplete(i);}

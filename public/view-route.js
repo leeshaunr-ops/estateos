@@ -57,6 +57,7 @@
   if(!data?.user)return {state:home(),fellBack:true};
   const role=data.user.role,has=(rows,id)=>Array.isArray(rows)&&rows.some(r=>r&&r.id===id);
   const s={...blank(),...requested},bad=()=>({state:home(),fellBack:true});
+  if(role==='inspector'&&!['dashboard','inspection','profile','notifications'].includes(s.page))return bad();
   switch(s.page){
    case 'property':{if(!has(data.properties,s.propertyId))return bad();const tabs=residenceTabs(role);if(!tabs.includes(s.tab))s.tab=tabs[0];break;}
    case 'inspection':if(!has(data.inspections,s.activeInspection))return bad();break;
