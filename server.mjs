@@ -35,6 +35,7 @@ import { fileURLToPath } from 'node:url';
 import { inspectionPdf, jpegSize } from './pdf.mjs';
 import { createVisitVerification } from './visit-verification.mjs';
 import { createWeather } from './weather.mjs';
+import { createAiSummaries } from './ai-summaries.mjs';
 import { createStorm, portalLink } from './storm.mjs';
 import { createInsurance } from './insurance.mjs';
 import { createPhotoSpots } from './photo-spots.mjs';
@@ -242,6 +243,9 @@ const photoSpots = createPhotoSpots({get,all,run,transaction,id,now,fail,json,bo
 // Severe-weather alerts (per-company flag, default off). Freezes report.weather at publish through visitVerification.publishFields.
 const weather = createWeather({get,all,run,transaction,id,now,fail,json,body,roles,property,audit,platformOwner,visitVerification,storm,portalLink});
 weather.extendReports(visitVerification);weather.hookCheckIn(visitVerification);
+// AI inspection summaries (off unless AI_FEATURES_ENABLED=true and the company turns them on). Adds report.aiNote at publish when the company labels reports.
+const aiSummaries = createAiSummaries({get,all,run,transaction,id,now,fail,json,body,roles,property,audit,platformOwner,visitVerification});
+aiSummaries.extendReports(visitVerification);
 const insurance = createInsurance({get,all,run,transaction,id,now,fail,json,body,roles,property,audit,visitVerification,failAlerts,readFile,readBytes});
 const inspectors = createInspectors({get,all,run,transaction,id,now,fail,json,body,roles,property,audit,date,communications,failAlerts,visitChecklists,visitVerification,demos,template});
 const offlineInspections = createOfflineInspections({get,all,run,body,json,fail,roles,property,entity,hash,now,template,visitChecklists,visitVerification});
@@ -290,6 +294,7 @@ async function api(req, res, url, user) {
     if(await visitVerification.handle(req,res,url,user))return;
     if(await storm.handle(req,res,url,user))return;
     if(await weather.handle(req,res,url,user))return;
+    if(await aiSummaries.handle(req,res,url,user))return;
     if(await insurance.handle(req,res,url,user))return;
     if(await photoSpots.handle(req,res,url,user))return;
     if(await smartLocks.handle(req,res,url,user))return;
@@ -423,7 +428,7 @@ async function api(req, res, url, user) {
     if (p === '/api/data' && method === 'GET' && user.role === 'inspector')
         return json(res, 200, await visitVerification.decorate(user, await inspectors.snapshot(user, {safeUser, profile: await get('SELECT phone,preferred_contact FROM user_profiles WHERE user_id=?', user.id) || {phone:'',preferred_contact:'Email'}})));
     if (p === '/api/data' && method === 'GET')
-        return json(res, 200, await photoSpots.decorate(user, await flights.decorate(user, await weather.decorate(user, await insurance.decorate(user, await smartLocks.decorate(user, await visitVerification.decorate(user, await snapshot(user))))))));
+        return json(res, 200, await aiSummaries.decorate(user, await photoSpots.decorate(user, await flights.decorate(user, await weather.decorate(user, await insurance.decorate(user, await smartLocks.decorate(user, await visitVerification.decorate(user, await snapshot(user)))))))));
     if (p.startsWith('/api/files/') && method === 'GET') {
         const f = (await readFile(user, p.split('/')[3]));
         const bytes = (await readBytes(f.storage_key));
@@ -994,8 +999,12 @@ async function api(req, res, url, user) {
             result = { id: row.id, status: 'submitted', version: row.version + 1, submitted_at: submittedAt };
             if (b.autoPublish === true && user.role === 'admin') {
                 const fresh = await get('SELECT * FROM inspections WHERE id=?', row.id);
+                // An AI-assisted summary nobody has confirmed stays submitted; the admin confirms it when publishing.
+                if (aiSummaries.reviewPending(fresh)) result = { ...result, autoPublishSkipped: 'ai_review_required' };
+                else {
                 const published = await publishInspection(user, fresh, { key: 'submit:' + row.id + ':' + fresh.version, route: '/api/inspections/publish', requestHash: hash('auto-publish:' + row.id) });
                 result = { ...result, ...published, status: 'published', version: fresh.version + 1 };
+                }
             }
         }
     }
@@ -1326,7 +1335,7 @@ const server = http.createServer(async (req, res) => {
             return res.end(url.pathname === '/sw.js' ? content.replace('__SHELL_VERSION__', shellVersion()) : content);
         }
         const appHome = url.pathname === '/' && (url.searchParams.has('invite') || url.searchParams.has('workspaceInvite') || await actor(req));
-        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/home-refresh.css':'home-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js','/visit-verification.js':'visit-verification.js','/visit-card.js':'visit-card.js','/storm-core.js':'storm-core.js','/smart-locks.js':'smart-locks.js','/smart-locks.css':'smart-locks.css','/flights.js':'flights.js','/flights.css':'flights.css', '/weather-core.js':'weather-core.js', '/weather.js':'weather.js', '/weather.css':'weather.css','/storm.js':'storm.js','/storm.css':'storm.css','/insurance.js':'insurance.js','/insurance.css':'insurance.css','/photo-spots.js':'photo-spots.js','/photo-spots.css':'photo-spots.css','/certificate.js':'certificate.js','/certificate.css':'certificate.css','/view-route.js':'view-route.js', '/sidebar-core.js':'sidebar-core.js','/overview-core.js':'overview-core.js','/app-format.js':'app-format.js','/app.css':'app.css', '/overview.js':'overview.js', '/overview.css':'overview.css', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/login.js':'login.js','/login.css':'login.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/faq.js':'faq.js','/site-menu.js':'site-menu.js','/home-compact.js':'home-compact.js','/plan-panel.js':'plan-panel.js','/inspector.js':'inspector.js','/inspector.css':'inspector.css','/platform-owner.js':'platform-owner.js','/platform-owner.css':'platform-owner.css','/plan-panel.css':'plan-panel.css','/security':'security.html' };
+        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/home-refresh.css':'home-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js','/visit-verification.js':'visit-verification.js','/visit-card.js':'visit-card.js','/storm-core.js':'storm-core.js','/smart-locks.js':'smart-locks.js','/smart-locks.css':'smart-locks.css','/flights.js':'flights.js','/flights.css':'flights.css', '/weather-core.js':'weather-core.js', '/weather.js':'weather.js', '/weather.css':'weather.css','/ai-summaries.js':'ai-summaries.js','/ai-summaries.css':'ai-summaries.css','/storm.js':'storm.js','/storm.css':'storm.css','/insurance.js':'insurance.js','/insurance.css':'insurance.css','/photo-spots.js':'photo-spots.js','/photo-spots.css':'photo-spots.css','/certificate.js':'certificate.js','/certificate.css':'certificate.css','/view-route.js':'view-route.js', '/sidebar-core.js':'sidebar-core.js','/overview-core.js':'overview-core.js','/app-format.js':'app-format.js','/app.css':'app.css', '/overview.js':'overview.js', '/overview.css':'overview.css', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/login.js':'login.js','/login.css':'login.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/faq.js':'faq.js','/site-menu.js':'site-menu.js','/home-compact.js':'home-compact.js','/plan-panel.js':'plan-panel.js','/inspector.js':'inspector.js','/inspector.css':'inspector.css','/platform-owner.js':'platform-owner.js','/platform-owner.css':'platform-owner.css','/plan-panel.css':'plan-panel.css','/security':'security.html' };
         const file = names[url.pathname] || (url.pathname === '/client-login' || /^\/client\/[a-z0-9-]+$/i.test(url.pathname) ? 'live.html' : /^\/certificate\/[A-Za-z0-9_-]{43}$/.test(url.pathname) ? 'certificate.html' : null);
         if (!file) {
             // Unknown pages get a friendly HTML 404 with the site navigation; /api/* keeps its JSON errors above.
@@ -1356,7 +1365,7 @@ const server = http.createServer(async (req, res) => {
         json(res, status, { error: status === 500 ? 'The action could not be saved. Check the server log.' : error.message, ...(status !== 500 && error.extra ? error.extra : {}) });
     }
 });
-const SHELL_FILES = ['live.html','live.js','login.js','login.css','inspection-checklist.js','visit-verification.js','visit-card.js','view-route.js','sidebar-core.js','overview-core.js','overview.js','overview.css','app-format.js','app.css','storm-core.js','storm.js','storm.css','weather-core.js','weather.js','weather.css','smart-locks.js','smart-locks.css','flights.js','flights.css','insurance.js','insurance.css','photo-spots.js','photo-spots.css','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png','ea-shield-80.png','ea-shield-120.png','plan-panel.js','plan-panel.css','platform-owner.js','platform-owner.css','inspector.js','inspector.css'];
+const SHELL_FILES = ['live.html','live.js','login.js','login.css','inspection-checklist.js','visit-verification.js','visit-card.js','view-route.js','sidebar-core.js','overview-core.js','overview.js','overview.css','app-format.js','app.css','storm-core.js','storm.js','storm.css','weather-core.js','weather.js','weather.css','ai-summaries.js','ai-summaries.css','smart-locks.js','smart-locks.css','flights.js','flights.css','insurance.js','insurance.css','photo-spots.js','photo-spots.css','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png','ea-shield-80.png','ea-shield-120.png','plan-panel.js','plan-panel.css','platform-owner.js','platform-owner.css','inspector.js','inspector.css'];
 let cachedShellVersion = null;
 function shellVersion() { if (!cachedShellVersion) { const digest = createHash('sha256'); for (const name of SHELL_FILES) { try { digest.update(name).update(fs.readFileSync(path.join(root, 'public', name))); } catch { digest.update(name + ':missing'); } } cachedShellVersion = digest.digest('hex').slice(0, 12); } return cachedShellVersion; }
 setInterval(() => offlineInspections.purge().catch(e => console.error('Idempotency cleanup:', e.message)), 3600000).unref();
@@ -1378,6 +1387,7 @@ async function publishInspection(user,row,{key,route,requestHash}){
  const linked=parseSnapshot(row.checklist_snapshot);
  if(linked&&EAChecklist.photoRequired(answers).length&&!(await get('SELECT id FROM files WHERE inspection_id=? LIMIT 1',row.id)))fail(422,'Add a photo for the failed items that require one before publishing.');
  if(!row.summary.trim())fail(422,'Add an inspection summary.');
+ aiSummaries.assertReviewed(row);
  const pRow=await property(user,row.property_id);
  await visitVerification.autoCheckOut(user,row);
  const fileIds=(await all('SELECT id FROM files WHERE inspection_id=? ORDER BY created_at',row.id)).map(f=>f.id);

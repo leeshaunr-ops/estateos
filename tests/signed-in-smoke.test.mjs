@@ -26,6 +26,8 @@ const dir=mkdtempSync(path.join(os.tmpdir(),'estateos-smoke-'));
 let proc,base,log='';
 const password='Test-only-strong-password-928!';
 async function start(){const env={...process.env,PORT:'0',ESTATEOS_DATA_DIR:dir,ESTATEOS_VAULT_KEY:randomBytes(32).toString('base64')};delete env.DATABASE_URL;delete env.RENDER;delete env.ESTATEOS_SECURE_COOKIES;
+ // AI summaries: server switch on with the offline fake provider (no network, no key); each company still opts in.
+ env.AI_FEATURES_ENABLED='true';env.AI_PROVIDER='fake';delete env.OPENAI_API_KEY;
  proc=spawn(process.execPath,['server.mjs'],{cwd:root,env,windowsHide:true});proc.stderr.on('data',c=>{log+=c;});
  base=await new Promise((resolve,reject)=>{proc.stdout.on('data',c=>{const m=String(c).match(/http:\/\/127\.0\.0\.1:\d+/);if(m)resolve(m[0]);});proc.once('exit',code=>reject(Error('Server exited: '+code+' '+log)));setTimeout(()=>reject(Error('Startup timeout')),10000).unref();});}
 function client(){let cookie='';const call=async(endpoint,b,expected=200)=>{const res=await fetch(base+'/api/'+endpoint,{method:b===undefined?'GET':'POST',headers:{Origin:base,'Content-Type':'application/json',Cookie:cookie},body:b===undefined?undefined:JSON.stringify(b)});const set=res.headers.get('set-cookie');if(set)cookie=set.split(';')[0];const result=await res.json();assert.equal(res.status,expected,endpoint+': '+JSON.stringify(result));return result;};call.cookie=()=>cookie;return call;}
@@ -700,5 +702,42 @@ for(const [name,launch,options] of browsers.length?browsers:[['browser',null,nul
    }finally{await browser.close();}
   }
   await asAdmin('settings/weather',{enabled:false});
+ });
+}
+
+// AI inspection summaries (company switch off by default). Turned on here, last: the admin asks for a draft on a
+// draft visit, the review panel passes axe, "Use this draft" fills the summary box and tags it, and Complete & publish
+// asks for a confirmation first.
+for(const [name,launch,options] of browsers.length?browsers:[['browser',null,null]]){
+ test(`signed in (${name}): AI summary draft, review panel and publish confirmation`,{skip,timeout:120000},async()=>{
+  await asAdmin('settings/ai',{enabled:true});
+  const d=await asAdmin('data');const i=d.inspections.find(x=>x.id===draftId);
+  if(i.answers.every(a=>a.status==='unchecked')){
+   const answers=i.answers.map((a,k)=>({...a,status:k===0?'attention':k<4?'pass':a.status,note:k===0?'Slow drip under the kitchen sink':a.note}));
+   const res=await fetch(base+'/api/inspections/save',{method:'POST',headers:{Origin:base,'Content-Type':'application/json',Cookie:sessions['admin@example.test']},body:JSON.stringify({id:draftId,version:i.version,answers,summary:'',notes:'',internalNotes:''})});
+   assert.equal(res.status,201,'seed answers');
+  }
+  const browser=await launch();const ctx=await browser.newContext({...options,serviceWorkers:'block',bypassCSP:!!axePath});
+  const {page,errors,toasts}=await watch(ctx);
+  try{
+   const [cookieName,value]=sessions['admin@example.test'].split('=');await ctx.addCookies([{name:cookieName,value,url:base}]);
+   await page.goto(base+'/login');await page.waitForSelector('.shell',{timeout:15000});await settle(page);
+   await page.evaluate(id=>action('inspection',id),draftId);await page.waitForSelector('.ai-panel .ai-generate',{timeout:5000});
+   assert.equal(await page.locator('.ai-panel .ai-generate').isDisabled(),false,'Generate is enabled');
+   await click(page,'.ai-panel .ai-generate');await page.waitForSelector('#ai-draft-text',{timeout:10000});await settle(page);
+   const draft=await page.locator('#ai-draft-text').innerText();
+   assert.match(draft,/needs attention: Slow drip under the kitchen sink/,draft);
+   await axeCheck(page,'AI review panel');
+   await page.locator('.ai-review [data-action="ai-use"]').click();await page.waitForSelector('.ai-panel .ai-tag',{timeout:5000});await settle(page);
+   assert.equal(await page.inputValue('#f-summary'),draft,'the draft fills the summary box');
+   await page.evaluate(id=>action('inspection-publish',id),draftId);await page.waitForSelector('#modal[open] input[name="confirm"]',{timeout:5000});
+   assert.match(await page.locator('#modalBody h2').innerText(),/Confirm the AI-assisted summary/);
+   if(axePath){await page.addScriptTag({path:axePath});const r=await page.evaluate(()=>window.axe.run(document.querySelector('#modal'),{resultTypes:['violations']}));assert.deepEqual(r.violations.filter(v=>['serious','critical'].includes(v.impact)).map(v=>v.id),[],'publish confirmation: accessibility');}
+   await click(page,'#modal [data-action="close"]');
+   await page.waitForTimeout(300);
+   assert.deepEqual(errors,[],'page errors on the AI panel');
+   assert.deepEqual((await toasts()).filter(t=>ERROR_TOAST.test(t)),[],'error toasts on the AI panel');
+  }finally{await browser.close();}
+  await asAdmin('settings/ai',{enabled:false});
  });
 }
