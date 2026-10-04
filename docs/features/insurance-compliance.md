@@ -11,7 +11,7 @@ Most homeowner policies say that while a home is unoccupied, someone has to chec
   - **At risk**: nothing is scheduled before the deadline.
   - **Breached**: the deadline or the vacancy limit has passed.
   - **Not set up**: no profile has been added yet.
-- **Where it shows**: Overview › Needs your attention (breached, at risk, due soon, plus renewals for admins), the residence facts strip (an *Insurance* cell), the residence's *Needs attention here* panel, and a new **Insurance compliance** page under Residences. That page can be sorted by any column and filtered by status; on phones it shows cards with sort chips.
+- **Where it shows**: Overview › Needs your attention (breached, at risk, due soon, plus renewals for admins), the residence facts strip (an *Insurance* cell), the residence's *Needs attention here* panel, and a new **Insurance compliance** page under Residences. That page can be sorted by any column and filtered by status. On phones each residence is a card with a coloured status badge, one plain-English line (for example *Visit due by Oct 20 — nothing scheduled*) and only the dates that exist (last visit, visit due by, next scheduled, renewal). Homes without insurance details show an *Add insurance details* button for admins. A short legend explains each status; with a single residence the filters and sort chips are hidden.
 - **Alerts** (hourly): bell notifications to admins and the Residence Manager, and email through the normal outbox (demo companies get bell alerts only). A residence gets at most one alert of each kind per deadline window:
   - *pre-breach*: at risk and within the warning window;
   - *breached*;

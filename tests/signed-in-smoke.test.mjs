@@ -426,7 +426,8 @@ async function inspectionChecks(page,role,mobile,done){
 }
 // Insurance compliance: the Residences page, sorting and filters, and the Home records section it links to.
 async function insuranceChecks(page,role,mobile,done){
- const rowsOf=()=>page.evaluate(()=>[...document.querySelectorAll('.content .ins-list tbody tr')].map(r=>r.innerText.replace(/\s+/g,' ')));
+ // Phones get one card per residence; wider screens get the sortable table (only one of them is shown).
+ const rowsOf=()=>page.evaluate(m=>[...document.querySelectorAll(m?'.content .ins-cards .ins-card':'.content .ins-list tbody tr')].map(r=>r.innerText.replace(/\s+/g,' ')),mobile);
  if(role!=='client'){
   await go(page,'insurance');assert.equal(await page.locator('.content .page-title').innerText(),'Insurance compliance',`${role}: insurance page title`);
   let rows=await rowsOf();
@@ -440,7 +441,11 @@ async function insuranceChecks(page,role,mobile,done){
    await page.locator('.content .ins-chips .chip[data-id=""]').click();await settle(page);}
   else assert.deepEqual(rows.map(r=>/Ocean House/.test(r)),[true],`${role}: staff see only the residences they look after`);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${role}: insurance page fits the screen`);
-  await page.locator('.content .ins-list .ins-name',{hasText:'Ocean House'}).click();await settle(page);
+  const shown=await page.evaluate(()=>({cards:getComputedStyle(document.querySelector('.content .ins-cards')).display!=='none',table:getComputedStyle(document.querySelector('.content .ins-list')).display!=='none'}));
+  assert.deepEqual(shown,{cards:mobile,table:!mobile},`${role}: cards on phones, the table on wider screens`);
+  if(mobile){const card=page.locator('.content .ins-card',{hasText:'Ocean House'});assert.match(await card.innerText(),/At risk[\s\S]*Visit due (by|today|tomorrow)[^\n]*nothing scheduled/i,`${role}: the card says what is due in plain words`);
+   assert.ok((await card.locator('.ins-card-name').boundingBox()).height>=44,`${role}: the residence name is a 44px tap target`);}
+  await page.locator(mobile?'.content .ins-cards .ins-card-name':'.content .ins-list .ins-name',{hasText:'Ocean House'}).click();await settle(page);
  }else{await go(page,'properties');await page.evaluate(()=>action('insurance-open',data.properties.find(p=>p.name==='Ocean House').id));await settle(page);}
  const sec=await page.evaluate(()=>{const s=document.getElementById('res-insurance');return s?{text:s.innerText,edit:!!s.querySelector('[data-action="insurance-edit"]'),cert:!!s.querySelector('a[href*="certificate.pdf"]'),share:!!s.querySelector('[data-action="insurance-share"]')}:null;});
  assert.ok(sec,`${role}: Home records has the insurance section`);
