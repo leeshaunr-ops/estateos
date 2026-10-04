@@ -1,6 +1,6 @@
 // Oct 3 fixes: "Request service" priorities (any letter case accepted, stored as Low/Normal/High/Urgent; the form sends
 // those values), "Edit email" on the inspection page saving through /api/inspections/recipient, and the October 2026
-// homepage tutorial (12 chapters inside the video, cache-busted URLs, range requests, captions, poster).
+// homepage tutorial (20 chapters inside the video, cache-busted URLs, range requests, captions, poster).
 // Server scenarios run on SQLite and on Postgres (PGlite).
 import {test,after} from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,7 +13,7 @@ const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const read=f=>readFileSync(path.join(root,f),'utf8');
 const pw='Test-only-strong-password-928!';
 const dirs=[];after(()=>{for(const d of dirs)rmSync(d,{recursive:true,force:true});});
-const TUTORIAL_SECONDS=361.8,V='?v=2026-10-03';
+const TUTORIAL_SECONDS=637.2,V='?v=2026-10-04';
 
 function server(env){let proc,base,log='';return {get base(){return base;},get log(){return log;},
  async start(extra={}){proc=spawn(process.execPath,['server.mjs'],{cwd:root,env:{...process.env,PORT:'0',...env,...extra},windowsHide:true});proc.stderr.on('data',c=>{log+=c;});base=await new Promise((resolve,reject)=>{proc.stdout.on('data',c=>{const m=String(c).match(/http:\/\/127\.0\.0\.1:\d+/);if(m)resolve(m[0]);});proc.once('exit',code=>reject(Error('Server exited '+code+'\n'+log)));});},
@@ -66,21 +66,21 @@ async function scenario(label,env){
 test('request priorities and inspection recipient on SQLite',()=>scenario('SQLite',{}));
 test('request priorities and inspection recipient on Postgres (PGlite)',()=>scenario('PG',{pg:true}));
 
-test('homepage tutorial: October 2026 video, 12 chapters, new wording, cache-busted URLs',()=>{
+test('homepage tutorial: October 4 2026 video, 20 chapters, new wording, cache-busted URLs',()=>{
  const home=read('public/marketing.html');
  const section=home.slice(home.indexOf('<section class="tutorial-section"'),home.indexOf('</section>',home.indexOf('<section class="tutorial-section"')));
- assert.ok(section.includes('<p>A six-minute tour of a typical week, from the first visit of the day to storm prep. 12 chapters to help you find what you need.</p>'));
+ assert.ok(section.includes('<p>A ten-minute tour of a typical week, from the first visit of the day to storm prep, plus what’s new: smart-lock access windows, insurance compliance, photo baselines, AI-drafted summaries, field inspector logins, severe-weather alerts, flight-aware arrivals and data import. 20 chapters to help you find what you need.</p>'));
  assert.doesNotMatch(home,/23 minutes|45 chapters/);
  const opts=[...section.matchAll(/<option value="([^"]*)">([^<]*)<\/option>/g)].map(m=>[m[1],m[2].replace(/&#183;/g,'·')]);
- assert.deepEqual(opts[0],['','Choose a chapter…']);const ch=opts.slice(1);assert.equal(ch.length,12);
+ assert.deepEqual(opts[0],['','Choose a chapter…']);const ch=opts.slice(1);assert.equal(ch.length,20);
  const secs=ch.map(([v])=>Number(v));assert.equal(secs[0],0);assert.ok(secs.every((s,i)=>i===0||s>secs[i-1]),'chapters in order');assert.ok(secs.at(-1)<TUTORIAL_SECONDS,'every chapter is inside the video');
  ch.forEach(([v,t],i)=>{const s=Number(v),stamp=`${String(Math.floor(s/60)).padStart(2,'0')}:${String(Math.floor(s%60)).padStart(2,'0')}`;assert.ok(t.startsWith(`${stamp} — ${String(i+1).padStart(2,'0')} · `),`chapter label ${t} matches ${v}s`);});
- assert.equal(ch[11][1].split(' · ')[1],'Get started');
+ assert.equal(ch[19][1].split(' · ')[1],'Get started');assert.equal(ch[18][1].split(' · ')[1],'Importing from another system');
  for(const url of [`/tutorial.mp4${V}`,`/tutorial.vtt${V}`,`/img/tutorial-poster.webp${V}`])assert.ok(section.includes(url),'cache-busted '+url);
  assert.doesNotMatch(section,/"\/tutorial\.(mp4|vtt)"|tutorial-poster\.webp"/,'no un-versioned tutorial URLs on the homepage');
  assert.ok(read('public/demo-guide.html').includes(`<source src="/tutorial.mp4${V}"`),'the demo guide gets the new video too');
  // Repo/host limits: GitHub refuses files over 100 MB; the file is plain git (no LFS), as before.
- const size=statSync(path.join(root,'public/tutorial.mp4')).size;assert.ok(size>40e6&&size<95e6,'tutorial.mp4 is '+size+' bytes');
+ const size=statSync(path.join(root,'public/tutorial.mp4')).size;assert.ok(size>25e6&&size<95e6,'tutorial.mp4 is '+size+' bytes');
  const fd=openSync(path.join(root,'public/tutorial.mp4'),'r'),head=Buffer.alloc(2*1024*1024);readSync(fd,head,0,head.length,0);closeSync(fd);
  assert.ok(head.indexOf('moov')>0&&head.indexOf('moov')<head.indexOf('mdat'),'faststart: playback starts before the whole file downloads');
  const vtt=read('public/tutorial.vtt');assert.match(vtt,/^WEBVTT/);const ends=[...vtt.matchAll(/--> (\d\d):(\d\d):(\d\d\.\d+)/g)].map(m=>m[1]*3600+m[2]*60+Number(m[3]));

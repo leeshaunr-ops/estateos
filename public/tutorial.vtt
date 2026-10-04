@@ -105,234 +105,474 @@ And People shows the family, the residence manager,
 and who on your team looks after it.
 
 27
-00:01:51.830 --> 00:01:53.762
-Every visit follows a checklist.
+00:01:51.830 --> 00:01:54.555
+Smart locks are kept in Home records too.
 
 28
-00:01:53.772 --> 00:01:57.179
-Start from a ready-made template, or build your own.
+00:01:54.565 --> 00:01:58.892
+Add each lock at the residence, from your connected lock account,
 
 29
-00:01:58.429 --> 00:02:02.211
-Each item is answered Pass, Monitor, Fail, or N/A.
+00:01:58.902 --> 00:02:00.353
+or in manual mode.
 
 30
-00:02:03.461 --> 00:02:06.645
-You can require photos, mark items as required,
+00:02:02.403 --> 00:02:07.201
+Every visit or job with an assignee gets its own temporary door code,
 
 31
-00:02:06.655 --> 00:02:10.574
-and choose which failures alert the office right away.
+00:02:07.211 --> 00:02:10.179
+good only for that visit's time window.
 
 32
-00:02:13.624 --> 00:02:15.753
-Now, let's head out on a visit.
+00:02:12.029 --> 00:02:16.373
+Your team member sees the code on their phone only during the window.
 
 33
-00:02:15.763 --> 00:02:19.670
-EstateAegis works on any phone, right in the browser.
+00:02:16.383 --> 00:02:18.265
+Families never see door codes,
 
 34
-00:02:20.920 --> 00:02:23.294
-Checking in records the GPS location,
+00:02:18.275 --> 00:02:21.554
+and every view is recorded in the audit history.
 
 35
-00:02:23.304 --> 00:02:27.421
-so every report shows the visit really happened at the home.
+00:02:25.004 --> 00:02:30.246
+Many insurance policies require regular checks while a home is unoccupied.
 
 36
-00:02:29.271 --> 00:02:31.225
-Then work through the checklist.
+00:02:30.256 --> 00:02:35.073
+In Home records, add the policy, how often the home must be visited,
 
 37
-00:02:31.235 --> 00:02:33.879
-Tap Fail, add a note, and take a photo.
+00:02:35.083 --> 00:02:37.817
+and the longest it may stay vacant.
 
 38
-00:02:36.029 --> 00:02:36.675
-No signal?
+00:02:39.867 --> 00:02:45.086
+The Insurance compliance page shows every residence as OK, Due soon, At risk,
 
 39
-00:02:36.685 --> 00:02:37.397
-Keep going.
+00:02:45.096 --> 00:02:48.809
+or Breached, with the reason and the next deadline.
 
 40
-00:02:37.407 --> 00:02:40.152
-Answers and photos are saved on the phone,
+00:02:50.859 --> 00:02:54.093
+And a visit history certificate is ready to download,
 
 41
-00:02:40.162 --> 00:02:43.758
-and they sync on their own once you're back online.
+00:02:54.103 --> 00:02:56.067
+or to share with the broker.
 
 42
-00:02:51.008 --> 00:02:55.793
-When a visit comes in with a failed item, the office is alerted right away,
+00:02:59.317 --> 00:03:01.249
+Every visit follows a checklist.
 
 43
-00:02:55.803 --> 00:02:57.587
-in the app and by email.
+00:03:01.259 --> 00:03:04.666
+Start from a ready-made template, or build your own.
 
 44
-00:02:58.837 --> 00:03:02.719
-Review the report, then publish it to the family with one click.
+00:03:05.916 --> 00:03:09.698
+Each item is answered Pass, Monitor, Fail, or N/A.
 
 45
-00:03:04.369 --> 00:03:08.898
-The PDF carries your company's name and logo, with photos, notes,
+00:03:10.948 --> 00:03:14.132
+You can require photos, mark items as required,
 
 46
-00:03:08.908 --> 00:03:11.044
-and the visit verification.
+00:03:14.142 --> 00:03:18.061
+and choose which failures alert the office right away.
 
 47
-00:03:13.694 --> 00:03:16.139
-Any finding can become a work order.
+00:03:21.111 --> 00:03:23.240
+Now, let's head out on a visit.
 
 48
-00:03:16.149 --> 00:03:20.777
-The board groups jobs by due date, with quick filters, like overdue,
+00:03:23.250 --> 00:03:27.157
+EstateAegis works on any phone, right in the browser.
 
 49
-00:03:20.787 --> 00:03:22.469
-or waiting on client.
+00:03:28.407 --> 00:03:30.781
+Checking in records the GPS location,
 
 50
-00:03:23.719 --> 00:03:27.139
-Assign a job to someone on your team, or to a vendor.
+00:03:30.791 --> 00:03:34.908
+so every report shows the visit really happened at the home.
 
 51
-00:03:27.149 --> 00:03:31.995
-When a repair needs the family's go-ahead, it waits for their approval.
+00:03:36.758 --> 00:03:38.712
+Then work through the checklist.
 
 52
-00:03:33.745 --> 00:03:38.063
-If they haven't answered yet, Remind client sends a friendly nudge.
+00:03:38.722 --> 00:03:41.366
+Tap Fail, add a note, and take a photo.
 
 53
-00:03:38.073 --> 00:03:41.617
-And Export CSV gives you the list for your records.
+00:03:43.516 --> 00:03:44.162
+No signal?
 
 54
-00:03:44.267 --> 00:03:49.563
-Staff schedules shows the week for your whole team: shifts, visits, and jobs,
+00:03:44.172 --> 00:03:44.884
+Keep going.
 
 55
-00:03:49.573 --> 00:03:50.995
-person by person.
+00:03:44.894 --> 00:03:47.639
+Answers and photos are saved on the phone,
 
 56
-00:03:52.245 --> 00:03:55.212
-Jobs that still need someone are listed below.
+00:03:47.649 --> 00:03:51.245
+and they sync on their own once you're back online.
 
 57
-00:03:55.222 --> 00:03:57.931
-Assign all hands them out in one step.
+00:03:58.495 --> 00:04:03.249
+Photo spots capture the same view, from the same angle, on every visit.
 
 58
-00:03:59.181 --> 00:04:01.245
-And when severe weather is coming,
+00:04:03.259 --> 00:04:08.608
+Each spot has a baseline photo, like the water heater or the pool equipment.
 
 59
-00:04:01.255 --> 00:04:04.372
-Storm prep only narrows the week to storm work.
+00:04:10.658 --> 00:04:14.877
+On the visit, the camera shows the baseline as a see-through overlay,
 
 60
-00:04:05.622 --> 00:04:10.404
-The calendar lists every visit, arrival, job, and shift, day by day.
+00:04:14.887 --> 00:04:16.731
+so the new photo lines up.
 
 61
-00:04:13.054 --> 00:04:17.386
-When a storm is on the way, whether it's a hurricane, a winter storm,
+00:04:19.381 --> 00:04:24.793
+Reports then place each photo beside its baseline, so changes are easy to see.
 
 62
-00:04:17.396 --> 00:04:19.723
-or a flood, open the storm board.
+00:04:28.043 --> 00:04:30.219
+Once an administrator turns it on,
 
 63
-00:04:20.973 --> 00:04:24.580
-Schedule pre-storm visits for every affected home at once,
+00:04:30.229 --> 00:04:34.849
+Draft summary with AI writes a first draft of the visit summary from the
 
 64
-00:04:24.590 --> 00:04:26.337
-shared across your team.
+00:04:34.859 --> 00:04:36.909
+checklist answers and notes.
 
 65
-00:04:28.187 --> 00:04:31.518
-The board updates on its own as homes are secured.
+00:04:39.759 --> 00:04:42.616
+Use this draft, try again, or discard it.
 
 66
-00:04:31.528 --> 00:04:36.522
-After the storm, it tracks each post-storm check, and any damage found.
+00:04:42.626 --> 00:04:47.442
+Nothing written by AI reaches a family until someone on your team has
 
 67
-00:04:37.772 --> 00:04:42.397
-And each home gets an insurance-ready storm report, with the findings,
+00:04:47.452 --> 00:04:50.359
+reviewed it and confirmed the summary.
 
 68
-00:04:42.407 --> 00:04:44.974
-the damage notes, and dated photos.
+00:04:53.809 --> 00:04:58.594
+When a visit comes in with a failed item, the office is alerted right away,
 
 69
-00:04:47.624 --> 00:04:52.550
-Families sign in on your own branded page, with your logo and your welcome.
+00:04:58.604 --> 00:05:00.388
+in the app and by email.
 
 70
-00:04:53.800 --> 00:04:57.347
-Their home page shows each residence, the latest reports,
+00:05:01.638 --> 00:05:05.520
+Review the report, then publish it to the family with one click.
 
 71
-00:04:57.357 --> 00:04:59.417
-and anything waiting on them.
+00:05:07.170 --> 00:05:11.699
+The PDF carries your company's name and logo, with photos, notes,
 
 72
-00:05:00.667 --> 00:05:04.967
-They can approve an estimate, send a request, or plan their next arrival,
+00:05:11.709 --> 00:05:13.845
+and the visit verification.
 
 73
-00:05:04.977 --> 00:05:07.530
-so the home is ready when they walk in.
+00:05:16.495 --> 00:05:18.940
+Any finding can become a work order.
 
 74
-00:05:09.280 --> 00:05:13.602
-Vendors get a simple home of their own, with their jobs, due dates,
+00:05:18.950 --> 00:05:23.578
+The board groups jobs by due date, with quick filters, like overdue,
 
 75
-00:05:13.612 --> 00:05:16.901
-and one tap to start work or submit completion.
+00:05:23.588 --> 00:05:25.270
+or waiting on client.
 
 76
-00:05:19.551 --> 00:05:23.531
-In Company settings, add your logo, your client portal welcome,
+00:05:26.520 --> 00:05:29.940
+Assign a job to someone on your team, or to a vendor.
 
 77
-00:05:23.541 --> 00:05:25.945
-and your visit verification rules.
+00:05:29.950 --> 00:05:34.796
+When a repair needs the family's go-ahead, it waits for their approval.
 
 78
-00:05:27.195 --> 00:05:28.377
-And in My profile,
+00:05:36.546 --> 00:05:40.864
+If they haven't answered yet, Remind client sends a friendly nudge.
 
 79
-00:05:28.387 --> 00:05:32.873
-anyone can turn on two-factor sign-in with an authenticator app.
+00:05:40.874 --> 00:05:44.418
+And Export CSV gives you the list for your records.
 
 80
-00:05:36.923 --> 00:05:38.217
-And that's the tour.
+00:05:47.068 --> 00:05:52.364
+Staff schedules shows the week for your whole team: shifts, visits, and jobs,
 
 81
-00:05:38.227 --> 00:05:43.433
-EstateAegis: your residences, your team, and your clients, all in one place.
+00:05:52.374 --> 00:05:53.796
+person by person.
 
 82
-00:05:45.283 --> 00:05:49.095
-Start your free seven-day demo at estateaegis.com.
+00:05:55.046 --> 00:05:58.013
+Jobs that still need someone are listed below.
 
 83
-00:05:49.105 --> 00:05:51.190
-No credit card required.
+00:05:58.023 --> 00:06:00.732
+Assign all hands them out in one step.
 
 84
-00:05:52.940 --> 00:05:57.069
+00:06:01.982 --> 00:06:04.046
+And when severe weather is coming,
+
+85
+00:06:04.056 --> 00:06:07.173
+Storm prep only narrows the week to storm work.
+
+86
+00:06:08.423 --> 00:06:13.204
+The calendar lists every visit, arrival, job, and shift, day by day.
+
+87
+00:06:15.854 --> 00:06:18.970
+Field inspectors get a login made just for visits.
+
+88
+00:06:18.980 --> 00:06:23.596
+They see only the visits you assign them, with the address, the checklist,
+
+89
+00:06:23.606 --> 00:06:26.857
+and the door codes on the day, and nothing else.
+
+90
+00:06:28.907 --> 00:06:31.314
+Assign a visit in a couple of clicks.
+
+91
+00:06:31.324 --> 00:06:34.450
+Every plan includes free field inspector logins,
+
+92
+00:06:34.460 --> 00:06:37.062
+and they never take up a staff seat.
+
+93
+00:06:40.512 --> 00:06:44.147
+Severe-weather alerts watch every residence, nationwide,
+
+94
+00:06:44.157 --> 00:06:48.442
+using National Weather Service alerts and forecast thresholds.
+
+95
+00:06:50.092 --> 00:06:54.900
+Hard freezes, extreme heat, floods, high wind, tornadoes, wildfire,
+
+96
+00:06:54.910 --> 00:06:55.979
+and hurricanes.
+
+97
+00:06:55.989 --> 00:06:58.568
+Each alert lists the homes affected,
+
+98
+00:06:58.578 --> 00:07:02.568
+and the Overview shows a banner while one is active.
+
+99
+00:07:04.618 --> 00:07:06.680
+Open an alert for the details.
+
+100
+00:07:06.690 --> 00:07:11.516
+Start storm event creates a storm for the affected homes, in one step.
+
+101
+00:07:11.526 --> 00:07:15.437
+An administrator turns alerts on in Weather settings.
+
+102
+00:07:18.887 --> 00:07:23.219
+When a storm is on the way, whether it's a hurricane, a winter storm,
+
+103
+00:07:23.229 --> 00:07:25.556
+or a flood, open the storm board.
+
+104
+00:07:26.806 --> 00:07:30.413
+Schedule pre-storm visits for every affected home at once,
+
+105
+00:07:30.423 --> 00:07:32.170
+shared across your team.
+
+106
+00:07:34.020 --> 00:07:37.351
+The board updates on its own as homes are secured.
+
+107
+00:07:37.361 --> 00:07:42.355
+After the storm, it tracks each post-storm check, and any damage found.
+
+108
+00:07:43.605 --> 00:07:48.230
+And each home gets an insurance-ready storm report, with the findings,
+
+109
+00:07:48.240 --> 00:07:50.807
+the damage notes, and dated photos.
+
+110
+00:07:53.457 --> 00:07:58.383
+Families sign in on your own branded page, with your logo and your welcome.
+
+111
+00:07:59.633 --> 00:08:03.180
+Their home page shows each residence, the latest reports,
+
+112
+00:08:03.190 --> 00:08:05.250
+and anything waiting on them.
+
+113
+00:08:06.500 --> 00:08:10.800
+They can approve an estimate, send a request, or plan their next arrival,
+
+114
+00:08:10.810 --> 00:08:13.363
+so the home is ready when they walk in.
+
+115
+00:08:15.113 --> 00:08:19.435
+Vendors get a simple home of their own, with their jobs, due dates,
+
+116
+00:08:19.445 --> 00:08:22.734
+and one tap to start work or submit completion.
+
+117
+00:08:25.384 --> 00:08:29.872
+When a family adds their flight to an arrival, EstateAegis tracks it.
+
+118
+00:08:29.882 --> 00:08:33.783
+Each step of the arrival plan is timed from the landing.
+
+119
+00:08:35.833 --> 00:08:40.536
+If the flight is delayed, the times move with it, and your team is alerted.
+
+120
+00:08:40.546 --> 00:08:45.007
+When the plan is done, the family sees that the residence is ready.
+
+121
+00:08:48.457 --> 00:08:52.437
+In Company settings, add your logo, your client portal welcome,
+
+122
+00:08:52.447 --> 00:08:54.851
+and your visit verification rules.
+
+123
+00:08:56.101 --> 00:08:57.283
+And in My profile,
+
+124
+00:08:57.293 --> 00:09:01.779
+anyone can turn on two-factor sign-in with an authenticator app.
+
+125
+00:09:05.829 --> 00:09:07.945
+Switching from another system?
+
+126
+00:09:07.955 --> 00:09:13.331
+Import data, under Company, brings in your clients and residences, contacts,
+
+127
+00:09:13.341 --> 00:09:15.599
+vendors, staff, and past visits.
+
+128
+00:09:15.609 --> 00:09:20.040
+New companies also find it on the Overview setup checklist.
+
+129
+00:09:22.090 --> 00:09:27.638
+Upload a CSV or Excel export from your old software, or start from a template.
+
+130
+00:09:27.648 --> 00:09:32.388
+Most columns match automatically, and you can change any match.
+
+131
+00:09:34.438 --> 00:09:38.329
+The preview marks each row as new, update, or duplicate,
+
+132
+00:09:38.339 --> 00:09:40.280
+with plain-English warnings.
+
+133
+00:09:40.290 --> 00:09:42.909
+Nothing is saved until you import.
+
+134
+00:09:44.959 --> 00:09:47.499
+Then a summary shows what was added.
+
+135
+00:09:47.509 --> 00:09:50.899
+Undo removes the whole import within seven days.
+
+136
+00:09:50.909 --> 00:09:55.196
+Imported staff stay inactive until you click Send invite.
+
+137
+00:09:58.446 --> 00:09:59.740
+And that's the tour.
+
+138
+00:09:59.750 --> 00:10:04.956
+EstateAegis: your residences, your team, and your clients, all in one place.
+
+139
+00:10:06.806 --> 00:10:10.618
+Start your free seven-day demo at estateaegis.com.
+
+140
+00:10:10.628 --> 00:10:12.713
+No credit card required.
+
+141
+00:10:14.463 --> 00:10:18.592
 And when you're ready, paid plans begin with a thirty-day free trial.
+
+142
+00:10:19.842 --> 00:10:25.536
+Plans include four, ten, or twenty admin and staff users, plus eight, twenty,
+
+143
+00:10:25.546 --> 00:10:28.278
+or forty free field inspector logins.
+
+144
+00:10:28.288 --> 00:10:32.464
+Client and vendor logins are unlimited on every plan.
 
