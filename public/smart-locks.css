@@ -22,3 +22,4 @@
 .sl-res{margin-bottom:22px}
 .sl-sub{font-size:15px;margin:14px 0 8px;color:#1f2933}
 @media (max-width:640px){.sl-code-digits{font-size:30px}.sl-actions{display:flex;flex-wrap:wrap;gap:8px}.sl-actions button{flex:1 1 auto}}
+.sl-help{color:#5f6b76;margin:0;line-height:1.5}

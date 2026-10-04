@@ -160,10 +160,10 @@ export function createSmartLocks({get, all, run, transaction, id, now, fail, tex
  }
 
  /** What codes should exist right now for one company (pure database reads). */
- async function desired(org, st) {
+ async function desired(org, st, nowMs = clock()) {
   const locks = await all('SELECT l.* FROM residence_locks l JOIN properties p ON p.id=l.property_id WHERE l.organization_id=? AND l.active=1 AND p.organization_id=? AND p.archived_at IS NULL', org, org);
   const byHome = new Map(); for (const l of locks) { if (!byHome.has(l.property_id)) byHome.set(l.property_id, []); byHome.get(l.property_id).push(l); }
-  const out = [], nowMs = clock(), horizon = nowMs + HORIZON_DAYS * 864e5;
+  const out = [], horizon = nowMs + HORIZON_DAYS * 864e5;
   for (const [homeId, homeLocks] of byHome) {
    const pRow = await get('SELECT * FROM properties WHERE id=?', homeId), tz = await residenceTz(pRow), today = wallClock(new Date(nowMs).toISOString(), tz).day;
    const visits = await all("SELECT i.id,i.inspection_date,i.inspector_id FROM inspections i JOIN users u ON u.id=i.inspector_id AND u.active=1 WHERE i.property_id=? AND i.status='draft' AND i.inspection_date>=? AND i.inspection_date<=?", homeId, addDays(today, -1), addDays(today, HORIZON_DAYS));
@@ -186,13 +186,14 @@ export function createSmartLocks({get, all, run, transaction, id, now, fail, tex
   return 'rescheduled';
  }
  async function reconcileNow(org, {force = false} = {}) {
-  const st = await settings(org), nowIso = new Date(clock()).toISOString();
+  // One clock reading per pass, so a window that ends mid-pass expires instead of being treated as gone.
+  const st = await settings(org), nowMs = clock(), nowIso = new Date(nowMs).toISOString();
   // Expire codes whose window (plus buffer) has passed.
   for (const code of await all("SELECT * FROM lock_access_codes WHERE organization_id=? AND status IN ('needs_code','scheduled') AND ends_at<?", org, nowIso)) {
    const done = await run("UPDATE lock_access_codes SET status='expired',expired_at=?,version=version+1,updated_at=? WHERE id=? AND status IN ('needs_code','scheduled')", nowIso, nowIso, code.id);
    if (done.changes && code.code_sealed && !code.provider_code_id) await removalReminder(code, 'expired');
   }
-  const want = await desired(org, st), live = await all("SELECT * FROM lock_access_codes WHERE organization_id=? AND status IN ('needs_code','scheduled')", org);
+  const want = await desired(org, st, nowMs), live = await all("SELECT * FROM lock_access_codes WHERE organization_id=? AND status IN ('needs_code','scheduled')", org);
   const keyOf = (lockId, type, sourceId) => `${lockId}|${type}|${sourceId}`;
   const wanted = new Map(want.map(w => [keyOf(w.lock.id, w.sourceType, w.sourceId), w]));
   for (const code of live) {
@@ -217,7 +218,7 @@ export function createSmartLocks({get, all, run, transaction, id, now, fail, tex
    for (const code of await all("SELECT * FROM lock_access_codes WHERE organization_id=? AND status IN ('revoked') AND provider_code_id IS NOT NULL AND provider_deleted_at IS NULL", org)) await deleteAtProvider(code);
   }
   // Locks offline for more than 30 minutes get a maintenance task.
-  for (const lock of await all('SELECT * FROM residence_locks WHERE organization_id=? AND active=1 AND offline_since IS NOT NULL AND offline_since<?', org, new Date(clock() - OFFLINE_TASK_MINUTES * 60000).toISOString())) {
+  for (const lock of await all('SELECT * FROM residence_locks WHERE organization_id=? AND active=1 AND offline_since IS NOT NULL AND offline_since<?', org, new Date(nowMs - OFFLINE_TASK_MINUTES * 60000).toISOString())) {
    const pRow = await get('SELECT name FROM properties WHERE id=?', lock.property_id);
    await openTask(lock, 'offline', {title: `${LOCK_TASK_TITLES.offline}: ${lock.name}`, description: `The ${lock.name} at ${pRow?.name || 'the residence'} has been offline since ${formatIn(lock.offline_since, 'America/New_York')}. Temporary codes and entry records need the lock online. Check its Wi-Fi bridge or hub and batteries.`});
   }
@@ -408,7 +409,7 @@ export function createSmartLocks({get, all, run, transaction, id, now, fail, tex
    if (!made.length) fail(422, 'A door code needs a lock at the residence, an assignee and a date within the next two weeks.');
    return done({created: made.length});
   }
-  if (p === '/api/smart-locks/sync') { await reconcileNow(org); return done({ok: true}); }
+  if (p === '/api/smart-locks/sync') { await changed(org); return done({ok: true}); }
   fail(404, 'Endpoint not found.');
  }
  return {settings, handle, webhook, decorate, extendReports, reconcileNow, changed, tick, applyEvent, provider, isLockTask, reportRows};
