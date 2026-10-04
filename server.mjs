@@ -33,6 +33,7 @@ import { fileURLToPath } from 'node:url';
 import { inspectionPdf, jpegSize } from './pdf.mjs';
 import { createVisitVerification } from './visit-verification.mjs';
 import { createStorm } from './storm.mjs';
+import { createSmartLocks } from './smart-locks.mjs';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const db = await openDatabase(root);
 let storage;
@@ -222,6 +223,8 @@ const staff = createStaff({get,all,run,transaction,fail,text,note,id,now,passwor
 const workExtras = createWorkExtras({get,all,run,transaction,id,now,fail,roles,work,property,audit,body,communications});
 const checklistTemplates = createChecklistTemplates({get,all,run,transaction,body,json,fail,roles,property,id,now,audit});
 const visitVerification = createVisitVerification({get,all,run,transaction,id,now,fail,json,body,roles,property,entity,audit,captureTime});
+const smartLocks = createSmartLocks({get,all,run,transaction,id,now,fail,text,note,json,body,roles,property,audit,communications,timezoneFor:async p=>visitVerification.timezoneFor(p,await visitVerification.settings(p.organization_id))});
+smartLocks.extendReports(visitVerification);
 const storm = createStorm({get,all,run,transaction,id,now,fail,text,note,date,json,body,roles,property,audit,visitChecklists,visitVerification,readFile,readBytes,checklistLabel});
 const offlineInspections = createOfflineInspections({get,all,run,body,json,fail,roles,property,entity,hash,now,template,visitChecklists,visitVerification});
 async function assertWorkspaceActive(organizationId){if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',organizationId))?.status==='suspended')fail(403,'This company workspace is suspended. Contact support.');const d=await demos.lookup(organizationId);if(d&&Number(d.expires_at)<=Date.now())fail(403,'Your seven-day demo has ended. Contact sales@estateaegis.com for more time.');}
@@ -263,6 +266,7 @@ async function api(req, res, url, user) {
     if(await failAlerts.handle(req,res,url,user))return;
     if(await visitVerification.handle(req,res,url,user))return;
     if(await storm.handle(req,res,url,user))return;
+    if(await smartLocks.handle(req,res,url,user))return;
     if(await communications.handle(req,res,url,user))return;
     if(await operations.handle(req,res,url,user))return;
     if(await security.handle(req,res,url,user))return;
@@ -389,7 +393,7 @@ async function api(req, res, url, user) {
         return json(res, 200, { ok: true });
     }
     if (p === '/api/data' && method === 'GET')
-        return json(res, 200, await visitVerification.decorate(user, await snapshot(user)));
+        return json(res, 200, await smartLocks.decorate(user, await visitVerification.decorate(user, await snapshot(user))));
     if (p.startsWith('/api/files/') && method === 'GET') {
         const f = (await readFile(user, p.split('/')[3]));
         const bytes = (await readBytes(f.storage_key));
@@ -1232,6 +1236,8 @@ const server = http.createServer(async (req, res) => {
         const localHost = process.env.ESTATEOS_HOST || '127.0.0.1';
         if (localHost === '127.0.0.1' && !/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host))
             fail(403, 'Invalid host.');
+        // Signed webhooks from outside services (no browser Origin; each handler verifies its own signature).
+        if (url.pathname.startsWith('/api/webhooks/')) { if (await smartLocks.webhook(req, res, url)) return; fail(404, 'Endpoint not found.'); }
         if (req.method !== 'GET' && req.method !== 'HEAD') {
             const origin = req.headers.origin;
             if (!origin || new URL(origin).host !== host)
@@ -1240,7 +1246,7 @@ const server = http.createServer(async (req, res) => {
                 fail(415, 'JSON content required.');
         }
         if (url.pathname.startsWith('/api/'))
-{ const user = await actor(req); return await offlineInspections.idempotent(req, res, url, user, () => api(req, res, url, user)); }
+{ const user = await actor(req); if (user && req.method === 'POST') res.once('finish', () => { if (res.statusCode < 400) smartLocks.changed(user.organization_id); }); return await offlineInspections.idempotent(req, res, url, user, () => api(req, res, url, user)); }
         if (url.pathname === '/robots.txt' || url.pathname === '/sitemap.xml') {
             const sitemap = url.pathname === '/sitemap.xml';
             const content = sitemap ? '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://estateaegis.com/</loc></url><url><loc>https://estateaegis.com/home-watch-software</loc></url><url><loc>https://estateaegis.com/private-residence-management</loc></url><url><loc>https://estateaegis.com/inspection-report-software</loc></url><url><loc>https://estateaegis.com/about</loc></url><url><loc>https://estateaegis.com/home-watch-checklist</loc></url><url><loc>https://estateaegis.com/arrival-preparation-checklist</loc></url><url><loc>https://estateaegis.com/example-workflow</loc></url><url><loc>https://estateaegis.com/resources</loc></url></urlset>' : 'User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /login\nSitemap: https://estateaegis.com/sitemap.xml\n';
@@ -1277,7 +1283,7 @@ const server = http.createServer(async (req, res) => {
             return res.end(url.pathname === '/sw.js' ? content.replace('__SHELL_VERSION__', shellVersion()) : content);
         }
         const appHome = url.pathname === '/' && (url.searchParams.has('invite') || url.searchParams.has('workspaceInvite') || await actor(req));
-        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/home-refresh.css':'home-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js','/visit-verification.js':'visit-verification.js','/visit-card.js':'visit-card.js','/storm-core.js':'storm-core.js','/storm.js':'storm.js','/storm.css':'storm.css','/view-route.js':'view-route.js', '/sidebar-core.js':'sidebar-core.js','/overview-core.js':'overview-core.js','/app-format.js':'app-format.js','/app.css':'app.css', '/overview.js':'overview.js', '/overview.css':'overview.css', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/login.js':'login.js','/login.css':'login.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/faq.js':'faq.js','/site-menu.js':'site-menu.js','/home-compact.js':'home-compact.js','/plan-panel.js':'plan-panel.js','/plan-panel.css':'plan-panel.css','/security':'security.html' };
+        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/home-refresh.css':'home-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js','/visit-verification.js':'visit-verification.js','/visit-card.js':'visit-card.js','/storm-core.js':'storm-core.js','/smart-locks.js':'smart-locks.js','/smart-locks.css':'smart-locks.css','/storm.js':'storm.js','/storm.css':'storm.css','/view-route.js':'view-route.js', '/sidebar-core.js':'sidebar-core.js','/overview-core.js':'overview-core.js','/app-format.js':'app-format.js','/app.css':'app.css', '/overview.js':'overview.js', '/overview.css':'overview.css', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/login.js':'login.js','/login.css':'login.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/faq.js':'faq.js','/site-menu.js':'site-menu.js','/home-compact.js':'home-compact.js','/plan-panel.js':'plan-panel.js','/plan-panel.css':'plan-panel.css','/security':'security.html' };
         const file = names[url.pathname] || (url.pathname === '/client-login' || /^\/client\/[a-z0-9-]+$/i.test(url.pathname) ? 'live.html' : null);
         if (!file) {
             // Unknown pages get a friendly HTML 404 with the site navigation; /api/* keeps its JSON errors above.
@@ -1307,7 +1313,7 @@ const server = http.createServer(async (req, res) => {
         json(res, status, { error: status === 500 ? 'The action could not be saved. Check the server log.' : error.message, ...(status !== 500 && error.extra ? error.extra : {}) });
     }
 });
-const SHELL_FILES = ['live.html','live.js','login.js','login.css','inspection-checklist.js','visit-verification.js','visit-card.js','view-route.js','sidebar-core.js','overview-core.js','overview.js','overview.css','app-format.js','app.css','storm-core.js','storm.js','storm.css','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png','ea-shield-80.png','ea-shield-120.png','plan-panel.js','plan-panel.css'];
+const SHELL_FILES = ['live.html','live.js','login.js','login.css','inspection-checklist.js','visit-verification.js','visit-card.js','view-route.js','sidebar-core.js','overview-core.js','overview.js','overview.css','app-format.js','app.css','storm-core.js','storm.js','storm.css','smart-locks.js','smart-locks.css','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png','ea-shield-80.png','ea-shield-120.png','plan-panel.js','plan-panel.css'];
 let cachedShellVersion = null;
 function shellVersion() { if (!cachedShellVersion) { const digest = createHash('sha256'); for (const name of SHELL_FILES) { try { digest.update(name).update(fs.readFileSync(path.join(root, 'public', name))); } catch { digest.update(name + ':missing'); } } cachedShellVersion = digest.digest('hex').slice(0, 12); } return cachedShellVersion; }
 setInterval(() => offlineInspections.purge().catch(e => console.error('Idempotency cleanup:', e.message)), 3600000).unref();
@@ -1369,6 +1375,7 @@ async function deliverInspection(user,inspectionId){
 
 setInterval(()=>communications.drain().catch(error=>console.error('Email queue:',error.message)),15000).unref();
 
+setInterval(()=>smartLocks.tick().catch(e=>console.error('Smart locks:',e.message)),60000).unref();
 setInterval(()=>operations.tick().catch(e=>console.error("Automation:",e.message)),60000).unref();
 
 const backupWorker=createBackupWorker({get,run,transaction,putBytes,readBytes,deleteBytes});setTimeout(()=>backupWorker.tick(),15000).unref();setInterval(()=>backupWorker.tick(),3600000).unref();
