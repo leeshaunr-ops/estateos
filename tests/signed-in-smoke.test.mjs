@@ -58,6 +58,10 @@ before(async()=>{if(skip)return;await start();const admin=client();
  // Batch 3a: a third home where the vendor has a job, so the vendor can open a residence.
  const loft=await admin('properties',{clientId:fam.id,name:'Harbor Loft',streetAddress:'3 Harbor Way',city:'Stuart',state:'FL',postalCode:'34994',country:'United States'},201);
  await admin('work',{propertyId:loft.id,title:'Service the pool pump',priority:'Normal',dueDate:day(4),vendorId:ven.id},201);
+ // Smart locks: a manual keypad at Harbor Loft; the vendor's job gets a temporary door code the office enters.
+ await admin('smart-locks/locks',{propertyId:loft.id,name:'Front door keypad',provider:'manual'});
+ const lockCode=(await admin('data')).smartLocks.codes.find(c=>c.provider==='manual'&&c.status==='needs_code');
+ await admin('smart-locks/codes/set',{id:lockCode.id,code:'2468'});
  // Batch 5: a storm-prep shift (tomorrow, so it never overlaps the smoke shift) and two unassigned jobs for Assign all
  // (the pool light gets assigned by the batch 0 Assign check).
  await admin('staff/schedule',{staffId:id('staff@example.test'),title:'Storm shutters up',startsAt:new Date(day(1)+'T09:00').toISOString(),endsAt:new Date(day(1)+'T11:00').toISOString(),propertyId:home.id},200);
@@ -429,6 +433,22 @@ async function insuranceChecks(page,role,mobile,done){
  assert.equal(await page.locator('.content .res-tabs button.active').getAttribute('data-id'),'records');
  done.push('insurance');
 }
+// Smart locks: the admin reveals the job's door code (audited) and sees the residence's locks and the settings panel;
+// the vendor sees the code is coming but cannot reveal it before the window; the family never sees door access.
+async function lockChecks(page,role,done){
+ const openJob=()=>page.evaluate(()=>{const w=data.work.find(x=>x.title==='Service the pool pump');page='work';activeWork=w.id;render();});
+ if(role==='client'){assert.deepEqual(await page.evaluate(()=>data.smartLocks?.codes||[]),[],'client: no door codes');assert.equal(await page.locator('.sl-door').count(),0);done.push('smart-locks');return;}
+ await go(page,'work');await openJob();await settle(page);
+ const panel=page.locator('.sl-door').first();assert.match(await panel.innerText(),/Door access[\s\S]*Front door keypad/,`${role}: door access on the job`);
+ if(role==='vendor'){assert.match(await panel.innerText(),/shows here from/,'vendor: code shows only in its window');assert.equal(await page.locator('[data-action="sl-reveal"]').count(),0,'vendor: no reveal before the window');done.push('smart-locks');return;}
+ await click(page,'[data-action="sl-reveal"]');await page.waitForSelector('.sl-code-digits',{timeout:5000});
+ assert.equal(await page.locator('.sl-code-digits').innerText(),'2 4 6 8','admin: revealed code');
+ await page.evaluate(()=>{action('property',data.properties.find(p=>p.name==='Harbor Loft').id);});await settle(page);await page.evaluate(()=>{tab='records';render();});await settle(page);
+ assert.match(await page.locator('#res-locks').innerText(),/Smart locks[\s\S]*Front door keypad[\s\S]*Upcoming door codes/,'admin: residence lists locks and codes');
+ assert.match(await go(page,'workspace'),/Smart locks[\s\S]*Manual codes/,'admin: settings show the lock connection');
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'admin: settings fit the screen');
+ done.push('smart-locks');
+}
 const PAGE_CHECKS={
  admin:async(page,mobile,done)=>{
   await headerChecks(page,mobile,'admin',['properties','work','inspections','requests','maintenance','documents','assets','audit','billing','messages','notifications','storm'],done);
@@ -477,6 +497,7 @@ const PAGE_CHECKS={
   await inspectionChecks(page,'admin',mobile,done);
   await calendarChecks(page,'admin',{arrival:'Owners arrive',chips:['Everything','Visits','Arrivals','Work','Shifts']},done);
   await insuranceChecks(page,'admin',mobile,done);
+  await lockChecks(page,'admin',done);
  },
  employee:async(page,mobile,done)=>{
   await insuranceChecks(page,'employee',mobile,done);
@@ -497,6 +518,7 @@ const PAGE_CHECKS={
   await residenceChecks(page,'vendor','Harbor Loft',{tabs:null},done);
   await workChecks(page,'vendor',{chips:['Open','Completed'],rows:['Service the pool pump'],primary:'Start work'},done);
   assert.match(await go(page,'messages'),/company that sends you jobs/,'vendor: messages subtitle for vendors');done.push('wording');
+  await lockChecks(page,'vendor',done);
  },
  client:async(page,mobile,done)=>{
   await headerChecks(page,mobile,'client',['properties','work','inspections','requests','documents','messages','notifications'],done);
@@ -516,6 +538,7 @@ const PAGE_CHECKS={
   assert.doesNotMatch(await go(page,'profile'),/Account ID/,'client: no raw account ID');done.push('profile');
   await calendarChecks(page,'client',{arrival:'You arrive',chips:['Everything','Visits','Arrivals','Service']},done);
   await requestServiceCheck(page,'client',done);
+  await lockChecks(page,'client',done);
  }
 };
 async function pageJourney(launch,contextOptions,role,email){
