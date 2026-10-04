@@ -46,6 +46,8 @@
  .shell .ps-lede{margin:0 16px 10px}
  .shell .ps-card{grid-template-columns:1fr}
  .shell .ps-card-actions{justify-content:flex-start}
+ .shell .ps-card-actions>*{flex:1 1 120px;min-width:0;width:auto}
+ .shell .ps-card-actions>button,.shell .ps-card-actions>details>summary{width:100%;justify-content:center}
  .shell .ps-thumb{width:88px;height:66px}
  .shell .ps-visit-row{flex-wrap:wrap}
  .shell .ps-visit-row .ps-card-actions{width:100%}
@@ -67,3 +69,4 @@
 #modal .ps-file{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
 #modal .ps-file-label{position:relative}
 #modal .ps-file-label:focus-within{outline:3px solid #8b242b;outline-offset:2px}
+.ps-cam-actions [hidden],.ps-stage [hidden]{display:none!important}

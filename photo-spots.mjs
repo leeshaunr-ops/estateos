@@ -54,7 +54,7 @@ export function createPhotoSpots({get, all, run, transaction, id, now, fail, jso
   const q = ids.map(() => '?').join(',');
   const full = await all(`SELECT * FROM properties WHERE organization_id=? AND id IN (${q})`, user.organization_id, ...ids);
   const tz = new Map(); for (const p of full) tz.set(p.id, await tzOf(p));
-  const spots = await all(`SELECT * FROM photo_spots WHERE organization_id=? AND property_id IN (${q}) AND archived_at IS NULL ORDER BY created_at,id`, user.organization_id, ...ids);
+  const spots = await all(`SELECT * FROM photo_spots WHERE organization_id=? AND property_id IN (${q}) AND archived_at IS NULL ORDER BY LOWER(name),created_at,id`, user.organization_id, ...ids);
   const rows = await all(`SELECT s.*,f.name,f.captured_at,f.created_at file_created_at,i.status inspection_status,i.inspection_date FROM photo_spot_shots s JOIN files f ON f.id=s.file_id LEFT JOIN inspections i ON i.id=s.inspection_id WHERE s.organization_id=? AND s.property_id IN (${q}) ORDER BY COALESCE(f.captured_at,f.created_at) DESC,s.file_id`, user.organization_id, ...ids);
   const visible = r => staff(user) || !r.inspection_id || r.inspection_status === 'published';
   const shots = rows.filter(visible), shotIds = new Set(shots.map(r => r.file_id));
