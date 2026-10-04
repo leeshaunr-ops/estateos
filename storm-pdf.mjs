@@ -177,3 +177,5 @@ export function stormSummaryPdf(s){
  if(!s.rows.length)doc.paragraph('No residences are on this storm yet.',{color:C.muted});
  return doc.finish(footerWith(doc,s.company,''));
 }
+// Shared with the insurance visit history certificate (insurance-pdf.mjs) and photo comparisons.
+export {Doc,C,BG,BOTTOM,footerWith,photoGrid,verificationBox};

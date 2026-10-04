@@ -1,0 +1,44 @@
+@font-face{font-family:"EA Inter";font-style:normal;font-weight:400 800;font-display:swap;src:url(/fonts/inter-latin-var.woff2) format("woff2")}
+*{box-sizing:border-box}
+html{background:#f6f8f7;color:#1f2933;font-family:"EA Inter",Inter,"Segoe UI",system-ui,sans-serif;font-size:16px;line-height:1.5}
+body{margin:0;min-height:100vh;display:flex;flex-direction:column}
+.cert{flex:1;width:min(920px,100%);margin:0 auto;padding:32px 20px 24px}
+.cert-loading{color:#5f6b76}
+.cert-head{display:flex;align-items:center;gap:18px;flex-wrap:wrap;border-top:4px solid #7e202b;background:#fff;border-radius:12px;padding:22px 24px;box-shadow:0 3px 12px rgba(24,39,56,.05);margin-bottom:18px}
+.cert-head>div{flex:1;min-width:220px}
+.cert-logo{max-width:120px;max-height:56px;object-fit:contain}
+.cert-company{margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#5f6b76;font-weight:700}
+.cert h1{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:clamp(26px,4vw,34px);margin:4px 0 2px;color:#1f2933;letter-spacing:-.4px}
+.cert h2{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:21px;margin:0 0 10px}
+.cert-sub{margin:0;color:#5f6b76}
+.cert-button{display:inline-flex;align-items:center;min-height:44px;padding:10px 18px;border-radius:9px;background:#7e202b;color:#fff;font-weight:700;text-decoration:none}
+.cert-button:focus-visible,.cert a:focus-visible{outline:3px solid #b78432;outline-offset:3px}
+.cert-card{background:#fff;border:1px solid #e2e7eb;border-radius:12px;padding:20px 24px;margin-bottom:16px}
+.cert-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 24px;margin:0}
+.cert-facts dt{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#7a6847;font-weight:700}
+.cert-facts dd{margin:2px 0 0;font-weight:600}
+.cert-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px}
+.cert-stats div{background:#fff;border:1px solid #e2e7eb;border-top:3px solid #c7ced4;border-radius:10px;padding:14px 16px}
+.cert-stats b{display:block;font-size:20px}
+.cert-stats span{font-size:13px;color:#5f6b76}
+.cert-stats .cert-ok{border-top-color:#1f6b4a}.cert-stats .cert-ok b{color:#1f6b4a}
+.cert-stats .cert-warn{border-top-color:#9a6a09}.cert-stats .cert-warn b{color:#7d5605}
+.cert-stats .cert-bad{border-top-color:#a8232f}.cert-stats .cert-bad b{color:#8f1d27}
+.cert-note,.cert-muted{color:#5f6b76;font-size:14px}
+.cert-note{margin:0 0 16px}
+.cert-devices,.cert-visits{list-style:none;margin:0;padding:0}
+.cert-devices li{display:flex;flex-direction:column;padding:10px 0;border-top:1px solid #edf0f2}
+.cert-devices li:first-child{border-top:0}
+.cert-devices span{color:#5f6b76;font-size:14px}
+.cert-visits li{padding:12px 0;border-top:1px solid #edf0f2}
+.cert-visits li:first-child{border-top:0}
+.cert-visit-top{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+.cert-visit-meta{color:#5f6b76;font-size:14px}
+.cert-visits p{margin:6px 0 0;font-size:14px}
+.cert-pill{font-size:12px;font-weight:700;padding:4px 10px;border-radius:20px;background:#eef1f3;color:#4a5560}
+.cert-pill.cert-ok{background:#e5f2ea;color:#1b5e40}
+.cert-disclaimer{border-left:4px solid #c79a57}
+.cert-message{text-align:center;padding:48px 24px}
+.cert-footer{text-align:center;color:#5f6b76;font-size:13px;padding:16px 20px 28px}
+@media(max-width:640px){.cert{padding:16px 12px}.cert-head{padding:18px}.cert-facts{grid-template-columns:1fr}.cert-stats{grid-template-columns:1fr 1fr}.cert-button{width:100%;justify-content:center}.cert-card{padding:16px}}
+@media print{.cert-button,.cert-footer{display:none}html{background:#fff}}
