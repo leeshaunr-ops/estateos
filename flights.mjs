@@ -262,6 +262,7 @@ export function createFlights({get, all, run, transaction, id, now, fail, text, 
  /* ---------- API ---------- */
  async function handle(req, res, url, user) {
   const p = url.pathname; if (!p.startsWith('/api/flights/')) return false;
+  if (!user) fail(401, 'Please sign in.');
   if (req.method !== 'POST') fail(405, 'Use POST.');
   const b = await body(req), done = v => { json(res, 200, v); return true; };
   if (p === '/api/flights/add') {
