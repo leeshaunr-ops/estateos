@@ -21,7 +21,7 @@ export function createSaas({get,all,run,transaction,fail,text,note,id,hash,now,p
     const paidSignup=await get('SELECT * FROM paid_signups WHERE invite_hash=?',row.token_hash);
     if(paidSignup){
      const paid=await get('SELECT status,plan FROM stripe_billing WHERE organization_id=?',paidSignup.organization_id);
-     if(paidSignup.status!=='invited'||paidSignup.email!==row.email||paid?.status!=='active'||!paid.plan)fail(409,'This paid invitation needs review. Contact help@estateaegis.com.');
+     if(paidSignup.status!=='invited'||paidSignup.email!==row.email||!['active','trialing'].includes(paid?.status)||!paid.plan)fail(409,'This paid invitation needs review. Contact help@estateaegis.com.');
      org=paidSignup.organization_id;await run('UPDATE workspace_settings SET logo_data=? WHERE organization_id=?',logo,org);
      await run("UPDATE paid_signups SET status='accepted',accepted_at=? WHERE id=?",now(),paidSignup.id);
     }else{

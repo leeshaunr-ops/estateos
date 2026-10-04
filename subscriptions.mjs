@@ -1,4 +1,4 @@
-import {subscriptionQuote} from './stripe-plans.mjs';
+import {subscriptionQuote,GOOD_STANDING} from './stripe-plans.mjs';
 export const GB=1000000000;
 export function planPrice(seats,packs=0){return 5900+Math.max(0,seats-2)*1500+packs*500;}
 export function createSubscriptions({get,all,run,transaction,id,now,fail,json,body,audit,platformOwner,communications}){
@@ -27,7 +27,7 @@ export function createSubscriptions({get,all,run,transaction,id,now,fail,json,bo
   }
   return s;
  }
- async function ensureSpace(org,bytes){const s=await summary(org);if(s.stripeConnected&&s.stripeStatus!=='active')fail(409,'Resolve your subscription payment before uploading new files. Existing files remain available.');if(s.used+bytes>s.limit)fail(413,'Company storage is full or this file would exceed the allowance. Ask your administrator to request another 20 GB for $5/month in Company settings. Existing files remain available.');}
+ async function ensureSpace(org,bytes){const s=await summary(org);if(s.stripeConnected&&!GOOD_STANDING.includes(s.stripeStatus))fail(409,'Resolve your subscription payment before uploading new files. Existing files remain available.');if(s.used+bytes>s.limit)fail(413,'Company storage is full or this file would exceed the allowance. Ask your administrator to request another 20 GB for $5/month in Company settings. Existing files remain available.');}
  async function handle(req,res,url,user){
   if(!['/api/subscription','/api/subscription/request','/api/platform/storage','/api/platform/storage/decide','/api/platform/subscription-invoice'].includes(url.pathname))return false;
   if(!user)fail(401,'Please sign in.');if(user.role!=='admin')fail(403,'Administrator access required.');

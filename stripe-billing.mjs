@@ -1,4 +1,4 @@
-import {PLANS,ADDONS,subscriptionQuote} from './stripe-plans.mjs';
+import {PLANS,ADDONS,subscriptionQuote,GOOD_STANDING,CHECKOUT_SETTLED} from './stripe-plans.mjs';
 import {createStripeClient} from './stripe-client.mjs';
 
 // Stripe is the source of payment truth. Redirect query parameters never grant access.
@@ -26,7 +26,7 @@ export function createStripeBilling({get,all,run,transaction,id,now,fail,json,bo
     if(session.livemode!==true)throw Error('Live billing cannot accept a test checkout.');
     if(session.client_reference_id!==org || session.metadata?.attempt_id!==attempt.id || session.mode!=='subscription')throw Error('Checkout ownership mismatch.');
     if(session.status==='expired'){await run("UPDATE stripe_checkout_attempts SET status='expired' WHERE id=?",attempt.id);return;}
-    if(session.status!=='complete' || session.payment_status!=='paid')return;
+    if(session.status!=='complete' || !CHECKOUT_SETTLED.includes(session.payment_status))return;
     const sid=typeof session.subscription==='string'?session.subscription:session.subscription?.id,cid=typeof session.customer==='string'?session.customer:session.customer?.id;
     if(!sid||!cid)throw Error('Incomplete Stripe subscription.');
     await transaction(async()=>{const old=await get('SELECT * FROM stripe_billing WHERE organization_id=?',org);if(old?.subscription_id&&old.subscription_id!==sid)throw Error('Duplicate subscription requires review.');await run("INSERT INTO stripe_billing(organization_id,customer_id,subscription_id,status) VALUES(?,?,?,'pending') ON CONFLICT(organization_id) DO UPDATE SET customer_id=excluded.customer_id,subscription_id=excluded.subscription_id",org,cid,sid);await run("UPDATE stripe_checkout_attempts SET status='complete' WHERE id=?",attempt.id);});
@@ -37,13 +37,13 @@ export function createStripeBilling({get,all,run,transaction,id,now,fail,json,bo
    if(sub.metadata?.organization_id!==org || (typeof sub.customer==='string'?sub.customer:sub.customer?.id)!==record.customer_id)throw Error('Subscription ownership mismatch.');
    const q=parseSubscription(sub),paid=sub.latest_invoice?.status==='paid';
    await transaction(async()=>{
-    if(sub.status==='active'&&paid)await run('UPDATE stripe_billing SET plan=?,extra_seats=?,storage_packs=?,status=?,verified_at=?,last_error=NULL WHERE organization_id=?',q.plan,q.extraSeats,q.storagePacks,sub.status,now(),org);
+    if((sub.status==='active'&&paid)||sub.status==='trialing')await run('UPDATE stripe_billing SET plan=?,extra_seats=?,storage_packs=?,status=?,verified_at=?,last_error=NULL WHERE organization_id=?',q.plan,q.extraSeats,q.storagePacks,sub.status,now(),org);
     else await run('UPDATE stripe_billing SET status=?,verified_at=?,last_error=NULL WHERE organization_id=?',sub.status==='active'?'payment_pending':sub.status,now(),org);
    });
   })();busy.set(org,task);try{await task;}finally{busy.delete(org);}
  }
  async function state(org){const row=await get('SELECT * FROM stripe_billing WHERE organization_id=?',org);return {enabled:enabled(),status:row?.status||'not_subscribed',plan:row?.plan||null,extraSeats:row?.extra_seats||0,storagePacks:row?.storage_packs||0,verifiedAt:row?.verified_at||null,connected:!!row?.subscription_id,quote:row?.plan?subscriptionQuote(row.plan,row.extra_seats,row.storage_packs):null,usage:await usage(org)};}
- async function assertCapacity(org,kind,increment=1){const row=await get('SELECT * FROM stripe_billing WHERE organization_id=?',org);if(!row?.subscription_id)return;if(row.status!=='active')fail(409,'Resolve your subscription payment in Company settings before adding records. Existing records remain available.');if(!row.plan)fail(409,'Subscription activation is pending.');const q=subscriptionQuote(row.plan,row.extra_seats,row.storage_packs),u=await usage(org);if(u[kind]+increment>q[kind])fail(409,'Your subscription allowance is full. Contact sales@estateaegis.com to confirm an upgrade before adding more '+kind+'.');}
+ async function assertCapacity(org,kind,increment=1){const row=await get('SELECT * FROM stripe_billing WHERE organization_id=?',org);if(!row?.subscription_id)return;if(!GOOD_STANDING.includes(row.status))fail(409,'Resolve your subscription payment in Company settings before adding records. Existing records remain available.');if(!row.plan)fail(409,'Subscription activation is pending.');const q=subscriptionQuote(row.plan,row.extra_seats,row.storage_packs),u=await usage(org);if(u[kind]+increment>q[kind])fail(409,'Your subscription allowance is full. Contact sales@estateaegis.com to confirm an upgrade before adding more '+kind+'.');}
  async function handle(req,res,url,user){
   if(!url.pathname.startsWith('/api/billing/'))return false;
   if(!user)fail(401,'Please sign in.');if(user.role!=='admin')fail(403,'Administrator access required.');const org=user.organization_id;
