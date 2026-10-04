@@ -57,12 +57,12 @@ test('menu structure: flat headings in the mockup style, short client and vendor
  assert.equal(m.subtitle,'Admin workspace');
  assert.deepEqual(titles('admin'),[
   'Daily work: Visits & inspections, Daily route, Calendar, Work orders, Requests, Arrival preparation, Storm board, Client approvals',
-  'Residences: Residences, Client families, Documents, Assets, Maintenance',
+  'Residences: Residences, Insurance compliance, Client families, Documents, Assets, Maintenance',
   'Team: Staff, Staff schedules, Vendors, Team & access',
   'Company: Company settings, Checklist templates, Schedules & automation, Billing, Email activity, Audit history']);
  assert.deepEqual(titles('employee'),[
   'Daily work: Visits & inspections, Daily route, Calendar, Work orders, Requests, Arrival preparation, Storm board',
-  'Residences: Residences, Documents, Assets, Maintenance',
+  'Residences: Residences, Insurance compliance, Documents, Assets, Maintenance',
   'Team: Staff schedules']);
  assert.deepEqual(titles('client'),['Your home: My residences, Inspection reports, Service updates, Requests, Documents','Plans: Arrivals, Shopping list, Calendar, Approvals']);
  assert.deepEqual(titles('vendor'),['Your work: My jobs, Residences']);

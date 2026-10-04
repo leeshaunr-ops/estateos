@@ -67,6 +67,8 @@ before(async()=>{if(skip)return;await start();const admin=client();
  await admin('staff/schedule',{staffId:id('staff@example.test'),title:'Storm shutters up',startsAt:new Date(day(1)+'T09:00').toISOString(),endsAt:new Date(day(1)+'T11:00').toISOString(),propertyId:home.id},200);
  await admin('work',{propertyId:loft.id,title:'Clear the dock drains',priority:'Normal',dueDate:day(2)},201);
  await admin('work',{propertyId:loft.id,title:'Rinse the pool deck',priority:'Normal',dueDate:day(3)},201);
+ // Insurance compliance: Ocean House has a 7-day unoccupancy rule and nothing scheduled, so it is At risk; the family may share the certificate.
+ await admin('insurance/'+home.id,{carrier:'Example Mutual',policy_number:'EM-1001',renewal_date:day(20),inspect_every_days:7,devices:[{key:'water_shutoff',required:true,installed:true}],client_share:true});
 });
 after(async()=>{if(proc&&!proc.killed){proc.kill();await new Promise(r=>proc.once('exit',r));}rmSync(dir,{recursive:true,force:true});});
 
@@ -252,7 +254,7 @@ async function residenceChecks(page,role,name,expect,done){
  assert.equal(r.title,name,`${role}: residence title`);assert.equal(r.wide,false,`${role}: residence page fits the screen`);
  if(expect.tabs===null){assert.equal(r.tabs,null,`${role}: no lone tab strip`);done.push('residence');return;}
  assert.deepEqual(r.tabs,expect.tabs,`${role}: residence sections`);assert.equal(r.overflow,false,`${role}: sections wrap instead of scrolling`);
- assert.equal(r.facts,5,`${role}: facts strip`);assert.equal(r.closed,0,`${role}: nothing hidden behind closed toggles`);
+ assert.equal(r.facts,expect.facts||5,`${role}: facts strip`);assert.equal(r.closed,0,`${role}: nothing hidden behind closed toggles`);
  for(const p of expect.panels)assert.ok(r.panels.includes(p),`${role}: Summary shows ${p} (got ${r.panels.join(', ')})`);
  if(expect.alias){await page.evaluate(([t])=>action('tab',t),[expect.alias[0]]);await settle(page);
   assert.equal(await page.locator('.content .res-tabs button.active').getAttribute('data-id'),expect.alias[1],`${role}: old tab ${expect.alias[0]} opens ${expect.alias[1]}`);}
@@ -406,6 +408,31 @@ async function inspectionChecks(page,role,mobile,done){
  if(r.roomsLeft!==null){assert.ok(r.roomsLeft<40,`${role}: Room-by-room checks heading is left-aligned (${r.roomsLeft}px)`);assert.notEqual(r.align,'right');assert.notEqual(r.align,'center');}
  done.push('inspection-fill-in');
 }
+// Insurance compliance: the Residences page, sorting and filters, and the Home records section it links to.
+async function insuranceChecks(page,role,mobile,done){
+ const rowsOf=()=>page.evaluate(()=>[...document.querySelectorAll('.content .ins-list tbody tr')].map(r=>r.innerText.replace(/\s+/g,' ')));
+ if(role!=='client'){
+  await go(page,'insurance');assert.equal(await page.locator('.content .page-title').innerText(),'Insurance compliance',`${role}: insurance page title`);
+  let rows=await rowsOf();
+  assert.ok(rows.some(r=>/Ocean House/.test(r)&&/At risk/.test(r)),`${role}: Ocean House is at risk (got ${rows.join(' | ')})`);
+  if(role==='admin'){assert.ok(rows.some(r=>/Bay Cottage/.test(r)&&/Not set up/.test(r)),'admin: homes without a policy say Not set up');
+   assert.match(rows[0],/Ocean House/,'admin: most urgent first');
+   if(mobile)await page.locator('.content .ins-sort-mobile .chip[data-id="name"]').click();else await page.locator('.content .ins-list th button[data-id="name"]').click();await settle(page);
+   rows=await rowsOf();assert.match(rows[0],/Bay Cottage/,'admin: sorted by name');
+   if(!mobile)assert.equal(await page.locator('.content .ins-list th[aria-sort="ascending"]').count(),1,'admin: the sorted column is announced');
+   await page.locator('.content .ins-chips .chip[data-id="at_risk"]').click();await settle(page);rows=await rowsOf();assert.equal(rows.length,1,'admin: status filter');
+   await page.locator('.content .ins-chips .chip[data-id=""]').click();await settle(page);}
+  else assert.deepEqual(rows.map(r=>/Ocean House/.test(r)),[true],`${role}: staff see only the residences they look after`);
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${role}: insurance page fits the screen`);
+  await page.locator('.content .ins-list .ins-name',{hasText:'Ocean House'}).click();await settle(page);
+ }else{await go(page,'properties');await page.evaluate(()=>action('insurance-open',data.properties.find(p=>p.name==='Ocean House').id));await settle(page);}
+ const sec=await page.evaluate(()=>{const s=document.getElementById('res-insurance');return s?{text:s.innerText,edit:!!s.querySelector('[data-action="insurance-edit"]'),cert:!!s.querySelector('a[href*="certificate.pdf"]'),share:!!s.querySelector('[data-action="insurance-share"]')}:null;});
+ assert.ok(sec,`${role}: Home records has the insurance section`);
+ assert.match(sec.text,/Example Mutual/);assert.match(sec.text,/EM-1001/);assert.match(sec.text,/Inspect at least every 7 days/i);assert.doesNotMatch(sec.text,MACHINE_DATE,`${role}: readable dates`);
+ assert.equal(sec.edit,role==='admin',`${role}: only admins edit`);assert.equal(sec.cert,true,`${role}: certificate download`);assert.equal(sec.share,role!=='employee',`${role}: share links for admins and allowed families`);
+ assert.equal(await page.locator('.content .res-tabs button.active').getAttribute('data-id'),'records');
+ done.push('insurance');
+}
 // Smart locks: the admin reveals the job's door code (audited) and sees the residence's locks and the settings panel;
 // the vendor sees the code is coming but cannot reveal it before the window; the family never sees door access.
 async function lockChecks(page,role,done){
@@ -425,7 +452,7 @@ async function lockChecks(page,role,done){
 const PAGE_CHECKS={
  admin:async(page,mobile,done)=>{
   await headerChecks(page,mobile,'admin',['properties','work','inspections','requests','maintenance','documents','assets','audit','billing','messages','notifications','storm'],done);
-  await residenceChecks(page,'admin','Ocean House',{tabs:['overview','inspections','services','arrivals','records','people','notes'],panels:['Needs attention here','Visits','Work orders','Owners & family','Next arrival','Home records','Latest note'],alias:['assets','records']},done);
+  await residenceChecks(page,'admin','Ocean House',{facts:6,tabs:['overview','inspections','services','arrivals','records','people','notes'],panels:['Needs attention here','Visits','Work orders','Owners & family','Next arrival','Home records','Latest note'],alias:['assets','records']},done);
   if(!await page.evaluate(()=>data.assets.length))await emptyCheck(page,'admin','assets',/No assets yet/,'new-asset');await emptyCheck(page,'admin','documents',/No documents yet/,'new-document');await emptyCheck(page,'admin','billing',/No invoices yet/,'');done.push('empty-states');
   assert.equal(await page.locator('aside [data-id="platform"]').count(),0,'admin: no duplicate Platform Administration item');
   for(const id of ['arrivals','calendar']){const t=await go(page,id);assert.doesNotMatch(t,MACHINE_DATE,`admin: ${id} has no machine dates`);done.push(id);}
@@ -469,9 +496,11 @@ const PAGE_CHECKS={
   await inboxChecks(page,'admin',{subject:'Ocean House gate',preview:'side gate latch'},done);
   await inspectionChecks(page,'admin',mobile,done);
   await calendarChecks(page,'admin',{arrival:'Owners arrive',chips:['Everything','Visits','Arrivals','Work','Shifts']},done);
+  await insuranceChecks(page,'admin',mobile,done);
   await lockChecks(page,'admin',done);
  },
  employee:async(page,mobile,done)=>{
+  await insuranceChecks(page,'employee',mobile,done);
   await scheduleChecks(page,'employee',mobile,done);
   await requestServiceCheck(page,'employee',done);
  },
@@ -495,7 +524,8 @@ const PAGE_CHECKS={
   await headerChecks(page,mobile,'client',['properties','work','inspections','requests','documents','messages','notifications'],done);
   await emptyCheck(page,'client','documents',/No documents yet/,'');
   await workChecks(page,'client',{chips:['Open','Needs your approval','Completed'],rows:['Replace pool light'],primary:'Review the estimate'},done);
-  await residenceChecks(page,'client','Ocean House',{tabs:['overview','inspections','services','arrivals','records','people'],panels:['Needs attention here','Visits','Service updates','Owners & family','Next arrival','Home records'],alias:['shopping','arrivals']},done);
+  await residenceChecks(page,'client','Ocean House',{facts:6,tabs:['overview','inspections','services','arrivals','records','people'],panels:['Needs attention here','Visits','Service updates','Owners & family','Next arrival','Home records'],alias:['shopping','arrivals']},done);
+  await insuranceChecks(page,'client',mobile,done);
   // Batch 2 wording: written for the family, not for staff.
   const home=await go(page,'dashboard');assert.match(await page.locator('.content .page-title').innerText(),/^Good (morning|afternoon|evening)/,'client: home greets the family');
   assert.equal(await page.locator('details.action-needed').evaluate(d=>d.open),true,'client: Action needed starts open');assert.doesNotMatch(home,/\b1 work orders\b/,'client: singular work order');

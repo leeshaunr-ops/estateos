@@ -8,7 +8,7 @@
   const nav=[['dashboard','Overview'],['messages','Messages'+(unreadMessages?' ('+unreadMessages+')':'')],['properties',role==='client'?'My residences':'Residences'],['work',role==='vendor'?'My jobs':'Work orders']];
   if(role==='client')nav.push(['shopping','Shopping list']);
   if(role!=='vendor')nav.push(['inspections','Inspection reports'],['requests','Service requests'],['arrivals','Arrival preparation'],['calendar','Calendar'],['documents','Documents']);
-  if(staff)nav.push(['maintenance','Maintenance'],['assets','Assets'],['routes','Daily route'],['storm','Storms']);
+  if(staff)nav.push(['maintenance','Maintenance'],['assets','Assets'],['routes','Daily route'],['storm','Storms'],['insurance','Insurance compliance']);
   // No 'platform' item: it only repeated Billing. Platform owners get the Platform console link in the sidebar footer.
   if(staff)nav.push(['staff-schedules','Staff schedules']);
   if(role==='admin')nav.push(['staff','Staff'],['workspace','Company settings'],['clients','Client families'],['vendors','Vendors'],['billing','Billing'],['users','Team & access'],['audit','Audit history']);
@@ -23,7 +23,7 @@
  const TOP=['dashboard','messages','notifications'];
  const SECTIONS={
   staff:[['Daily work',['inspections','routes','calendar','work','requests','arrivals','storm','approvals']],
-   ['Residences',['properties','clients','documents','assets','maintenance']],
+   ['Residences',['properties','insurance','clients','documents','assets','maintenance']],
    ['Team',['staff','staff-schedules','vendors','users']],
    ['Company',['workspace','checklist-templates','automation','billing','email-activity','audit','platform','platform-owner']]],
   client:[['Your home',['properties','inspections','work','requests','documents']],
