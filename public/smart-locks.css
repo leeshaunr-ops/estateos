@@ -1,0 +1,25 @@
+/* Smart-lock access windows. Existing palette (wine accent, warm neutrals, white cards); 44px tap targets; nothing
+   scrolls inside a box. */
+.sl-door{margin-top:16px}
+.sl-door-head{display:flex;flex-direction:column;gap:2px;margin-bottom:8px}
+.sl-door-head h2{margin:0;font-size:17px;color:#1f2933}
+.sl-door-head small,.sl-code-head small{color:#5f6b76;font-size:13px;line-height:1.45}
+.sl-door-inline{border-top:1px solid #e2e7eb;padding-top:14px;margin-top:14px}
+.sl-code-row{border-top:1px solid #eef1f3;padding:12px 0}
+.sl-code-row:first-of-type{border-top:0}
+.sl-code-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.sl-code-head>div{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 220px}
+.sl-code-head strong{color:#1f2933;font-size:15px}
+.sl-note{margin:8px 0 0;color:#5f6b76;line-height:1.5}
+.sl-error{color:#9b1c1c}
+.sl-actions{margin-top:10px}
+.sl-actions button,.sl-actions .more-toggle,.sl-res .actions button{min-height:44px}
+.sl-code{display:flex;flex-direction:column;gap:4px;margin-top:10px;padding:14px 16px;border:1px solid #ecc9c4;border-left:5px solid var(--refresh-wine,#7e202b);border-radius:10px;background:#fdf6f5}
+.sl-code-label{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#7e202b;font-weight:700}
+.sl-code-digits{font-family:Georgia,"Times New Roman",serif;font-size:34px;font-weight:400;letter-spacing:.12em;color:#1f2933;line-height:1.2;word-break:break-all}
+.sl-code small{color:#5f6b76}
+.sl-work .sl-entries{margin-top:12px}
+.sl-res{margin-bottom:22px}
+.sl-sub{font-size:15px;margin:14px 0 8px;color:#1f2933}
+@media (max-width:640px){.sl-code-digits{font-size:30px}.sl-actions{display:flex;flex-wrap:wrap;gap:8px}.sl-actions button{flex:1 1 auto}}
+.sl-help{color:#5f6b76;margin:0;line-height:1.5}
