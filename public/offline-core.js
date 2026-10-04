@@ -155,7 +155,7 @@
     const blob=await store.getBlob(op.opId);
     if(!blob){await fail(op,'failed','The photo is missing from this device.',false);return {status:-1};}
     const where=op.payload.captureLatitude!=null&&op.payload.captureLongitude!=null?{captureLatitude:op.payload.captureLatitude,captureLongitude:op.payload.captureLongitude,captureAccuracy:op.payload.captureAccuracy??null}:{};
-    const r=await send('POST','/api/files',{propertyId:op.payload.propertyId,inspectionId:op.inspectionId,name:op.payload.name,capturedAt:op.payload.capturedAt,...where,clientOpId:op.opId,base64:await encode(blob)},op.opId);
+    const r=await send('POST','/api/files',{propertyId:op.payload.propertyId,inspectionId:op.inspectionId,name:op.payload.name,capturedAt:op.payload.capturedAt,...where,clientOpId:op.opId,...(op.payload.spotId?{spotId:op.payload.spotId}:{}),base64:await encode(blob)},op.opId);
     if(classify(r.status)!=='ok')return r;
     await store.updateDraft(op.inspectionId,d=>{if(!d)return null;const photo=(d.photos||[]).find(p=>p.opId===op.opId);if(photo){photo.fileId=r.body.id;photo.uploadedAt=new Date(now()).toISOString();}return d;});
     await store.deleteBlob(op.opId);await done(op);return r;

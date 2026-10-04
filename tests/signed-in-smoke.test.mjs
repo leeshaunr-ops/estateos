@@ -11,7 +11,7 @@
 import {test,after,before} from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
-import {mkdtempSync,rmSync,existsSync} from 'node:fs';
+import {mkdtempSync,rmSync,existsSync,readFileSync} from 'node:fs';
 import {randomBytes,randomUUID} from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
@@ -72,6 +72,10 @@ before(async()=>{if(skip)return;await start();const admin=client();
  await admin('work',{propertyId:loft.id,title:'Rinse the pool deck',priority:'Normal',dueDate:day(3)},201);
  // Insurance compliance: Ocean House has a 7-day unoccupancy rule and nothing scheduled, so it is At risk; the family may share the certificate.
  await admin('insurance/'+home.id,{carrier:'Example Mutual',policy_number:'EM-1001',renewal_date:day(20),inspect_every_days:7,devices:[{key:'water_shutoff',required:true,installed:true}],client_share:true});
+ // Photo spots: Ocean House has one spot with a baseline and one still waiting for its first photo.
+ const sink=(await admin('photo-spots',{propertyId:home.id,name:'Kitchen sink cabinet',location:'Kitchen',notes:'Door open, from the left.'},201)).id;
+ await admin('photo-spots',{propertyId:home.id,name:'Water heater',location:'Garage'},201);
+ await admin('files',{propertyId:home.id,name:'kitchen-baseline.jpg',base64:readFileSync(path.join(root,'tests/fixture.jpg')).toString('base64'),spotId:sink},201);
 });
 after(async()=>{if(proc&&!proc.killed){proc.kill();await new Promise(r=>proc.once('exit',r));}rmSync(dir,{recursive:true,force:true});});
 
@@ -436,6 +440,26 @@ async function insuranceChecks(page,role,mobile,done){
  assert.equal(await page.locator('.content .res-tabs button.active').getAttribute('data-id'),'records');
  done.push('insurance');
 }
+// Photo spots: Home records lists the spots (staff can add, only admins see Archive; the family sees no staff notes
+// or edit controls), and the draft visit shows the Photo spots panel with Take photo.
+async function photoSpotChecks(page,role,mobile,done){
+ await go(page,'properties');await page.evaluate(()=>{action('property',data.properties.find(p=>p.name==='Ocean House').id);});await settle(page);await page.evaluate(()=>{tab='records';render();});await settle(page);
+ const sec=await page.evaluate(()=>{const s=document.getElementById('res-photo-spots');return s?{text:s.innerText,cards:s.querySelectorAll('.ps-card').length,add:!!s.querySelector('[data-action="spot-new"]'),archive:!!s.querySelector('[data-action="spot-archive"]'),img:!!s.querySelector('img.ps-thumb, .ps-thumb img')}:null;});
+ assert.ok(sec,`${role}: Home records has Photo spots`);
+ assert.match(sec.text,/Kitchen sink cabinet[\s\S]*Water heater/,`${role}: spots listed by name`);assert.doesNotMatch(sec.text,MACHINE_DATE,`${role}: readable dates`);
+ assert.equal(sec.add,role!=='client',`${role}: staff add spots`);assert.equal(sec.archive,role==='admin',`${role}: only admins archive`);
+ if(role==='client')assert.doesNotMatch(sec.text,/Door open, from the left/,'client: staff notes stay internal');else assert.match(sec.text,/Door open, from the left/,`${role}: staff see the shooting notes`);
+ await page.locator('#res-photo-spots [data-action="spot-timeline"]').first().click();await settle(page);
+ assert.match(await page.locator('#res-photo-spots .ps-tl-wrap').first().innerText(),/Baseline/,`${role}: the timeline shows the baseline`);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${role}: photo spots fit the screen`);
+ if(role!=='client'){
+  await page.evaluate(id=>action('inspection',id),draftId);await settle(page);
+  const panel=await page.evaluate(()=>{const s=document.getElementById('ps-visit');return s?{rows:s.querySelectorAll('.ps-visit-row').length,take:s.querySelectorAll('[data-action="spot-capture"]').length,text:s.innerText}:null;});
+  assert.ok(panel,`${role}: the draft visit has the Photo spots panel`);assert.equal(panel.rows,2);assert.equal(panel.take,2,`${role}: Take photo for each spot`);
+  assert.match(panel.text,/No baseline yet/,`${role}: a spot without a baseline says so`);
+ }
+ done.push('photo-spots');
+}
 // Smart locks: the admin reveals the job's door code (audited) and sees the residence's locks and the settings panel;
 // the vendor sees the code is coming but cannot reveal it before the window; the family never sees door access.
 async function lockChecks(page,role,done){
@@ -516,11 +540,13 @@ const PAGE_CHECKS={
   await inspectionChecks(page,'admin',mobile,done);
   await calendarChecks(page,'admin',{arrival:'Owners arrive',chips:['Everything','Visits','Arrivals','Work','Shifts']},done);
   await insuranceChecks(page,'admin',mobile,done);
+  await photoSpotChecks(page,'admin',mobile,done);
   await lockChecks(page,'admin',done);
   await flightChecks(page,'admin',done);
  },
  employee:async(page,mobile,done)=>{
   await insuranceChecks(page,'employee',mobile,done);
+  await photoSpotChecks(page,'employee',mobile,done);
   await scheduleChecks(page,'employee',mobile,done);
   await requestServiceCheck(page,'employee',done);
  },
@@ -547,6 +573,7 @@ const PAGE_CHECKS={
   await workChecks(page,'client',{chips:['Open','Needs your approval','Completed'],rows:['Replace pool light'],primary:'Review the estimate'},done);
   await residenceChecks(page,'client','Ocean House',{facts:6,tabs:['overview','inspections','services','arrivals','records','people'],panels:['Needs attention here','Visits','Service updates','Owners & family','Next arrival','Home records'],alias:['shopping','arrivals']},done);
   await insuranceChecks(page,'client',mobile,done);
+  await photoSpotChecks(page,'client',mobile,done);
   // Batch 2 wording: written for the family, not for staff.
   const home=await go(page,'dashboard');assert.match(await page.locator('.content .page-title').innerText(),/^Good (morning|afternoon|evening)/,'client: home greets the family');
   assert.equal(await page.locator('details.action-needed').evaluate(d=>d.open),true,'client: Action needed starts open');assert.doesNotMatch(home,/\b1 work orders\b/,'client: singular work order');
