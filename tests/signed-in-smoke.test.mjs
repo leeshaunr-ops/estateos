@@ -52,7 +52,10 @@ before(async()=>{if(skip)return;await start();const admin=client();
  const cottage=await admin('properties',{clientId:fam.id,name:'Bay Cottage',streetAddress:'9 Bay Rd',city:'Stuart',state:'FL',postalCode:'34994',country:'United States'},201);
  await family('requests',{propertyId:cottage.id,title:'Check the dock lights',description:'',priority:'Normal'},201);
  await family('requests',{propertyId:home.id,title:'Stock the fridge',description:'Sparkling water.',priority:'Normal'},201);
- await family('arrivals',{propertyId:home.id,arrivalAt:day(5)+'T15:00',notes:'Arriving with grandchildren.'},201);
+ const arrival=await family('arrivals',{propertyId:home.id,arrivalAt:day(5)+'T15:00',notes:'Arriving with grandchildren.'},201);
+ // Flight-aware arrival: the family adds their flight (manual mode: no flight service in tests); staff add the suggested timed plan.
+ await family('flights/add',{arrivalId:arrival.id,airline:'DL',flightNumber:'1287',date:day(5),scheduledAt:day(5)+'T13:00'});
+ await staff('flights/tasks/suggested',{arrivalId:arrival.id});
  const job=(await admin('data')).work.find(w=>w.title==='Replace pool light');
  await admin('operations/approval',{workId:job.id,amountMinor:12500,description:'New pool light fixture and labor.'},200);
  // Batch 3a: a third home where the vendor has a job, so the vendor can open a residence.
@@ -422,6 +425,22 @@ async function lockChecks(page,role,done){
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'admin: settings fit the screen');
  done.push('smart-locks');
 }
+// Flight-aware arrivals: the arrival shows the flight and the timed plan (staff) or the flight and progress (family);
+// arrival cards carry the flight status; settings show the flight connection; vendors never see arrivals.
+async function flightChecks(page,role,done){
+ if(role==='vendor'){assert.deepEqual(await page.evaluate(()=>data.flights?.flights||[]),[],'vendor: no flights');done.push('flights');return;}
+ const list=await go(page,'arrivals');assert.match(list,/DL1287 · On time · lands 1:00 PM/,`${role}: arrival card shows the flight status`);
+ await page.evaluate(()=>action('arrival-open',data.arrivals[0].id));await settle(page);
+ const panels=await page.locator('.fl-panel').allInnerTexts();
+ assert.match(panels[0],/Flights[\s\S]*DL1287[\s\S]*Lands .*1:00 PM/,`${role}: flight on the arrival`);
+ assert.match(panels[1]||'',/Arrival plan[\s\S]*Turn on air conditioning or heat[\s\S]*4 h before landing[\s\S]*Driver waiting at the airport[\s\S]*At landing/,`${role}: timed plan`);
+ assert.doesNotMatch(panels.join(' '),/\d{4}-\d{2}-\d{2}T/,`${role}: no machine dates`);
+ if(role==='client'){assert.match(await mainText(page),/Preparing your residence[\s\S]*\d+ of \d+ checklist items done/,'client: preparation progress');assert.equal(await page.locator('[data-action="fl-task-done"]').count(),0,'client: cannot tick the plan');}
+ else{assert.equal(await page.locator('[data-action="fl-task-done"]').count(),3,'admin: plan can be ticked');
+  assert.match(await go(page,'workspace'),/Flight tracking[\s\S]*Manual updates/,'admin: settings show the flight connection');}
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${role}: fits the screen`);
+ done.push('flights');
+}
 const PAGE_CHECKS={
  admin:async(page,mobile,done)=>{
   await headerChecks(page,mobile,'admin',['properties','work','inspections','requests','maintenance','documents','assets','audit','billing','messages','notifications','storm'],done);
@@ -470,6 +489,7 @@ const PAGE_CHECKS={
   await inspectionChecks(page,'admin',mobile,done);
   await calendarChecks(page,'admin',{arrival:'Owners arrive',chips:['Everything','Visits','Arrivals','Work','Shifts']},done);
   await lockChecks(page,'admin',done);
+  await flightChecks(page,'admin',done);
  },
  employee:async(page,mobile,done)=>{
   await scheduleChecks(page,'employee',mobile,done);
@@ -490,6 +510,7 @@ const PAGE_CHECKS={
   await workChecks(page,'vendor',{chips:['Open','Completed'],rows:['Service the pool pump'],primary:'Start work'},done);
   assert.match(await go(page,'messages'),/company that sends you jobs/,'vendor: messages subtitle for vendors');done.push('wording');
   await lockChecks(page,'vendor',done);
+  await flightChecks(page,'vendor',done);
  },
  client:async(page,mobile,done)=>{
   await headerChecks(page,mobile,'client',['properties','work','inspections','requests','documents','messages','notifications'],done);
@@ -509,6 +530,7 @@ const PAGE_CHECKS={
   await calendarChecks(page,'client',{arrival:'You arrive',chips:['Everything','Visits','Arrivals','Service']},done);
   await requestServiceCheck(page,'client',done);
   await lockChecks(page,'client',done);
+  await flightChecks(page,'client',done);
  }
 };
 async function pageJourney(launch,contextOptions,role,email){
