@@ -191,7 +191,7 @@ for(const [label,envFor] of engines)test('server on '+label+': inspectors reach 
   await srv.stop();await srv.start({ESTATEOS_PLATFORM_OWNER_ID:setup.user.id});
   await admin.req('login',{email:'jordan@example.test',password:pw});
   const fam=await admin.req('clients',{name:'Sample Ocean family',email:'family-private@example.test'},201);
-  const home=async name=>(await admin.req('properties',{clientId:fam.id,name,streetAddress:'1 '+name+' Dr',city:'Stuart',state:'FL',postalCode:'34996',country:'United States',timezone:'America/New_York'},201)).id;
+  const home=async name=>(await admin.req('properties',{clientId:fam.id,name,streetAddress:'1 '+name+' Dr',city:'Stuart',state:'FL',postalCode:'34996',country:'United States',timezone:'America/New_York',roomProfile:{rooms:[{key:'primary',name:'Primary suite',assignment:'Owner',assignedName:'Private Owner Name'}]}},201)).id;
   const A=await home('Ocean Palm Residence'),B=await home('Private Unassigned Estate'),C=await home('Seagrape Cottage');
   for(const p of [A,B,C])await admin.req('access-codes/save',{propertyId:p,version:0,details:{gate:'1234',door:'5678',alarm:'9012',lockbox:'',instructions:'Side door'}});
   const accept=async(c,role,email,name)=>{const inv=await admin.req('invitations',{role,email},201);return (await c.req('accept-invite',{token:tokenOf(inv),name,password:pw},201)).user;};
@@ -230,7 +230,8 @@ for(const [label,envFor] of engines)test('server on '+label+': inspectors reach 
   assert.deepEqual(d.properties.map(p=>p.id).sort(),[A,C].sort());
   for(const k of ['clients','users','invoices','work','requests','notes','audit','vendors','invitations','assets','arrivals','maintenance','shopping','checklists'])assert.deepEqual(d[k],[],k+' is empty');
   for(const p of d.properties)for(const k of ['client_id','client_name','client_profile','manual','account_manager_id','account_manager_name','inspection_report_email'])assert.ok(!(k in p),'residence field '+k+' hidden');
-  for(const w of ['Sample Ocean family','family-private@example.test','Private Unassigned Estate','Riley Brooks','Taylor Staff','Gulf Breeze','Rival',vRiley,vStaff,adminDoc.id,staffPhoto.id,'1234','5678'])assert.ok(!S.includes(w),'inspector /api/data never includes '+w);
+  assert.ok(d.properties.every(p=>JSON.parse(p.room_profile).rooms.some(r=>r.name==='Primary suite')),'room list kept for the checklist');
+  for(const w of ['Private Owner Name','Sample Ocean family','family-private@example.test','Private Unassigned Estate','Riley Brooks','Taylor Staff','Gulf Breeze','Rival',vRiley,vStaff,adminDoc.id,staffPhoto.id,'1234','5678'])assert.ok(!S.includes(w),'inspector /api/data never includes '+w);
   assert.ok(d.inspections.every(i=>Array.isArray(i.answers)&&i.answers.length&&!('report_email' in i)),'checklist answers present, report recipient hidden');
   assert.ok(d.notifications.length===0||d.notifications.every(n=>n),'notifications list is present');
   const notes=await sam.req('notifications');assert.ok(JSON.stringify(notes).includes('Visit assigned: Ocean Palm Residence'),'the inspector is notified of assignments');
@@ -261,6 +262,7 @@ for(const [label,envFor] of engines)test('server on '+label+': inspectors reach 
   const off=await sam.req('offline/visits?propertyIds='+[A,B,C,R].join(','));
   assert.deepEqual(off.properties.map(p=>p.id).sort(),[A,C].sort(),'offline copies only for assigned residences');
   assert.deepEqual(off.inspections.map(i=>i.id).sort(),[vToday,vLater].sort(),'no other inspector visits and no earlier reports');
+  assert.ok(!JSON.stringify(off).includes('Private Owner Name'),'offline copies hide room assignments');
   assert.ok(off.properties.every(p=>!('client_name' in p)&&!('inspection_report_email' in p)&&!('account_manager_name' in p)));
 
   // Photos: only on their own draft at that residence, stored staff-only.
