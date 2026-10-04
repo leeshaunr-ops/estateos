@@ -1,0 +1,63 @@
+/* Severe-weather alerts. Same palette as storms (wine accent, warm neutrals); level is always shown as text plus an
+   icon, never colour alone. White cards, Georgia headings, 44px tap targets, nothing scrolls inside a box. */
+.wx-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px}
+.wx-tabs button,.wx-banner-actions button,.wx-visit-actions button,.wx-card .actions button,.wx-detail-actions button,.wx-res-monitor button{min-height:44px}
+.wx-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.wx-card{background:#fff;border:1px solid #e2e7eb;border-left:5px solid #b9c2ca;border-radius:12px;padding:16px 18px;margin:0}
+.wx-card-warning{border-left-color:#7e202b}.wx-card-watch{border-left-color:#b7791f}.wx-card-advisory,.wx-card-forecast{border-left-color:#4a6378}
+.wx-card h2,.wx-detail h2,.wx-residences h2,.wx-coverage h2,.wx-about h2,.wx-profile h2,.wx-intro h2{font-family:Georgia,'Times New Roman',serif;font-weight:600;color:#1f2933;margin:8px 0 4px}
+.wx-card-top{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.wx-count{margin:2px 0}
+.wx-pill,.wx-tag,.wx-badge{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;border-radius:999px;font-size:12px;font-weight:700;padding:3px 10px;border:1px solid transparent}
+.wx-pill.wx-warning,.wx-badge.wx-warning{background:#f6e7e4;color:#7e202b;border-color:#ecc9c4}
+.wx-pill.wx-watch,.wx-badge.wx-watch{background:#fdf3e1;color:#7a4d0b;border-color:#f1dcb4}
+.wx-pill.wx-advisory,.wx-pill.wx-forecast,.wx-pill.wx-statement,.wx-badge.wx-advisory,.wx-badge.wx-forecast{background:#eef3f7;color:#2c4a5f;border-color:#d5e0e8}
+.wx-tag{background:#f4f1ea;color:#5f4b32}
+.wx-badges{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+button.wx-badge{min-height:44px;cursor:pointer;font:inherit;font-size:13px;font-weight:700;line-height:1.2;padding:6px 12px}
+button.wx-badge:focus-visible{outline:3px solid #7e202b;outline-offset:2px}
+.wx-banner{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:#fff;border:1px solid #e2e7eb;border-left:5px solid #7e202b;border-radius:12px;padding:14px 16px;margin:0 0 16px;color:#1f2933}
+.wx-banner.wx-watch{border-left-color:#b7791f}.wx-banner.wx-advisory,.wx-banner.wx-forecast{border-left-color:#4a6378}
+.wx-banner h2{font-family:Georgia,'Times New Roman',serif;font-size:17px;margin:0 0 2px;color:#1f2933}
+.wx-banner p{margin:0;color:#4b5563}
+.wx-banner-text{flex:1 1 260px;min-width:0;line-height:1.45}
+.wx-banner-actions,.wx-visit-actions{display:flex;flex-wrap:wrap;gap:8px}
+.wx-icon{font-size:22px;line-height:1;color:#7e202b;flex:0 0 auto}
+.wx-res-banner,.wx-visit-line,.wx-visit-warn,.wx-res-monitor{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#fff;border:1px solid #e2e7eb;border-radius:12px;padding:12px 14px;margin:0 0 14px}
+.wx-res-banner>div,.wx-visit-line>div:not(.wx-visit-actions){flex:1 1 240px;min-width:0}
+.wx-res-monitor span{flex:1 1 240px}
+.wx-visit-warn{border-left:5px solid #7e202b;font-weight:700;color:#7e202b}
+.wx-visit-warn button{margin-left:auto;min-height:44px}
+.wx-detail .work-fields{margin-top:12px}
+.wx-detail-actions{display:flex;flex-wrap:wrap;gap:8px}
+.wx-nws{margin-top:14px;border-top:1px solid #e2e7eb;padding-top:10px}
+.wx-nws summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:700;color:#7e202b}
+.wx-pre{white-space:pre-wrap;line-height:1.5}
+.wx-filters{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin:10px 0 6px}
+.wx-filters .field{flex:1 1 200px;margin:0}
+.wx-select-all{display:flex;align-items:center;gap:10px}
+.wx-select-all button{min-height:44px}
+.wx-res{display:flex;align-items:center;gap:12px;border-top:1px solid #eef1f4;padding:8px 0}
+.wx-res-pick{display:flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;cursor:pointer}
+.wx-res-pick input{width:20px;height:20px}
+.wx-res-text{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}
+.wx-res-text button{min-height:44px;text-align:left;justify-content:flex-start}
+.wx-res-forecast{color:#2c4a5f;font-weight:700}
+.wx-res-end{flex:0 0 auto}
+.wx-foot{font-size:13px;margin:6px 0 24px}
+.wx-settings fieldset{border:0;border-top:1px solid #e2e7eb;padding:14px 0 6px;margin:0}
+.wx-settings fieldset:first-of-type{border-top:0;padding-top:0}
+.wx-settings legend{font-family:Georgia,'Times New Roman',serif;font-size:17px;font-weight:600;color:#1f2933;padding:0 0 6px}
+.wx-check{display:flex;gap:10px;align-items:flex-start;min-height:44px;padding:6px 0;cursor:pointer}
+.wx-check input{width:20px;height:20px;margin-top:2px;flex:0 0 auto}
+.wx-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.wx-grid input,.wx-settings input[type=time]{min-height:44px}
+.wx-preview{margin:6px 0 10px;padding:12px 14px;background:#faf9f6;border-left:4px solid #7e202b;border-radius:6px;line-height:1.5}
+.wx-settings-wrap{display:grid;gap:16px}
+.wx-warn{color:#7a4d0b;background:#fdf3e1;border-radius:8px;padding:10px 12px}
+.wx-notices{display:grid;gap:12px;margin:0 0 16px}
+.wx-notice{border-left:5px solid #7e202b;margin:0}
+.wx-notice p{line-height:1.55;margin:6px 0 10px}
+.wx-notice button{min-height:44px}
+.wx-profile select{min-height:44px}
+@media (max-width:640px){.wx-banner{align-items:flex-start}.wx-banner-actions{width:100%}.wx-banner-actions button{flex:1 1 auto}.wx-detail-actions button{flex:1 1 100%}}

@@ -3,12 +3,14 @@
 (function(root){
  'use strict';
  // Every screen a signed-in user can open from the menu, by role. Same rules and order as before the refresh.
- function navFor(user,{unreadMessages=0}={}){
+ function navFor(user,{unreadMessages=0,weather=false}={}){
   const role=user&&user.role,staff=role==='admin'||role==='employee';
   const nav=[['dashboard','Overview'],['messages','Messages'+(unreadMessages?' ('+unreadMessages+')':'')],['properties',role==='client'?'My residences':'Residences'],['work',role==='vendor'?'My jobs':'Work orders']];
   if(role==='client')nav.push(['shopping','Shopping list']);
   if(role!=='vendor')nav.push(['inspections','Inspection reports'],['requests','Service requests'],['arrivals','Arrival preparation'],['calendar','Calendar'],['documents','Documents']);
   if(staff)nav.push(['maintenance','Maintenance'],['assets','Assets'],['routes','Daily route'],['storm','Storms'],['insurance','Insurance compliance']);
+  // Weather appears once the company turns weather alerts on (admins turn it on from Company settings).
+  if(staff&&weather)nav.push(['weather','Weather']);
   // No 'platform' item: it only repeated Billing. Platform owners get the Platform console link in the sidebar footer.
   if(staff)nav.push(['staff-schedules','Staff schedules']);
   if(role==='admin')nav.push(['staff','Staff'],['workspace','Company settings'],['clients','Client families'],['vendors','Vendors'],['billing','Billing'],['users','Team & access'],['audit','Audit history']);
@@ -22,7 +24,7 @@
  }
  const TOP=['dashboard','messages','notifications'];
  const SECTIONS={
-  staff:[['Daily work',['inspections','routes','calendar','work','requests','arrivals','storm','approvals']],
+  staff:[['Daily work',['inspections','routes','calendar','work','requests','arrivals','storm','weather','approvals']],
    ['Residences',['properties','insurance','clients','documents','assets','maintenance']],
    ['Team',['staff','staff-schedules','vendors','users']],
    ['Company',['workspace','checklist-templates','automation','billing','email-activity','audit','platform','platform-owner']]],
