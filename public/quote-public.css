@@ -1,0 +1,77 @@
+/* Public quote request form and quote page: the home watch company's branding on white cards, wine accent,
+   Georgia headings, 44px tap targets. No scrolling boxes; one column on phones. */
+@font-face{font-family:"EA Inter";font-style:normal;font-weight:400 800;font-display:swap;src:url(/fonts/inter-latin-var.woff2) format("woff2")}
+*{box-sizing:border-box}
+html{background:#f6f4f1;color:#1f2933;font-family:"EA Inter",Inter,"Segoe UI",system-ui,sans-serif;font-size:16px;line-height:1.5;-webkit-text-size-adjust:100%}
+body{margin:0;min-height:100vh;display:flex;flex-direction:column}
+a{color:#8b242b}
+a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid #b78432;outline-offset:2px}
+.qp-main{flex:1;width:min(680px,100%);margin:0 auto;padding:32px 20px 12px}
+.qp-loading{color:#5f6b76;text-align:center;padding:40px 0}
+.qp-brand{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;margin:4px 0 20px}
+.qp-logo{max-width:240px;max-height:96px;object-fit:contain;background:#fff;padding:8px 12px;border-radius:12px}
+.qp-mark{display:inline-flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:50%;background:#8b242b;color:#fff;font-family:Georgia,"Times New Roman",serif;font-size:26px;letter-spacing:.02em}
+.qp-company{margin:0;font-family:Georgia,"Times New Roman",serif;font-size:24px;line-height:1.25;color:#1f2933}
+.qp-card{background:#fff;border:1px solid #e6e1da;border-top:4px solid #8b242b;border-radius:14px;padding:24px 26px;margin-bottom:16px;box-shadow:0 3px 14px rgba(40,24,20,.05)}
+.qp-card+.qp-card{border-top:1px solid #e6e1da}
+.qp h1{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:clamp(26px,5vw,32px);line-height:1.2;margin:0 0 6px;color:#1f2933}
+.qp h2{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:21px;margin:0 0 8px}
+.qp-lede{margin:0 0 18px;color:#4d5964}
+.qp-kicker{margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:#8b242b}
+.qp-form{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px}
+.qp-form .full,.qp-group .full{grid-column:1/-1}
+.qp-field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.qp-field label,.qp-group legend{font-weight:600;font-size:15px}
+.qp-req{font-weight:400;color:#6b7680;font-size:13px}
+.qp-field input,.qp-field textarea{font:inherit;width:100%;min-height:48px;padding:11px 13px;border:1px solid #cfd5da;border-radius:10px;background:#fff;color:#1f2933}
+.qp-field textarea{min-height:112px;resize:vertical}
+.qp-field input:focus,.qp-field textarea:focus{border-color:#8b242b}
+.qp-group{border:0;padding:0;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:14px 16px;min-width:0}
+.qp-group legend{padding:0;margin-bottom:8px}
+.qp-pair{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.qp-hint{margin:0;color:#5f6b76;font-size:14px}
+.qp-fine{margin:0;color:#6b7680;font-size:13px}
+.qp-trap{position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden}
+.qp-actions{display:flex}
+.qp-button{font:inherit;font-weight:700;min-height:48px;padding:12px 26px;border:0;border-radius:10px;background:#8b242b;color:#fff;cursor:pointer}
+.qp-button:hover{background:#701c23}
+.qp-button:disabled{opacity:.7;cursor:progress}
+.qp-alert{background:#fbeeee;border:1px solid #e7c4c6;color:#701c23;border-radius:10px;padding:11px 14px;margin:0 0 14px;font-weight:600}
+.qp-message{text-align:center;padding:36px 24px}
+.qp-message p{margin:6px 0 0;color:#4d5964}
+.qp-check{display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:50%;background:#f6e9e8;color:#8b242b;font-size:26px;font-weight:700;margin-bottom:10px}
+.qp-done h1:focus{outline:none}
+.qp-price{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;padding:16px 18px;margin:0 0 16px;background:#faf6f5;border:1px solid #efe2e0;border-radius:12px}
+.qp-amount{font-family:Georgia,"Times New Roman",serif;font-size:38px;line-height:1;color:#8b242b}
+.qp-per{color:#4d5964;font-weight:600}
+.qp-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 18px;margin:0 0 6px}
+.qp-facts dt{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#6b7680;font-weight:700}
+.qp-facts dd{margin:2px 0 0;font-weight:600}
+.qp-sub{margin-top:18px!important}
+.qp-items{list-style:none;margin:0;padding:0}
+.qp-items li{display:flex;justify-content:space-between;gap:14px;padding:11px 0;border-top:1px solid #efebe6}
+.qp-items li:first-child{border-top:0}
+.qp-item-amount{font-weight:600;white-space:nowrap;color:#4d5964}
+.qp-notes{margin:0;white-space:pre-wrap;color:#33404b}
+.qp-agree{display:flex;gap:12px;align-items:flex-start;min-height:44px;padding:12px 14px;border:1px solid #e6e1da;border-radius:10px;cursor:pointer}
+.qp-agree input{width:22px;height:22px;margin:1px 0 0;accent-color:#8b242b;flex:none}
+.qp-accepted{text-align:center;border-top:4px solid #8b242b!important}
+.qp-card>.qp-hint{margin-bottom:14px}
+.qp-accepted p{margin:6px 0 0}
+.qp-note{border-left:4px solid #c79a57}
+.qp-contact{text-align:center;color:#5f6b76;font-size:14px;margin:4px 0 0}
+.qp-footer{text-align:center;color:#636e78;font-size:12px;padding:14px 20px 26px}
+/* Embedded on the company's own site: no page background or footer chrome; the host page frames it. */
+.qp-embed{min-height:0}
+html:has(.qp-embed){background:transparent}
+.qp-embed .qp-main{padding:8px 4px}
+.qp-embed .qp-card{box-shadow:none}
+@media(max-width:600px){
+ .qp-main{padding:18px 14px 8px}
+ .qp-card{padding:20px 18px}
+ .qp-form,.qp-group{grid-template-columns:1fr}
+ .qp-button{width:100%}
+ .qp-facts{grid-template-columns:1fr 1fr}
+ .qp-company{font-size:22px}
+ .qp-amount{font-size:34px}
+}

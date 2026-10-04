@@ -43,6 +43,7 @@ import { createSmartLocks } from './smart-locks.mjs';
 import { createInspectors } from './inspector.mjs';
 import { createFlights } from './flights.mjs';
 import { createDataImport } from './data-import.mjs';
+import { createProspects } from './prospects.mjs';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const db = await openDatabase(root);
 let storage;
@@ -251,6 +252,22 @@ const insurance = createInsurance({get,all,run,transaction,id,now,fail,json,body
 const inspectors = createInspectors({get,all,run,transaction,id,now,fail,json,body,roles,property,audit,date,communications,failAlerts,visitChecklists,visitVerification,demos,template});
 // Import from another system (CSV/Excel): admins only, own company only; access codes sealed like Access & codes.
 const dataImport = createDataImport({get,all,run,transaction,id,now,fail,json,body,roles,audit,billing,addressFields,clientProfile,seal,unseal,vaultReady:()=>{try{seal({},'check');return true;}catch{return false;}},sendWorkspaceInvitation,hash,randomBytes});
+// Client family and residence creation, shared by Client families / Residences and by converting a won prospect.
+async function insertClient(user, b) {
+    const key = id();
+    await run('INSERT INTO clients(id,organization_id,name,email,phone,created_at,profile) VALUES(?,?,?,?,?,?,?)', key, user.organization_id, text(b.name || b.lastName, 'Family name', 160), note(b.email, 254), note(b.phone, 80), now(), JSON.stringify(clientProfile(b)));
+    await audit(user, 'client.created', key);
+    return key;
+}
+async function insertProperty(user, b) {
+    if (!(await get('SELECT id FROM clients WHERE id=? AND organization_id=?', b.clientId, user.organization_id)))
+        fail(422, 'Select a client family.');
+    const a = addressFields(b), key = id();
+    await transaction(async()=>{await billing.assertCapacity(user.organization_id,'residences');(await run('INSERT INTO properties(id,organization_id,client_id,name,address,timezone,manual,created_at,street_address,address_line2,city,state,postal_code,country,room_profile) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', key, user.organization_id, b.clientId, text(b.name, 'Residence', 160), a.full, note(b.timezone, 80) || 'America/New_York', '', now(), a.street, a.line2, a.city, a.state, a.postal, a.country, JSON.stringify(roomProfile(b.roomProfile))));});
+    return key;
+}
+// Prospects (sales leads), the public quote request form and quote acceptance pages. Admins + staff granted access.
+const prospects = createProspects({get,all,run,transaction,id,now,fail,json,body,audit,insertClient,insertProperty,afterAddressSave:(key,b,prev)=>visitVerification.afterAddressSave(key,b,prev)});
 const offlineInspections = createOfflineInspections({get,all,run,body,json,fail,roles,property,entity,hash,now,template,visitChecklists,visitVerification});
 async function assertWorkspaceActive(organizationId){if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',organizationId))?.status==='suspended')fail(403,'This company workspace is suspended. Contact support.');const d=await demos.lookup(organizationId);if(d&&Number(d.expires_at)<=Date.now())fail(403,'Your seven-day demo has ended. Contact sales@estateaegis.com for more time.');}
 const clientErrorWindows = new Map();
@@ -274,6 +291,7 @@ async function api(req, res, url, user) {
         return json(res,204,{});
     }
     if(await insurance.handlePublic(req,res,url))return;
+    if(await prospects.handlePublic(req,res,url))return;
     if(await demoSignup.handle(req,res,url))return;
     if(await paidSignup.handle(req,res,url))return;
     if(user&&!['/api/login','/api/logout','/api/status'].includes(p))await assertWorkspaceActive(user.organization_id);
@@ -300,6 +318,7 @@ async function api(req, res, url, user) {
     if(await weather.handle(req,res,url,user))return;
     if(await aiSummaries.handle(req,res,url,user))return;
     if(await insurance.handle(req,res,url,user))return;
+    if(await prospects.handle(req,res,url,user))return;
     if(await photoSpots.handle(req,res,url,user))return;
     if(await smartLocks.handle(req,res,url,user))return;
     if(await flights.handle(req,res,url,user))return;
@@ -437,7 +456,7 @@ async function api(req, res, url, user) {
     if (p === '/api/data' && method === 'GET' && user.role === 'inspector')
         return json(res, 200, await visitVerification.decorate(user, await inspectors.snapshot(user, {safeUser, profile: await get('SELECT phone,preferred_contact FROM user_profiles WHERE user_id=?', user.id) || {phone:'',preferred_contact:'Email'}})));
     if (p === '/api/data' && method === 'GET')
-        return json(res, 200, await dataImport.decorate(user, await aiSummaries.decorate(user, await photoSpots.decorate(user, await flights.decorate(user, await weather.decorate(user, await insurance.decorate(user, await smartLocks.decorate(user, await visitVerification.decorate(user, await snapshot(user))))))))));
+        return json(res, 200, await prospects.decorate(user, await dataImport.decorate(user, await aiSummaries.decorate(user, await photoSpots.decorate(user, await flights.decorate(user, await weather.decorate(user, await insurance.decorate(user, await smartLocks.decorate(user, await visitVerification.decorate(user, await snapshot(user)))))))))));
     if (p.startsWith('/api/files/') && method === 'GET') {
         const f = (await readFile(user, p.split('/')[3]));
         const bytes = (await readBytes(f.storage_key));
@@ -535,10 +554,7 @@ async function api(req, res, url, user) {
     }
     else if (p === '/api/clients') {
         roles(user, 'admin');
-        const key = id();
-        (await run('INSERT INTO clients(id,organization_id,name,email,phone,created_at,profile) VALUES(?,?,?,?,?,?,?)', key, user.organization_id, text(b.name || b.lastName, 'Family name', 160), note(b.email, 254), note(b.phone, 80), now(), JSON.stringify(clientProfile(b))));
-        (await audit(user, 'client.created', key));
-        result = { id: key };
+        result = { id: await insertClient(user, b) };
     }
     else if (p === '/api/clients/update' || p === '/api/clients/member' || p === '/api/clients/member/delete') {
         roles(user, 'admin', 'client');
@@ -580,10 +596,7 @@ async function api(req, res, url, user) {
     }
     else if (p === '/api/properties') {
         roles(user, 'admin');
-        if (!(await get('SELECT id FROM clients WHERE id=? AND organization_id=?', b.clientId, user.organization_id)))
-            fail(422, 'Select a client family.');
-        const a = addressFields(b), key = id();
-        await transaction(async()=>{await billing.assertCapacity(user.organization_id,'residences');(await run('INSERT INTO properties(id,organization_id,client_id,name,address,timezone,manual,created_at,street_address,address_line2,city,state,postal_code,country,room_profile) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', key, user.organization_id, b.clientId, text(b.name, 'Residence', 160), a.full, note(b.timezone, 80) || 'America/New_York', '', now(), a.street, a.line2, a.city, a.state, a.postal, a.country, JSON.stringify(roomProfile(b.roomProfile))));});
+        const key = await insertProperty(user, b);
         await visitVerification.afterAddressSave(key, b, null);
         (await audit(user, 'property.created', key));
         result = { id: key };
@@ -1348,8 +1361,8 @@ const server = http.createServer(async (req, res) => {
             return res.end(url.pathname === '/sw.js' ? content.replace('__SHELL_VERSION__', shellVersion()) : content);
         }
         const appHome = url.pathname === '/' && (url.searchParams.has('invite') || url.searchParams.has('workspaceInvite') || await actor(req));
-        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/home-refresh.css':'home-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js','/visit-verification.js':'visit-verification.js','/visit-card.js':'visit-card.js','/storm-core.js':'storm-core.js','/smart-locks.js':'smart-locks.js','/smart-locks.css':'smart-locks.css','/flights.js':'flights.js','/flights.css':'flights.css', '/weather-core.js':'weather-core.js', '/weather.js':'weather.js', '/weather.css':'weather.css','/ai-summaries.js':'ai-summaries.js','/ai-summaries.css':'ai-summaries.css','/storm.js':'storm.js','/storm.css':'storm.css','/insurance.js':'insurance.js','/insurance.css':'insurance.css','/photo-spots.js':'photo-spots.js','/photo-spots.css':'photo-spots.css','/certificate.js':'certificate.js','/certificate.css':'certificate.css','/view-route.js':'view-route.js', '/sidebar-core.js':'sidebar-core.js','/overview-core.js':'overview-core.js','/app-format.js':'app-format.js','/app.css':'app.css', '/overview.js':'overview.js', '/overview.css':'overview.css', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/login.js':'login.js','/login.css':'login.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/faq.js':'faq.js','/site-menu.js':'site-menu.js','/home-compact.js':'home-compact.js','/plan-panel.js':'plan-panel.js','/inspector.js':'inspector.js','/inspector.css':'inspector.css','/data-import.js':'data-import.js','/data-import.css':'data-import.css','/platform-owner.js':'platform-owner.js','/platform-owner.css':'platform-owner.css','/plan-panel.css':'plan-panel.css','/security':'security.html' };
-        const file = names[url.pathname] || (url.pathname === '/client-login' || /^\/client\/[a-z0-9-]+$/i.test(url.pathname) ? 'live.html' : /^\/certificate\/[A-Za-z0-9_-]{43}$/.test(url.pathname) ? 'certificate.html' : null);
+        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/home-refresh.css':'home-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js','/visit-verification.js':'visit-verification.js','/visit-card.js':'visit-card.js','/storm-core.js':'storm-core.js','/smart-locks.js':'smart-locks.js','/smart-locks.css':'smart-locks.css','/flights.js':'flights.js','/flights.css':'flights.css', '/weather-core.js':'weather-core.js', '/weather.js':'weather.js', '/weather.css':'weather.css','/ai-summaries.js':'ai-summaries.js','/ai-summaries.css':'ai-summaries.css','/storm.js':'storm.js','/storm.css':'storm.css','/insurance.js':'insurance.js','/insurance.css':'insurance.css','/photo-spots.js':'photo-spots.js','/photo-spots.css':'photo-spots.css','/certificate.js':'certificate.js','/certificate.css':'certificate.css','/view-route.js':'view-route.js', '/sidebar-core.js':'sidebar-core.js','/overview-core.js':'overview-core.js','/app-format.js':'app-format.js','/app.css':'app.css', '/overview.js':'overview.js', '/overview.css':'overview.css', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/login.js':'login.js','/login.css':'login.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/faq.js':'faq.js','/site-menu.js':'site-menu.js','/home-compact.js':'home-compact.js','/plan-panel.js':'plan-panel.js','/inspector.js':'inspector.js','/inspector.css':'inspector.css','/data-import.js':'data-import.js','/data-import.css':'data-import.css','/prospects.js':'prospects.js','/prospects.css':'prospects.css','/quote-form.js':'quote-form.js','/quote-view.js':'quote-view.js','/quote-public.css':'quote-public.css','/platform-owner.js':'platform-owner.js','/platform-owner.css':'platform-owner.css','/plan-panel.css':'plan-panel.css','/security':'security.html' };
+        const file = names[url.pathname] || (url.pathname === '/client-login' || /^\/client\/[a-z0-9-]+$/i.test(url.pathname) ? 'live.html' : /^\/certificate\/[A-Za-z0-9_-]{43}$/.test(url.pathname) ? 'certificate.html' : /^\/quote\/[a-z0-9-]{2,80}$/.test(url.pathname) ? 'quote-form.html' : /^\/quotes\/[A-Za-z0-9_-]{43}$/.test(url.pathname) ? 'quote-view.html' : null);
         if (!file) {
             // Unknown pages get a friendly HTML 404 with the site navigation; /api/* keeps its JSON errors above.
             if (req.method !== 'GET' && req.method !== 'HEAD') fail(404, 'Page not found.');
@@ -1360,7 +1373,11 @@ const server = http.createServer(async (req, res) => {
         }
         if (file === 'live.html') { res.setHeader('X-Robots-Tag','noindex, nofollow'); res.setHeader('X-EA-Shell', shellVersion()); }
         if (url.pathname === '/') res.setHeader('Vary','Cookie');
-        res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://nominatim.openstreetmap.org https://photon.komoot.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");
+        // The public quote request form may be embedded on the company's own website (?embed=1): only that page can be framed.
+        const embeddable = file === 'quote-form.html' && url.searchParams.get('embed') === '1';
+        if (embeddable) res.removeHeader('X-Frame-Options');
+        if (file === 'quote-form.html' || file === 'quote-view.html') { res.setHeader('X-Robots-Tag', 'noindex, nofollow'); res.setHeader('Referrer-Policy', 'no-referrer'); }
+        res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://nominatim.openstreetmap.org https://photon.komoot.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors " + (embeddable ? "*" : "'none'"));
         res.writeHead(200, { 'Content-Type': file.endsWith('.html') ? 'text/html; charset=utf-8' : file.endsWith('.css') ? 'text/css' : 'text/javascript', 'Cache-Control': 'no-store, max-age=0, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' });
         if (req.method === 'HEAD') return res.end();
         // The app page and live.js carry the shell version, so a page and scripts from different deploys can be told apart (see login.js).
@@ -1378,7 +1395,7 @@ const server = http.createServer(async (req, res) => {
         json(res, status, { error: status === 500 ? 'The action could not be saved. Check the server log.' : error.message, ...(status !== 500 && error.extra ? error.extra : {}) });
     }
 });
-const SHELL_FILES = ['live.html','live.js','login.js','login.css','inspection-checklist.js','visit-verification.js','visit-card.js','view-route.js','sidebar-core.js','overview-core.js','overview.js','overview.css','app-format.js','app.css','storm-core.js','storm.js','storm.css','weather-core.js','weather.js','weather.css','ai-summaries.js','ai-summaries.css','smart-locks.js','smart-locks.css','flights.js','flights.css','insurance.js','insurance.css','photo-spots.js','photo-spots.css','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png','ea-shield-80.png','ea-shield-120.png','plan-panel.js','plan-panel.css','platform-owner.js','platform-owner.css','inspector.js','data-import.js','data-import.css','inspector.css'];
+const SHELL_FILES = ['live.html','live.js','login.js','login.css','inspection-checklist.js','visit-verification.js','visit-card.js','view-route.js','sidebar-core.js','overview-core.js','overview.js','overview.css','app-format.js','app.css','storm-core.js','storm.js','storm.css','weather-core.js','weather.js','weather.css','ai-summaries.js','ai-summaries.css','smart-locks.js','smart-locks.css','flights.js','flights.css','insurance.js','insurance.css','photo-spots.js','photo-spots.css','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png','ea-shield-80.png','ea-shield-120.png','plan-panel.js','plan-panel.css','platform-owner.js','platform-owner.css','inspector.js','data-import.js','data-import.css','inspector.css','prospects.js','prospects.css'];
 let cachedShellVersion = null;
 function shellVersion() { if (!cachedShellVersion) { const digest = createHash('sha256'); for (const name of SHELL_FILES) { try { digest.update(name).update(fs.readFileSync(path.join(root, 'public', name))); } catch { digest.update(name + ':missing'); } } cachedShellVersion = digest.digest('hex').slice(0, 12); } return cachedShellVersion; }
 setInterval(() => offlineInspections.purge().catch(e => console.error('Idempotency cleanup:', e.message)), 3600000).unref();
@@ -1446,6 +1463,8 @@ setInterval(()=>communications.drain().catch(error=>console.error('Email queue:'
 
 setTimeout(()=>insurance.tick().catch(e=>console.error('Insurance compliance:',e.message)),45000).unref();
 setInterval(()=>insurance.tick().catch(e=>console.error('Insurance compliance:',e.message)),3600000).unref();
+setTimeout(()=>prospects.tick().catch(e=>console.error('Prospect follow-ups:',e.message)),50000).unref();
+setInterval(()=>prospects.tick().catch(e=>console.error('Prospect follow-ups:',e.message)),3600000).unref();
 
 setInterval(()=>smartLocks.tick().catch(e=>console.error('Smart locks:',e.message)),60000).unref();
 setInterval(()=>flights.tick().catch(e=>console.error('Flights:',e.message)),60000).unref();

@@ -46,7 +46,7 @@ export function createDemos({get,all,run,transaction,id,now,hash,randomBytes,bod
     ['notes',`property_id IN (${props})`],['property_vault',`property_id IN (${props})`],['property_access',`property_id IN (${props})`],
     ['payments','invoice_id IN (SELECT id FROM invoices WHERE organization_id=?)'],['invoices','organization_id=?'],
     ['messages',`thread_id IN (${threads})`],['message_members',`thread_id IN (${threads})`],['message_threads','organization_id=?'],
-    ['email_outbox','organization_id=?'],['invitations','organization_id=?'],['imported_visits','organization_id=?'],['import_records','organization_id=?'],['import_batches','organization_id=?'],['properties','organization_id=?'],['clients','organization_id=?'],['vendors','organization_id=?'],
+    ['email_outbox','organization_id=?'],['invitations','organization_id=?'],['imported_visits','organization_id=?'],['import_records','organization_id=?'],['import_batches','organization_id=?'],['prospect_followup_alerts','prospect_id IN (SELECT id FROM prospects WHERE organization_id=?)'],['prospect_notes','organization_id=?'],['prospect_quotes','organization_id=?'],['prospects','organization_id=?'],['prospect_staff','organization_id=?'],['properties','organization_id=?'],['clients','organization_id=?'],['vendors','organization_id=?'],
     ['notifications','user_id IN (SELECT id FROM users WHERE organization_id=?)'],['idempotency','user_id IN (SELECT id FROM users WHERE organization_id=?)']
    ])await remove(table,where);
    await run('UPDATE users SET client_id=NULL,vendor_id=NULL WHERE organization_id=?',org);

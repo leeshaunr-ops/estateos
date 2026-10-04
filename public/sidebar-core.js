@@ -3,7 +3,7 @@
 (function(root){
  'use strict';
  // Every screen a signed-in user can open from the menu, by role. Same rules and order as before the refresh.
- function navFor(user,{unreadMessages=0,weather=false}={}){
+ function navFor(user,{unreadMessages=0,weather=false,prospects=false}={}){
   const role=user&&user.role,staff=role==='admin'||role==='employee';
   // Field inspectors only run the visits assigned to them (see inspector.js).
   if(role==='inspector')return [['dashboard','Today'],['notifications','Notifications'],['profile','My profile']];
@@ -16,6 +16,8 @@
   // No 'platform' item: it only repeated Billing. Platform owners get the Platform console link in the sidebar footer.
   if(staff)nav.push(['staff-schedules','Staff schedules']);
   if(role==='admin')nav.push(['staff','Staff'],['workspace','Company settings'],['clients','Client families'],['vendors','Vendors'],['billing','Billing'],['users','Team & access'],['audit','Audit history']);
+  // Prospects (sales leads): administrators, and staff an administrator has given access (data.prospects.access).
+  if(staff&&(role==='admin'||prospects))nav.push(['prospects','Prospects']);
   if(role==='admin'||role==='client')nav.push(['approvals','Client approvals']);
   if(role==='admin')nav.push(['automation','Schedules & automation'],['email-activity','Email activity'],['checklist-templates','Checklist templates'],['import','Import data']);
   // Platform owner only: read-only monitoring of every company (plans, trials, payments, usage). Not 'platform',
@@ -27,7 +29,7 @@
  const TOP=['dashboard','messages','notifications'];
  const SECTIONS={
   staff:[['Daily work',['inspections','routes','calendar','work','requests','arrivals','storm','weather','approvals']],
-   ['Residences',['properties','insurance','clients','documents','assets','maintenance']],
+   ['Residences',['properties','insurance','clients','prospects','documents','assets','maintenance']],
    ['Team',['staff','staff-schedules','vendors','users']],
    ['Company',['workspace','import','checklist-templates','automation','billing','email-activity','audit','platform','platform-owner']]],
   client:[['Your home',['properties','inspections','work','requests','documents']],

@@ -109,13 +109,18 @@
    if(['breached','at_risk','due_soon'].includes(st.code))add('insurance',{id:'insurance:'+r.property_id,tone:st.code==='breached'?'fail':st.code==='at_risk'?'monitor':'info',pill:st.label,title:'Insurance: '+(r.name||ctx.propertyName(r.property_id)),place:'',detail:clip(st.reason,140),action:{label:st.code==='breached'||st.code==='at_risk'?'Plan a visit':'Review',name:'insurance-open',key:r.property_id},date:st.deadline||'',late:st.code==='breached'?Math.max(1,-(st.daysLeft||0)):0});
    if(ctx.admin&&r.renewal?.due)add('insurance',{id:'renewal:'+r.property_id,sub:1,tone:'info',pill:'Renewal',title:'Policy renews: '+(r.name||ctx.propertyName(r.property_id)),place:'',detail:`${niceDate(r.renewal.date,t)} · ${plural(r.renewal.daysLeft,'day')} left`,action:{label:'Checklist',name:'insurance-open',key:r.property_id},date:r.renewal.date});
   }
-  const order=['failed','sign','overdue','insurance','clients','monitor','unassigned'];
+  // Prospect follow-ups due today or overdue (data.prospects, only for admins and staff with Prospects access).
+  if(ctx.staff&&data.prospects?.access)for(const p of data.prospects.due||[]){
+   const late=p.follow_up==='overdue'?daysBetween(p.next_follow_up,t):0;
+   add('prospects',{id:'prospect:'+p.id,tone:late?'monitor':'info',pill:late?plural(late,'day')+' late':'Today',title:'Follow up: '+p.name,place:'',detail:[p.stage_label,p.mine?'assigned to you':''].filter(Boolean).join(' · '),action:{label:'Open',name:'prospect-open',key:p.id},date:p.next_follow_up,late});
+  }
+  const order=['failed','sign','overdue','insurance','clients','prospects','monitor','unassigned'];
   items.sort((a,b)=>order.indexOf(a.group)-order.indexOf(b.group)||(a.sub||0)-(b.sub||0)||(b.late||0)-(a.late||0)||String(b.date).localeCompare(String(a.date)));
-  const primary=items.filter(i=>['failed','sign','overdue','insurance','clients'].includes(i.group));
+  const primary=items.filter(i=>['failed','sign','overdue','insurance','clients','prospects'].includes(i.group));
   const counts=Object.fromEntries(order.map(g=>[g,items.filter(i=>i.group===g).length]));
   return {items,primary,counts,total:items.length};
  }
- const GROUP_TITLES={failed:'Failed items',sign:'Reports to sign off',overdue:'Overdue',insurance:'Insurance compliance',clients:'New from clients',monitor:'To monitor',unassigned:'Work without an assignee'};
+ const GROUP_TITLES={failed:'Failed items',sign:'Reports to sign off',overdue:'Overdue',insurance:'Insurance compliance',clients:'New from clients',prospects:'Prospect follow-ups',monitor:'To monitor',unassigned:'Work without an assignee'};
  /** Splits the attention list into what is shown and a plain "N more" summary. */
  function attentionView(att,{limit=10,perGroup=3,showAll=false}={}){
   // Up to three per group so every kind of problem shows, at most ten in all; the rest go into "N more".
@@ -123,7 +128,7 @@
   const hidden=att.items.filter(i=>!shown.includes(i));
   const groups=[];for(const item of shown){let g=groups.find(g=>g.key===item.group);if(!g){g={key:item.group,title:GROUP_TITLES[item.group],items:[]};groups.push(g);}g.items.push(item);}
   const byGroup={};for(const i of hidden)byGroup[i.group]=(byGroup[i.group]||0)+1;
-  const words={failed:['failed item'],sign:['report to sign','reports to sign'],overdue:['overdue item'],insurance:['insurance item'],clients:['client request'],monitor:['monitor item'],unassigned:['work order without an assignee','work orders without an assignee']};
+  const words={failed:['failed item'],sign:['report to sign','reports to sign'],overdue:['overdue item'],insurance:['insurance item'],clients:['client request'],prospects:['prospect follow-up'],monitor:['monitor item'],unassigned:['work order without an assignee','work orders without an assignee']};
   const moreText=Object.entries(byGroup).map(([g,n])=>{const w=words[g];return `${n} ${n===1?w[0]:(w[1]||w[0]+'s')}`;}).join(', ');
   return {groups,hidden:hidden.length,moreText};
  }
@@ -179,6 +184,7 @@
   if(att.counts.overdue)bits.push(plural(att.counts.overdue,'overdue item'));
   if(att.counts.insurance)bits.push(plural(att.counts.insurance,'insurance item'));
   if(att.counts.clients)bits.push(plural(att.counts.clients,'new client request'));
+  if(att.counts.prospects)bits.push(plural(att.counts.prospects,'prospect follow-up'));
   const verb=bits.length===1&&/^1 /.test(bits[0])?'needs':'need';
   let storm='';const s=stormList.find(s=>s.prepDeadline&&isoDay(s.prepDeadline)>=today);
   if(s){const n=daysBetween(today,isoDay(s.prepDeadline));storm=`Storm prep is due ${n===0?'today':n===1?'tomorrow':LONG_WEEKDAYS[parts(isoDay(s.prepDeadline)).date.getUTCDay()]}.`;}
