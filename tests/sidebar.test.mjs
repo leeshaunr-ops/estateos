@@ -59,7 +59,7 @@ test('menu structure: flat headings in the mockup style, short client and vendor
   'Daily work: Visits & inspections, Daily route, Calendar, Work orders, Requests, Arrival preparation, Storm board, Client approvals',
   'Residences: Residences, Insurance compliance, Client families, Documents, Assets, Maintenance',
   'Team: Staff, Staff schedules, Vendors, Team & access',
-  'Company: Company settings, Checklist templates, Schedules & automation, Billing, Email activity, Audit history']);
+  'Company: Company settings, Import data, Checklist templates, Schedules & automation, Billing, Email activity, Audit history']);
  assert.deepEqual(titles('employee'),[
   'Daily work: Visits & inspections, Daily route, Calendar, Work orders, Requests, Arrival preparation, Storm board',
   'Residences: Residences, Insurance compliance, Documents, Assets, Maintenance',

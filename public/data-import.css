@@ -1,0 +1,138 @@
+/* Import data screen. Oct 2026 app palette: ink #1f2933, muted #5f6b76, hairline #e2e7eb, wine #8b242b; Georgia
+   headings, Inter body, white cards, 44px tap targets. Stacked cards only: nothing scrolls inside a box, no tables. */
+.shell .imp-page{display:flex;flex-direction:column;gap:18px;max-width:1180px}
+.shell .imp-card{margin:0;padding:22px 24px;background:#fff;border:1px solid #e2e7eb;border-radius:10px;box-shadow:0 3px 12px rgba(24,39,56,.06)}
+.shell .imp-h2{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:22px;color:#1f2933;margin:0 0 6px;letter-spacing:0}
+.shell .imp-h3{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:18px;color:#1f2933;margin:20px 0 4px}
+.shell .imp-muted{color:#5f6b76;font-size:14px;line-height:1.55;margin:4px 0 12px}
+.shell .imp-muted strong{color:#1f2933;font-weight:600;overflow-wrap:anywhere}
+.shell .imp-btn{min-height:44px;padding:10px 18px;border-radius:8px;border:1px solid #d5dce1;background:#fff;color:#1f2933;font-weight:600;font-size:14.5px;display:inline-flex;align-items:center;justify-content:center;text-align:center;gap:6px}
+.shell .imp-btn:hover{border-color:#8b242b;color:#8b242b}
+.shell .imp-btn.primary,.shell .imp-actions .primary{background:#8b242b;border-color:#8b242b;color:#fff}
+.shell .imp-btn.primary:hover{background:#74191f;color:#fff}
+.shell .imp-btn:disabled{opacity:.55;cursor:not-allowed}
+.shell .imp-btn[aria-pressed="true"]{background:#8b242b;border-color:#8b242b;color:#fff}
+.shell .imp-link{color:#8b242b;font-weight:600;font-size:14px;min-height:44px;display:inline-flex;align-items:center;text-decoration:underline;text-underline-offset:3px}
+.shell .imp-alert{background:#fbeaea;border:1px solid #efc9c9;color:#8b242b;border-radius:8px;padding:12px 14px;font-size:14.5px;line-height:1.5}
+.shell .imp-note{background:#eef6f1;border:1px solid #cfe3d6;color:#1f4d35;border-radius:8px;padding:12px 14px;font-size:14.5px;line-height:1.5;overflow-wrap:anywhere}
+/* stepper */
+.shell .imp-steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.shell .imp-steps li{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #e2e7eb;border-radius:10px;padding:10px 12px;color:#5f6b76;font-size:14px;min-height:48px}
+.shell .imp-steps li.current{border-color:#8b242b;color:#1f2933;font-weight:600;box-shadow:inset 0 -3px 0 #8b242b}
+.shell .imp-steps li.done{color:#1f2933}
+.shell .imp-step-num{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:#f1f3f5;color:#5f6b76;font-size:13px;font-weight:700}
+.shell .imp-steps li.current .imp-step-num{background:#8b242b;color:#fff}
+.shell .imp-steps li.done .imp-step-num{background:#e7f2ec;color:#1f6b43}
+/* upload */
+.shell .imp-cols{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:18px;align-items:start}
+.shell .imp-main,.shell .imp-side-col{display:flex;flex-direction:column;gap:18px;min-width:0}
+.shell .imp-types{display:grid;gap:10px}
+.shell .imp-type{display:flex;align-items:center;gap:12px;border:1px solid #e2e7eb;border-radius:10px;padding:12px 14px;cursor:pointer;min-height:56px}
+.shell .imp-type.selected{border-color:#8b242b;background:#fcf6f6}
+.shell .imp-type input{flex:none;width:20px;height:20px;accent-color:#8b242b;margin:0}
+.shell .imp-type-text{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.shell .imp-type-text strong{color:#1f2933;font-size:15px;font-weight:600}
+.shell .imp-type-text small{color:#5f6b76;font-size:13px;line-height:1.45}
+.shell .imp-template{flex:none;color:#8b242b;font-weight:600;font-size:13.5px;min-height:44px;display:inline-flex;align-items:center;padding:0 4px;text-decoration:underline;text-underline-offset:3px}
+.shell .imp-drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:2px dashed #d5b8ba;background:#fcf8f8;border-radius:10px;padding:22px 16px;min-height:96px;cursor:pointer;text-align:center}
+.shell .imp-drop:hover{border-color:#8b242b}
+.shell .imp-drop-title{font-weight:600;color:#8b242b;font-size:16px;overflow-wrap:anywhere}
+.shell .imp-drop-sub{color:#5f6b76;font-size:13px}
+.shell .imp-file{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.shell .imp-file:focus-visible+.imp-actions,.shell .imp-drop:focus-within{outline:3px solid #b78432;outline-offset:3px}
+.shell .imp-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;flex-wrap:wrap}
+.shell .imp-actions.imp-wrap{justify-content:flex-start}
+.shell .imp-sources{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.shell .imp-sources li{display:flex;flex-direction:column;gap:3px;border-top:1px solid #e2e7eb;padding-top:10px;font-size:13.5px;color:#5f6b76;line-height:1.5}
+.shell .imp-sources li strong{color:#1f2933;font-size:14.5px}
+.shell .imp-batch,.shell .imp-person{display:flex;justify-content:space-between;align-items:center;gap:12px;border-top:1px solid #e2e7eb;padding:12px 0}
+.shell .imp-batch-text,.shell .imp-person>div{display:flex;flex-direction:column;gap:2px;min-width:0;font-size:13.5px;color:#5f6b76}
+.shell .imp-batch-text strong,.shell .imp-person strong{color:#1f2933;font-size:14.5px;font-weight:600}
+.shell .imp-person span{overflow-wrap:anywhere}
+.shell .imp-batch-actions{display:flex;align-items:center;gap:10px;flex:none}
+.shell .imp-undone{color:#8b242b;font-weight:600}
+.shell .imp-pending{margin-top:6px}
+/* mapping */
+.shell .imp-map{display:grid;grid-template-columns:1fr 1fr;gap:0 24px;border-top:1px solid #e2e7eb}
+.shell .imp-map-row{display:flex;flex-direction:column;gap:6px;padding:12px 0;border-bottom:1px solid #e2e7eb;min-width:0}
+.shell .imp-map-label{font-weight:600;color:#1f2933;font-size:14.5px;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.shell .imp-map-label small{flex-basis:100%;font-weight:400;color:#5f6b76;font-size:12.5px}
+.shell .imp-map-pick{display:flex;flex-direction:column;gap:4px;min-width:0}
+.shell .imp-map-pick select{min-height:44px;border:1px solid #cfd7dd;border-radius:8px;padding:8px 10px;background:#fff;color:#1f2933;font-size:15px;width:100%}
+.shell .imp-map-row.mapped select{border-color:#8b242b}
+.shell .imp-sample{color:#5f6b76;font-size:12.5px;overflow-wrap:anywhere}
+.shell .imp-lock{font-size:11.5px;font-weight:600;color:#8b242b;background:#f8eeee;border-radius:999px;padding:2px 8px}
+.shell .imp-unused{font-size:13.5px;color:#5f6b76;line-height:1.5;margin:14px 0 0;overflow-wrap:anywhere}
+.shell .imp-unused strong{color:#1f2933}
+/* preview */
+.shell .imp-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:8px 0 16px}
+.shell .imp-stats.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.shell .imp-stat{border:1px solid #e2e7eb;border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.shell .imp-stat b{font-size:26px;font-weight:650;color:#1f2933;line-height:1.1}
+.shell .imp-stat span{font-size:13px;color:#5f6b76}
+.shell .imp-stat.new b{color:#1f6b43}.shell .imp-stat.update b{color:#2b5c8a}.shell .imp-stat.error b{color:#8b242b}
+.shell .imp-mode{border:1px solid #e2e7eb;border-radius:10px;padding:10px 14px 4px;margin:0 0 14px;display:grid;grid-template-columns:1fr 1fr;gap:4px 16px}
+.shell .imp-mode legend{font-weight:600;color:#1f2933;font-size:14.5px;padding:0 6px}
+.shell .imp-choice{display:flex;align-items:flex-start;gap:10px;padding:8px 0;cursor:pointer;min-height:44px}
+.shell .imp-choice input{flex:none;width:20px;height:20px;margin:2px 0 0;accent-color:#8b242b}
+.shell .imp-choice span{display:flex;flex-direction:column;gap:2px}
+.shell .imp-choice strong{font-size:14.5px;color:#1f2933;font-weight:600}
+.shell .imp-choice small{font-size:13px;color:#5f6b76;line-height:1.45}
+.shell .imp-filter{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 12px}
+.shell .imp-rows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.shell .imp-row{border:1px solid #e2e7eb;border-left:4px solid #e2e7eb;border-radius:10px;padding:12px 14px;min-width:0;background:#fff}
+.shell .imp-row.imp-new{border-left-color:#2f8a57}.shell .imp-row.imp-update{border-left-color:#3d72a6}.shell .imp-row.imp-skip{border-left-color:#b9a27a}.shell .imp-row.imp-error{border-left-color:#8b242b}
+.shell .imp-row-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.shell .imp-badge{font-size:12px;font-weight:600;border-radius:999px;padding:3px 10px;background:#f1f3f5;color:#1f2933;white-space:nowrap}
+.shell .imp-badge.imp-new{background:#e7f2ec;color:#1f6b43}.shell .imp-badge.imp-update{background:#e8f0f8;color:#2b5c8a}.shell .imp-badge.imp-skip{background:#f6f0e4;color:#6f5a2e}.shell .imp-badge.imp-error{background:#fbeaea;color:#8b242b}
+.shell .imp-row-num{font-size:12.5px;color:#5f6b76}
+.shell .imp-row-title{font-size:16px;font-weight:600;color:#1f2933;margin:8px 0 2px;overflow-wrap:anywhere;font-family:inherit}
+.shell .imp-row-sub{font-size:13.5px;color:#5f6b76;margin:0;line-height:1.45;overflow-wrap:anywhere}
+.shell .imp-row-action{font-size:13.5px;color:#1f2933;margin:6px 0 0}
+.shell .imp-row-reason{font-size:13.5px;color:#8b242b;margin:6px 0 0;line-height:1.45}
+.shell .imp-row.imp-skip .imp-row-reason{color:#6f5a2e}
+.shell .imp-msgs{margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.45}
+.shell .imp-msgs.err{color:#8b242b}.shell .imp-msgs.warn{color:#7a5a12}
+.shell .imp-more{margin-top:8px}
+.shell .imp-more summary{cursor:pointer;color:#8b242b;font-weight:600;font-size:13.5px;min-height:44px;display:flex;align-items:center;list-style-position:inside}
+.shell .imp-facts{margin:0;display:grid;gap:6px}
+.shell .imp-fact{display:grid;grid-template-columns:minmax(0,9.5em) minmax(0,1fr);gap:8px;font-size:13.5px}
+.shell .imp-fact dt{color:#5f6b76}.shell .imp-fact dd{margin:0;color:#1f2933;overflow-wrap:anywhere}
+.shell .imp-fact dd.imp-secret{color:#5f6b76;font-style:italic}
+.shell .imp-more-rows{display:flex;justify-content:center;margin-top:12px}
+/* residence history */
+.shell .imp-history{margin-top:22px;border-top:1px solid #e2e7eb;padding-top:4px}
+.shell .imp-visit{border:1px solid #e2e7eb;border-radius:10px;padding:12px 14px;margin-top:10px}
+.shell .imp-visit-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.shell .imp-visit-notes{margin:6px 0 0;font-size:14px;color:#1f2933;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+@media (max-width:900px){
+ .shell .imp-cols{grid-template-columns:1fr}
+ .shell .imp-rows{grid-template-columns:1fr}
+}
+@media (max-width:640px){
+ .shell .imp-card{padding:16px}
+ .shell .imp-steps{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+ .shell .imp-steps li{flex-direction:column;justify-content:center;gap:4px;padding:8px 4px;text-align:center;font-size:12px;min-height:58px}
+ .shell .imp-map{grid-template-columns:1fr}
+ .shell .imp-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .shell .imp-stats.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .shell .imp-mode{grid-template-columns:1fr}
+ .shell .imp-actions{flex-direction:column-reverse;align-items:stretch}
+ .shell .imp-actions .imp-btn{width:100%}
+ .shell .imp-filter .imp-btn{flex:1 1 auto}
+ .shell .imp-type{align-items:flex-start;flex-wrap:wrap}
+ .shell .imp-type input{margin-top:2px}
+ .shell .imp-type-text{flex:1 1 calc(100% - 40px)}
+ .shell .imp-template{margin:-6px 0 -8px 32px}
+ .shell .imp-batch,.shell .imp-person{flex-direction:column;align-items:stretch}
+ .shell .imp-batch-actions{flex-direction:column;align-items:stretch;gap:2px}
+ .shell .imp-batch-actions .imp-link{justify-content:center}
+ .shell .imp-person .imp-btn,.shell .imp-batch-actions .imp-btn{width:100%}
+ .shell .imp-fact{grid-template-columns:1fr;gap:0}
+}
+/* Step changes scroll the stepper into view below the sticky top bar. */
+.shell .imp-page{scroll-margin-top:96px}
+/* The side column is narrow on desktop too: stack import rows and invite rows instead of squeezing them. */
+.shell .imp-side-col .imp-batch,.shell .imp-side-col .imp-person{flex-direction:column;align-items:stretch;gap:8px}
+.shell .imp-side-col .imp-batch-actions{justify-content:flex-start;flex-wrap:wrap}
+.shell .imp-side-col .imp-person span{overflow-wrap:anywhere}

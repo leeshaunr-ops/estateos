@@ -235,7 +235,7 @@
   const hasTemplate=Array.isArray(published)&&published.some(t=>!Number(t.is_system)&&t.status==='published');
   const steps=[
    {key:'company',title:'Company details',detail:'Your company name, logo and support email appear on every report.',done:!!(data.company&&(data.workspaceSupport||data.companyLogo)),action:{label:'Edit',name:'navigate',key:'workspace'}},
-   {key:'client',title:'Add a client family and their residence',detail:'The address and location are used for directions and GPS-verified visits.',done:props.length>0,action:{label:(data.clients||[]).length?'Add residence':'Add client',name:(data.clients||[]).length?'new-property':'new-client',key:''}},
+   {key:'client',title:'Add a client family and their residence',detail:'The address and location are used for directions and GPS-verified visits.',done:props.length>0,action:{label:(data.clients||[]).length?'Add residence':'Add client',name:(data.clients||[]).length?'new-property':'new-client',key:''},alt:{label:'Or import them from another system',name:'navigate',key:'import'}},
    {key:'checklist',title:'Pick a visit checklist',detail:'Use the standard checklist or build your own, with alerts on failed items.',done:hasTemplate||(data.inspections||[]).length>0,action:{label:'Choose',name:'navigate',key:'checklist-templates'}},
    {key:'team',title:'Invite your team',detail:'Staff get their visits on their phone, with GPS check-in.',done:users.some(u=>u.role==='employee'),action:{label:'Invite',name:'navigate',key:'users'}},
    {key:'visit',title:'Schedule the first visit',detail:'Start a visit now or set one to repeat every week or two.',done:(data.inspections||[]).length>0||(data.operations?.plans||[]).length>0,action:{label:'Schedule',name:'navigate',key:'inspections'}},
