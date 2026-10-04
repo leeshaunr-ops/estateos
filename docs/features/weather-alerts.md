@@ -12,6 +12,12 @@ It is **off by default**. An admin turns it on in **Weather → Settings** (or *
 |---|---|---|
 | ![](weather-alerts/weather-page-desktop.png) | ![](weather-alerts/alert-detail-desktop.png) | ![](weather-alerts/weather-page-phone.png) |
 
+| Overview banner | Residence | Weather at visit | Client notice (phone) |
+|---|---|---|---|
+| ![](weather-alerts/overview-banner-desktop.png) | ![](weather-alerts/residence-desktop.png) | ![](weather-alerts/visit-weather-desktop.png) | ![](weather-alerts/client-notice-phone.png) |
+
+Settings: ![](weather-alerts/settings-desktop.png)
+
 - **Weather page** (Daily work → Weather): **Active** alerts (most severe first), **Recent** (ended or cancelled in the last 14 days) and, for admins, **Settings**. Each card shows the level (with an icon and the word, never colour alone), the number of residences, when it starts and ends, and whether someone has acknowledged it.
 - **Alert detail**: the NWS details (issued by, starts, ends, the full NWS text collapsed), the affected residences with their Residence Manager and next visit, filters by Residence Manager and city, and actions: **Start storm event**, **Add to storm event**, **Plan route**, **Acknowledge** and (admins) **Dismiss** with a reason.
 - **Banner** on the Overview: one line per alert ("Hurricane Warning · 12 residences · Tue evening to Thu morning"), collapsed into one line when there are more than two. It disappears once the alert has an open storm event.

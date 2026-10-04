@@ -38,7 +38,7 @@ function wxTabs(){
 }
 function wxCard(a){
  const ack=a.acknowledged_at?`Acknowledged by ${a.acknowledged_by_name||'a team member'}`:'Not yet acknowledged';
- const lines=[a.category_label,a.timeframe,a.status==='dismissed'?`Dismissed${a.dismissed_by_name?' by '+a.dismissed_by_name:''}`:a.status==='active'?ack:a.status==='cancelled'?'Cancelled by the National Weather Service':a.status==='ended'?'Ended':''].filter(Boolean);
+ const lines=[a.category_label,a.source==='forecast'?'':a.timeframe,a.status==='dismissed'?`Dismissed${a.dismissed_by_name?' by '+a.dismissed_by_name:''}`:a.status==='active'?ack:a.status==='cancelled'?'Cancelled by the National Weather Service':a.status==='ended'?'Ended':''].filter(Boolean);
  return `<article class="panel wx-card wx-card-${esc(a.level)}"><div class="wx-card-top">${wxPill(a)}${a.storm_event_id?`<span class="wx-tag">Storm: ${esc(a.storm_event_name)}</span>`:''}</div><h2>${esc(a.title||a.event_name)}</h2><p class="wx-count"><strong>${a.count} residence${a.count===1?'':'s'}</strong></p><p class="muted">${esc(lines.join(' · '))}</p><div class="actions">${btn('View residences','weather-open',a.id,true)}${a.status==='active'&&!a.acknowledged_at?btn('Acknowledge','weather-ack',a.id):''}</div></article>`;
 }
 function wxActiveView(){
@@ -142,7 +142,8 @@ residenceView=function(...args){
  let overrides={};try{overrides=typeof p.weather_threshold_overrides==='string'?JSON.parse(p.weather_threshold_overrides||'{}')||{}:(p.weather_threshold_overrides||{});}catch{}
  const admin=wxAdmin()?`<div class="wx-res-monitor"><span>${monitoringOff?'Weather monitoring is off for this residence.':Object.keys(overrides).length?'Weather monitoring on, with custom thresholds.':'Weather monitoring on, using company thresholds.'}</span>${btn('Weather settings','weather-monitoring',p.id)}</div>`:'';
  const extra=badges+admin;if(!extra)return html;
- const at=html.indexOf('<div class="hero summary">');return at<0?extra+html:html.slice(0,at)+extra+html.slice(at);
+ // Below the residence header and facts, just above the section tabs (older layouts: before the summary hero).
+ let at=html.indexOf('<nav class="res-tabs"');if(at<0)at=html.indexOf('<div class="hero summary">');return at<0?extra+html:html.slice(0,at)+extra+html.slice(at);
 };
 
 const wxBaseInspectionView=inspectionView;
