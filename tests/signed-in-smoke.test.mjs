@@ -11,7 +11,7 @@
 import {test,after,before} from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
-import {mkdtempSync,rmSync,existsSync} from 'node:fs';
+import {mkdtempSync,rmSync,existsSync,readFileSync} from 'node:fs';
 import {randomBytes,randomUUID} from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
@@ -52,7 +52,10 @@ before(async()=>{if(skip)return;await start();const admin=client();
  const cottage=await admin('properties',{clientId:fam.id,name:'Bay Cottage',streetAddress:'9 Bay Rd',city:'Stuart',state:'FL',postalCode:'34994',country:'United States'},201);
  await family('requests',{propertyId:cottage.id,title:'Check the dock lights',description:'',priority:'Normal'},201);
  await family('requests',{propertyId:home.id,title:'Stock the fridge',description:'Sparkling water.',priority:'Normal'},201);
- await family('arrivals',{propertyId:home.id,arrivalAt:day(5)+'T15:00',notes:'Arriving with grandchildren.'},201);
+ const arrival=await family('arrivals',{propertyId:home.id,arrivalAt:day(5)+'T15:00',notes:'Arriving with grandchildren.'},201);
+ // Flight-aware arrival: the family adds their flight (manual mode: no flight service in tests); staff add the suggested timed plan.
+ await family('flights/add',{arrivalId:arrival.id,airline:'DL',flightNumber:'1287',date:day(5),scheduledAt:day(5)+'T13:00'});
+ await staff('flights/tasks/suggested',{arrivalId:arrival.id});
  const job=(await admin('data')).work.find(w=>w.title==='Replace pool light');
  await admin('operations/approval',{workId:job.id,amountMinor:12500,description:'New pool light fixture and labor.'},200);
  // Batch 3a: a third home where the vendor has a job, so the vendor can open a residence.
@@ -76,6 +79,10 @@ before(async()=>{if(skip)return;await start();const admin=client();
  await admin('access-codes/save',{propertyId:loft.id,version:0,details:{gate:'1357',door:'5678',alarm:'2468',lockbox:'',instructions:'Use the side door.'}},201);
  await admin('inspectors/assign',{propertyId:loft.id,inspectorId,date:day(0)},201);
  await admin('inspectors/assign',{propertyId:cottage.id,inspectorId,date:day(6)},201);
+ // Photo spots: Ocean House has one spot with a baseline and one still waiting for its first photo.
+ const sink=(await admin('photo-spots',{propertyId:home.id,name:'Kitchen sink cabinet',location:'Kitchen',notes:'Door open, from the left.'},201)).id;
+ await admin('photo-spots',{propertyId:home.id,name:'Water heater',location:'Garage'},201);
+ await admin('files',{propertyId:home.id,name:'kitchen-baseline.jpg',base64:readFileSync(path.join(root,'tests/fixture.jpg')).toString('base64'),spotId:sink},201);
 });
 after(async()=>{if(proc&&!proc.killed){proc.kill();await new Promise(r=>proc.once('exit',r));}rmSync(dir,{recursive:true,force:true});});
 
@@ -440,6 +447,26 @@ async function insuranceChecks(page,role,mobile,done){
  assert.equal(await page.locator('.content .res-tabs button.active').getAttribute('data-id'),'records');
  done.push('insurance');
 }
+// Photo spots: Home records lists the spots (staff can add, only admins see Archive; the family sees no staff notes
+// or edit controls), and the draft visit shows the Photo spots panel with Take photo.
+async function photoSpotChecks(page,role,mobile,done){
+ await go(page,'properties');await page.evaluate(()=>{action('property',data.properties.find(p=>p.name==='Ocean House').id);});await settle(page);await page.evaluate(()=>{tab='records';render();});await settle(page);
+ const sec=await page.evaluate(()=>{const s=document.getElementById('res-photo-spots');return s?{text:s.innerText,cards:s.querySelectorAll('.ps-card').length,add:!!s.querySelector('[data-action="spot-new"]'),archive:!!s.querySelector('[data-action="spot-archive"]'),img:!!s.querySelector('img.ps-thumb, .ps-thumb img')}:null;});
+ assert.ok(sec,`${role}: Home records has Photo spots`);
+ assert.match(sec.text,/Kitchen sink cabinet[\s\S]*Water heater/,`${role}: spots listed by name`);assert.doesNotMatch(sec.text,MACHINE_DATE,`${role}: readable dates`);
+ assert.equal(sec.add,role!=='client',`${role}: staff add spots`);assert.equal(sec.archive,role==='admin',`${role}: only admins archive`);
+ if(role==='client')assert.doesNotMatch(sec.text,/Door open, from the left/,'client: staff notes stay internal');else assert.match(sec.text,/Door open, from the left/,`${role}: staff see the shooting notes`);
+ await page.locator('#res-photo-spots [data-action="spot-timeline"]').first().click();await settle(page);
+ assert.match(await page.locator('#res-photo-spots .ps-tl-wrap').first().innerText(),/Baseline/,`${role}: the timeline shows the baseline`);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${role}: photo spots fit the screen`);
+ if(role!=='client'){
+  await page.evaluate(id=>action('inspection',id),draftId);await settle(page);
+  const panel=await page.evaluate(()=>{const s=document.getElementById('ps-visit');return s?{rows:s.querySelectorAll('.ps-visit-row').length,take:s.querySelectorAll('[data-action="spot-capture"]').length,text:s.innerText}:null;});
+  assert.ok(panel,`${role}: the draft visit has the Photo spots panel`);assert.equal(panel.rows,2);assert.equal(panel.take,2,`${role}: Take photo for each spot`);
+  assert.match(panel.text,/No baseline yet/,`${role}: a spot without a baseline says so`);
+ }
+ done.push('photo-spots');
+}
 // Smart locks: the admin reveals the job's door code (audited) and sees the residence's locks and the settings panel;
 // the vendor sees the code is coming but cannot reveal it before the window; the family never sees door access.
 async function lockChecks(page,role,done){
@@ -455,6 +482,22 @@ async function lockChecks(page,role,done){
  assert.match(await go(page,'workspace'),/Smart locks[\s\S]*Manual codes/,'admin: settings show the lock connection');
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'admin: settings fit the screen');
  done.push('smart-locks');
+}
+// Flight-aware arrivals: the arrival shows the flight and the timed plan (staff) or the flight and progress (family);
+// arrival cards carry the flight status; settings show the flight connection; vendors never see arrivals.
+async function flightChecks(page,role,done){
+ if(role==='vendor'){assert.deepEqual(await page.evaluate(()=>data.flights?.flights||[]),[],'vendor: no flights');done.push('flights');return;}
+ const list=await go(page,'arrivals');assert.match(list,/DL1287 · On time · lands 1:00 PM/,`${role}: arrival card shows the flight status`);
+ await page.evaluate(()=>action('arrival-open',data.arrivals[0].id));await settle(page);
+ const panels=await page.locator('.fl-panel').allInnerTexts();
+ assert.match(panels[0],/Flights[\s\S]*DL1287[\s\S]*Lands .*1:00 PM/,`${role}: flight on the arrival`);
+ assert.match(panels[1]||'',/Arrival plan[\s\S]*Turn on air conditioning or heat[\s\S]*4 h before landing[\s\S]*Driver waiting at the airport[\s\S]*At landing/,`${role}: timed plan`);
+ assert.doesNotMatch(panels.join(' '),/\d{4}-\d{2}-\d{2}T/,`${role}: no machine dates`);
+ if(role==='client'){assert.match(await mainText(page),/Preparing your residence[\s\S]*\d+ of \d+ checklist items done/,'client: preparation progress');assert.equal(await page.locator('[data-action="fl-task-done"]').count(),0,'client: cannot tick the plan');}
+ else{assert.equal(await page.locator('[data-action="fl-task-done"]').count(),3,'admin: plan can be ticked');
+  assert.match(await go(page,'workspace'),/Flight tracking[\s\S]*Manual updates/,'admin: settings show the flight connection');}
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${role}: fits the screen`);
+ done.push('flights');
 }
 const PAGE_CHECKS={
  admin:async(page,mobile,done)=>{
@@ -504,10 +547,13 @@ const PAGE_CHECKS={
   await inspectionChecks(page,'admin',mobile,done);
   await calendarChecks(page,'admin',{arrival:'Owners arrive',chips:['Everything','Visits','Arrivals','Work','Shifts']},done);
   await insuranceChecks(page,'admin',mobile,done);
+  await photoSpotChecks(page,'admin',mobile,done);
   await lockChecks(page,'admin',done);
+  await flightChecks(page,'admin',done);
  },
  employee:async(page,mobile,done)=>{
   await insuranceChecks(page,'employee',mobile,done);
+  await photoSpotChecks(page,'employee',mobile,done);
   await scheduleChecks(page,'employee',mobile,done);
   await requestServiceCheck(page,'employee',done);
  },
@@ -526,6 +572,7 @@ const PAGE_CHECKS={
   await workChecks(page,'vendor',{chips:['Open','Completed'],rows:['Service the pool pump'],primary:'Start work'},done);
   assert.match(await go(page,'messages'),/company that sends you jobs/,'vendor: messages subtitle for vendors');done.push('wording');
   await lockChecks(page,'vendor',done);
+  await flightChecks(page,'vendor',done);
  },
  client:async(page,mobile,done)=>{
   await headerChecks(page,mobile,'client',['properties','work','inspections','requests','documents','messages','notifications'],done);
@@ -533,6 +580,7 @@ const PAGE_CHECKS={
   await workChecks(page,'client',{chips:['Open','Needs your approval','Completed'],rows:['Replace pool light'],primary:'Review the estimate'},done);
   await residenceChecks(page,'client','Ocean House',{facts:6,tabs:['overview','inspections','services','arrivals','records','people'],panels:['Needs attention here','Visits','Service updates','Owners & family','Next arrival','Home records'],alias:['shopping','arrivals']},done);
   await insuranceChecks(page,'client',mobile,done);
+  await photoSpotChecks(page,'client',mobile,done);
   // Batch 2 wording: written for the family, not for staff.
   const home=await go(page,'dashboard');assert.match(await page.locator('.content .page-title').innerText(),/^Good (morning|afternoon|evening)/,'client: home greets the family');
   assert.equal(await page.locator('details.action-needed').evaluate(d=>d.open),true,'client: Action needed starts open');assert.doesNotMatch(home,/\b1 work orders\b/,'client: singular work order');
@@ -546,6 +594,7 @@ const PAGE_CHECKS={
   await calendarChecks(page,'client',{arrival:'You arrive',chips:['Everything','Visits','Arrivals','Service']},done);
   await requestServiceCheck(page,'client',done);
   await lockChecks(page,'client',done);
+  await flightChecks(page,'client',done);
  }
 };
 async function pageJourney(launch,contextOptions,role,email){
@@ -609,4 +658,46 @@ async function inspectorJourney(launch,contextOptions){
 }
 for(const [name,launch,options] of browsers.length?browsers:[['browser',null,null]]){
  test(`signed in (${name}): a field inspector sees only Today and their assigned visit`,{skip,timeout:120000},async()=>{await inspectorJourney(launch,options);});
+// Weather alerts (off by default, so the menus above do not list it). Turned on here, last: admin and staff open the
+// Weather page (Active, Recent, admin Settings) with no errors, the menu item appears, and axe finds no serious or
+// critical accessibility problems. axe-core is optional: set AXE_CORE to axe.min.js, or it looks in node_modules.
+const axePath=[process.env.AXE_CORE,path.join(root,'node_modules/axe-core/axe.min.js'),path.join(path.dirname(pwCore||'/x/x'),'..','axe-core','axe.min.js')].find(p=>p&&existsSync(p));
+const asAdmin=async(endpoint,b)=>{const res=await fetch(base+'/api/'+endpoint,{method:b===undefined?'GET':'POST',headers:{Origin:base,'Content-Type':'application/json',Cookie:sessions['admin@example.test']},body:b===undefined?undefined:JSON.stringify(b)});assert.equal(res.status,200,endpoint);return res.json();};
+async function axeCheck(page,label){
+ if(!axePath)return;
+ await page.addScriptTag({path:axePath});
+ const r=await page.evaluate(()=>window.axe.run(document.querySelector('.shell main')||document,{resultTypes:['violations']}));
+ const bad=r.violations.filter(v=>['serious','critical'].includes(v.impact)).map(v=>`${v.id}: ${v.nodes.slice(0,3).map(n=>n.target.join(' ')).join(', ')}`);
+ assert.deepEqual(bad,[],`${label}: accessibility`);
+}
+for(const [name,launch,options] of browsers.length?browsers:[['browser',null,null]]){
+ test(`signed in (${name}): Weather page for admin and staff, with an accessibility check`,{skip,timeout:120000},async()=>{
+  await asAdmin('settings/weather',{enabled:true});
+  for(const [role,email] of [['admin','admin@example.test'],['employee','staff@example.test']]){
+   // bypassCSP only so the test can inject axe; the app itself runs under its normal policy everywhere else.
+   const browser=await launch();const ctx=await browser.newContext({...options,serviceWorkers:'block',bypassCSP:!!axePath});
+   const {page,errors,toasts}=await watch(ctx);
+   try{
+    const [cookieName,value]=sessions[email].split('=');await ctx.addCookies([{name:cookieName,value,url:base}]);
+    await page.goto(base+'/login');await page.waitForSelector('.shell',{timeout:15000});await settle(page);
+    const menu=await page.evaluate(()=>[...document.querySelectorAll('aside [data-action="navigate"]')].map(b=>b.dataset.id));
+    assert.ok(menu.includes('weather'),`${role}: Weather is in the menu once turned on`);
+    const text=await go(page,'weather');
+    assert.match(await page.locator('.content .page-title').innerText(),/^Weather/,`${role}: Weather page title`);
+    assert.match(text,/No weather alerts right now/,`${role}: empty active list`);
+    await axeCheck(page,`${role} weather (active)`);
+    const tabs=await page.evaluate(()=>[...document.querySelectorAll('.content .wx-tabs [data-action="weather-tab"]')].map(b=>b.dataset.id));
+    assert.deepEqual(tabs,role==='admin'?['active','recent','settings']:['active','recent'],`${role}: tabs`);
+    if(role==='admin'){
+     await click(page,'.content .wx-tabs [data-id="settings"]');await page.waitForSelector('#wxSettings',{timeout:5000});await settle(page);
+     assert.match(await mainText(page),/approximate residence coordinates/,'admin: privacy note in settings');
+     await axeCheck(page,'admin weather (settings)');
+    }
+    await page.waitForTimeout(200);
+    assert.deepEqual(errors,[],`${role}: page errors on Weather`);
+    assert.deepEqual((await toasts()).filter(t=>ERROR_TOAST.test(t)),[],`${role}: error toasts on Weather`);
+   }finally{await browser.close();}
+  }
+  await asAdmin('settings/weather',{enabled:false});
+ });
 }

@@ -1,0 +1,72 @@
+/* Repeat-angle photo baselines (signed-in app). White cards and Georgia headings from app.css, gold-brown labels,
+   44px tap targets, no scrolling boxes: timelines and comparisons wrap onto more rows instead. */
+.shell .ps-record>.empty-state{margin:0 22px 18px}
+.shell .ps-lede{color:#5f6b76;font-size:14px;line-height:1.5;margin:0 22px 10px}
+.shell .ps-list,.shell .ps-visit-list,.shell .ps-timeline{list-style:none;margin:0;padding:0}
+.shell .ps-list{padding:0 22px 12px}
+.shell .ps-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 14px;align-items:center;padding:14px 0;border-top:1px solid #edf0f2}
+.shell .ps-card:first-child{border-top:0}
+.shell .ps-card-main{display:flex;gap:14px;align-items:flex-start;min-width:0}
+.shell .ps-card-text{min-width:0;display:flex;flex-direction:column;gap:3px}
+.shell .ps-card-text h3{margin:0;font-size:16px;font-family:inherit;font-weight:700;color:#1f2933}
+.shell .ps-card-text strong{font-size:15px;color:#1f2933}
+.shell .ps-card-text small,.shell .ps-sub{color:#5f6b76;font-size:13px;line-height:1.45;margin:0}
+.shell .ps-note{margin:2px 0 0;font-size:13px;color:#3d4852;line-height:1.45}
+.shell .ps-card-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.shell .ps-card-actions button,.shell .ps-tl-actions button,.shell .ps-pair-actions button{min-height:44px}
+.shell .ps-thumb{width:112px;height:84px;object-fit:cover;border-radius:8px;border:1px solid #e2e7eb;background:#f3f5f6;flex:none;display:block}
+.shell .ps-thumb-empty{display:flex;align-items:center;justify-content:center;text-align:center;color:#5f6b76;font-size:12px;padding:6px}
+.shell .ps-tl-wrap{grid-column:1/-1}
+.shell .ps-timeline{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;padding:6px 0 4px}
+.shell .ps-tl-item{border:1px solid #edf0f2;border-radius:10px;padding:8px;background:#fff;display:flex;flex-direction:column;gap:6px}
+.shell .ps-tl-img{width:100%;aspect-ratio:4/3;height:auto;object-fit:cover;border-radius:6px;display:block;background:#f3f5f6}
+.shell .ps-tl-meta{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center}
+.shell .ps-tl-meta small{flex-basis:100%;color:#5f6b76;font-size:12.5px}
+.shell .ps-tl-actions{display:flex;gap:6px;flex-wrap:wrap}
+.shell .ps-base-badge{background:#f3ecdf;color:#6b5420}
+.shell .ps-visit,.shell .ps-compare{margin:22px 0 8px}
+.shell .ps-visit-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.shell .ps-visit-head h2{margin:0}
+.shell .ps-visit .ps-lede,.shell .ps-compare .ps-lede{margin:6px 0 10px}
+.shell .ps-visit-row{display:flex;gap:14px;align-items:center;padding:12px 0;border-top:1px solid #edf0f2}
+.shell .ps-visit-row .ps-card-text{flex:1}
+.shell .ps-ok{color:#2f6b45!important;font-weight:600}
+.shell .ps-pair-card{border:1px solid #edf0f2;border-radius:12px;padding:14px;margin:0 0 14px;background:#fff}
+.shell .ps-pair-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.shell .ps-pair-head h3{margin:0;font-size:16px;font-family:inherit;font-weight:700}
+.shell .ps-pair-head small{color:#5f6b76}
+.shell .ps-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.shell .ps-pair figure{margin:0;min-width:0}
+.shell .ps-pair img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;display:block;background:#f3f5f6}
+.shell .ps-pair figcaption{font-size:13px;color:#5f6b76;margin-top:6px}
+.shell .ps-pair figcaption strong{color:#7a6847;text-transform:uppercase;letter-spacing:.05em;font-size:11.5px}
+.shell .ps-pair-actions{margin-top:10px}
+@media(max-width:700px){
+ .shell .ps-list{padding:0 16px 10px}
+ .shell .ps-lede{margin:0 16px 10px}
+ .shell .ps-card{grid-template-columns:1fr}
+ .shell .ps-card-actions{justify-content:flex-start}
+ .shell .ps-card-actions>*{flex:1 1 120px;min-width:0;width:auto}
+ .shell .ps-card-actions>button,.shell .ps-card-actions>details>summary{width:100%;justify-content:center}
+ .shell .ps-thumb{width:88px;height:66px}
+ .shell .ps-visit-row{flex-wrap:wrap}
+ .shell .ps-visit-row .ps-card-actions{width:100%}
+ .shell .ps-visit-row .ps-card-actions button{flex:1}
+ .shell .ps-timeline{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+ .shell .ps-pair{gap:8px}
+}
+/* Camera dialog (the dialog sits outside .shell). */
+#modal .ps-hint{color:#4a5560;font-size:14px;line-height:1.5;margin:0 0 10px}
+#modal .ps-stage{position:relative;width:100%;aspect-ratio:4/3;background:#111820;border-radius:12px;overflow:hidden}
+#modal .ps-stage video,#modal .ps-stage img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+#modal .ps-stage .ps-ghost{pointer-events:none;opacity:.5}
+#modal .ps-stage-msg{position:absolute;inset:auto 0 0 0;margin:0;padding:12px 14px;color:#fff;background:rgba(17,24,32,.82);font-size:14px;line-height:1.45}
+#modal .ps-slider{margin-top:12px}
+#modal .ps-slider label{display:flex;justify-content:space-between}
+#modal .ps-slider input[type=range]{width:100%;min-height:44px}
+#modal .ps-cam-actions{flex-wrap:wrap}
+#modal .ps-cam-actions .button,#modal .ps-cam-actions button{min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+#modal .ps-file{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+#modal .ps-file-label{position:relative}
+#modal .ps-file-label:focus-within{outline:3px solid #8b242b;outline-offset:2px}
+.ps-cam-actions [hidden],.ps-stage [hidden]{display:none!important}

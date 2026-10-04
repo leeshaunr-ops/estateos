@@ -1,0 +1,57 @@
+{
+ "properties": {
+  "minTemperature": {
+   "uom": "wmoUnit:degC",
+   "values": [
+    {
+     "validTime": "{{day0}}T00:00:00+00:00/PT14H",
+     "value": 2
+    },
+    {
+     "validTime": "{{day1}}T00:00:00+00:00/PT14H",
+     "value": -6.7
+    },
+    {
+     "validTime": "{{day2}}T00:00:00+00:00/PT14H",
+     "value": -5
+    }
+   ]
+  },
+  "maxTemperature": {
+   "uom": "wmoUnit:degC",
+   "values": [
+    {
+     "validTime": "{{day0}}T12:00:00+00:00/PT12H",
+     "value": 8
+    }
+   ]
+  },
+  "apparentTemperature": {
+   "uom": "wmoUnit:degC",
+   "values": [
+    {
+     "validTime": "{{day0}}T12:00:00+00:00/PT6H",
+     "value": 7
+    }
+   ]
+  },
+  "quantitativePrecipitation": {
+   "uom": "wmoUnit:mm",
+   "values": [
+    {
+     "validTime": "{{day0}}T12:00:00+00:00/PT6H",
+     "value": 3
+    }
+   ]
+  },
+  "windGust": {
+   "uom": "wmoUnit:km_h-1",
+   "values": [
+    {
+     "validTime": "{{day0}}T12:00:00+00:00/PT6H",
+     "value": 30
+    }
+   ]
+  }
+ }
+}

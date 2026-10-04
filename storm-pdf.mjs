@@ -109,20 +109,21 @@ export function stormReportPdf(r,photos=new Map()){
  doc.y+=6;doc.need(66);
  [['PRE-STORM PREP',r.prepLabel,TONE_STYLE[r.prepTone]||'na'],['POST-STORM CHECK',r.postLabel,TONE_STYLE[r.postTone]||'na'],['DAMAGE SEVERITY',r.severity||'Not assessed',r.severity&&!['None','Not assessed'].includes(r.severity)?'attention':r.severity==='None'?'pass':'na']].forEach(([title,value,style],i)=>{const x=40+i*180;doc.rect(x,doc.y,172,56,BG[style]||BG.na);doc.rect(x,doc.y,172,3,C[style]||C.muted);doc.text(title,x+12,doc.y+12,8,C.muted,true);wrap(value,150,13,true).slice(0,2).forEach((l,k)=>doc.text(l,x+12,doc.y+26+k*15,13,C[style]||C.ink,true));});doc.y+=70;
  // Timeline in the residence time zone.
- const events=[[r.event.prepDeadlineAt,'Preparation deadline'],[r.pre?.completedAt,`Pre-storm visit completed by ${r.pre?.inspector||'the team'}`],[r.event.expectedImpactAt,`Expected ${r.event.typeLabel.toLowerCase()} impact`],[r.post?.completedAt,`Post-storm visit completed by ${r.post?.inspector||'the team'}`]].filter(([at])=>at).sort((a,b)=>String(a[0]).localeCompare(String(b[0])));
+ const events=[[r.event.prepDeadlineAt,'Preparation deadline'],[r.pre?.completedAt,`Pre-storm visit completed by ${r.pre?.inspector||'the team'}`],[r.event.expectedImpactAt,`Expected ${r.event.typeLabel.toLowerCase()} impact`],[r.post?.completedAt,`Post-storm visit completed by ${r.post?.inspector||'the team'}`],[r.weatherAlert?.issuedAt,r.weatherAlert?`National Weather Service ${r.weatherAlert.event} issued${r.weatherAlert.endsAt?` (in effect until ${reportTimestamp(r.weatherAlert.endsAt,tz)})`:''}`:'']].filter(([at])=>at).sort((a,b)=>String(a[0]).localeCompare(String(b[0])));
  doc.heading('Timeline');
  if(!events.length)doc.paragraph('No storm visits have been published for this residence yet.',{size:10,color:C.muted});
  for(const [at,what] of events){const l=wrap(what,330,10);doc.need(l.length*14+6);doc.rect(44,doc.y+3,6,6,C.brand);doc.text(reportTimestamp(at,tz),58,doc.y,10,C.ink,true);l.forEach((line,k)=>doc.text(line,240,doc.y+k*14,10));doc.y+=l.length*14+6;}
  doc.y+=4;doc.paragraph(`Times are shown in the residence time zone (${tz}).`,{size:8,color:C.muted});
+ if(r.weatherNote)doc.paragraph(r.weatherNote,{size:8,color:C.muted});
  // Pre-storm condition.
  doc.heading('Pre-storm condition');
  if(!r.pre)doc.paragraph('No published pre-storm visit for this storm.',{color:C.muted});
- else{doc.facts(visitMeta(r.pre,tz));verificationBox(doc,r.pre.verification);if(r.pre.summary){doc.need(30);doc.text('Inspector summary',40,doc.y,9,C.muted,true);doc.y+=14;doc.paragraph(r.pre.summary);}doc.y+=6;answerList(doc,r.pre.answers);doc.y+=8;doc.need((r.pre.photoIds||[]).length?250:40);doc.text('Pre-storm photos',40,doc.y,11,C.brand,true);doc.y+=18;photoGrid(doc,r.pre.photoIds,photos,{prefix:'PRE'});}
+ else{doc.facts([...visitMeta(r.pre,tz),...(r.pre.weatherLine?[['Weather at visit',r.pre.weatherLine]]:[])]);verificationBox(doc,r.pre.verification);if(r.pre.summary){doc.need(30);doc.text('Inspector summary',40,doc.y,9,C.muted,true);doc.y+=14;doc.paragraph(r.pre.summary);}doc.y+=6;answerList(doc,r.pre.answers);doc.y+=8;doc.need((r.pre.photoIds||[]).length?250:40);doc.text('Pre-storm photos',40,doc.y,11,C.brand,true);doc.y+=18;photoGrid(doc,r.pre.photoIds,photos,{prefix:'PRE'});}
  // Post-storm findings.
  doc.heading('Post-storm findings');
  if(!r.post)doc.paragraph('No published post-storm visit for this storm yet.',{color:C.muted});
  else{
-  doc.facts([...visitMeta(r.post,tz),['Damage severity',r.severity||'Not assessed']]);verificationBox(doc,r.post.verification);
+  doc.facts([...visitMeta(r.post,tz),...(r.post.weatherLine?[['Weather at visit',r.post.weatherLine]]:[]),['Damage severity',r.severity||'Not assessed']]);verificationBox(doc,r.post.verification);
   if(r.post.summary){doc.need(30);doc.text('Inspector summary',40,doc.y,9,C.muted,true);doc.y+=14;doc.paragraph(r.post.summary);}
   const found=S.findings(r.post.answers),written=(r.post.answers||[]).filter(a=>a.response_type==='text'&&a.status&&a.status!=='unchecked'&&String(a.status).trim());
   doc.y+=6;doc.need(40);doc.text('Damage and items to watch',40,doc.y,11,C.brand,true);doc.y+=18;
@@ -134,12 +135,12 @@ export function stormReportPdf(r,photos=new Map()){
  const pairs=(r.pairs||[]).filter(p=>p.beforeId&&p.afterId);
  if(pairs.length){
   doc.heading('Before and after',260);
-  doc.paragraph('Photos are paired by checklist item or by the same photo name. Photos without a match are shown side by side in the order they were taken.',{size:9,color:C.muted});doc.y+=4;
+  doc.paragraph('Photos are paired by photo spot (the same angle photographed before and after the storm), then by checklist item or by the same photo name. Photos without a match are shown side by side in the order they were taken.',{size:9,color:C.muted});doc.y+=4;
   const how={item:'Same checklist item',name:'Same photo name',order:'Shown in the order taken'};
   for(const pair of pairs){
    const sides=[['BEFORE (PRE-STORM)',photos.get(pair.beforeId)],['AFTER (POST-STORM)',photos.get(pair.afterId)]].map(([title,p])=>{const img=p?doc.image(p.id,p.bytes):null,w=img?Math.min(258,258*Math.min(1,img.width/img.height*180/258)):258,h=img?Math.min(180,w*img.height/img.width):30;return {title,p,img,w,h,cap:[...(p?.name?wrap(p.name,258,8):[]),...(p&&photoTakenAt(p)?wrap(photoTakenAt(p),258,8):[])]};});
    const height=16+Math.max(...sides.map(s=>s.h+s.cap.length*10))+22;doc.need(height);
-   doc.text(how[pair.match]||how.order,40,doc.y,8,C.muted,true);doc.y+=13;
+   doc.text(pair.match==='spot'?clean('Same photo spot'+(pair.spot?': '+pair.spot:'')).slice(0,90):how[pair.match]||how.order,40,doc.y,8,C.muted,true);doc.y+=13;
    sides.forEach((s,j)=>{const x=40+j*274;doc.text(s.title,x,doc.y,8,C.brand,true);if(s.img)doc.draw(s.img,x,doc.y+12,s.w,s.h);else doc.rect(x,doc.y+12,258,s.h,BG.na);let top=doc.y+16+s.h;s.cap.forEach(c=>{doc.text(c,x,top,8,C.muted);top+=10;});});
    doc.y+=height-13;
   }

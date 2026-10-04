@@ -282,7 +282,7 @@ export function createVisitVerification({get, all, run, transaction, id, now, fa
  /** Background geocoding: only companies with the feature on, only with GEOAPIFY_API_KEY, about one request a second. */
  async function geocodePending(limit = 25) {
   if (!env.GEOAPIFY_API_KEY) return 0;
-  const rows = await all(`SELECT p.* FROM properties p JOIN workspace_settings w ON w.organization_id=p.organization_id WHERE w.visit_verification_enabled=1 AND p.archived_at IS NULL AND p.address<>'' AND ((p.latitude IS NULL AND (p.geocode_source IS NULL OR (p.geocode_source='geoapify_failed' AND p.geocoded_address<>p.address))) OR (p.geocode_source='geoapify' AND p.geocoded_address<>p.address)) LIMIT ${Math.max(1, Math.min(100, limit))}`);
+  const rows = await all(`SELECT p.* FROM properties p JOIN workspace_settings w ON w.organization_id=p.organization_id WHERE (w.visit_verification_enabled=1 OR EXISTS(SELECT 1 FROM weather_settings ws WHERE ws.organization_id=p.organization_id AND ws.enabled=1)) AND p.archived_at IS NULL AND p.address<>'' AND ((p.latitude IS NULL AND (p.geocode_source IS NULL OR (p.geocode_source='geoapify_failed' AND p.geocoded_address<>p.address))) OR (p.geocode_source='geoapify' AND p.geocoded_address<>p.address)) LIMIT ${Math.max(1, Math.min(100, limit))}`);
   let done = 0;
   for (const pRow of rows) {
    if (done) await new Promise(r => setTimeout(r, Number(env.ESTATEOS_GEOCODE_DELAY_MS ?? 1100)));
