@@ -506,3 +506,47 @@ for(const [name,launch,options] of browsers.length?browsers:[['browser',null,nul
   }
  });
 }
+
+// Weather alerts (off by default, so the menus above do not list it). Turned on here, last: admin and staff open the
+// Weather page (Active, Recent, admin Settings) with no errors, the menu item appears, and axe finds no serious or
+// critical accessibility problems. axe-core is optional: set AXE_CORE to axe.min.js, or it looks in node_modules.
+const axePath=[process.env.AXE_CORE,path.join(root,'node_modules/axe-core/axe.min.js'),path.join(path.dirname(pwCore||'/x/x'),'..','axe-core','axe.min.js')].find(p=>p&&existsSync(p));
+const asAdmin=async(endpoint,b)=>{const res=await fetch(base+'/api/'+endpoint,{method:b===undefined?'GET':'POST',headers:{Origin:base,'Content-Type':'application/json',Cookie:sessions['admin@example.test']},body:b===undefined?undefined:JSON.stringify(b)});assert.equal(res.status,200,endpoint);return res.json();};
+async function axeCheck(page,label){
+ if(!axePath)return;
+ await page.addScriptTag({path:axePath});
+ const r=await page.evaluate(()=>window.axe.run(document.querySelector('.shell main')||document,{resultTypes:['violations']}));
+ const bad=r.violations.filter(v=>['serious','critical'].includes(v.impact)).map(v=>`${v.id}: ${v.nodes.slice(0,3).map(n=>n.target.join(' ')).join(', ')}`);
+ assert.deepEqual(bad,[],`${label}: accessibility`);
+}
+for(const [name,launch,options] of browsers.length?browsers:[['browser',null,null]]){
+ test(`signed in (${name}): Weather page for admin and staff, with an accessibility check`,{skip,timeout:120000},async()=>{
+  await asAdmin('settings/weather',{enabled:true});
+  for(const [role,email] of [['admin','admin@example.test'],['employee','staff@example.test']]){
+   // bypassCSP only so the test can inject axe; the app itself runs under its normal policy everywhere else.
+   const browser=await launch();const ctx=await browser.newContext({...options,serviceWorkers:'block',bypassCSP:!!axePath});
+   const {page,errors,toasts}=await watch(ctx);
+   try{
+    const [cookieName,value]=sessions[email].split('=');await ctx.addCookies([{name:cookieName,value,url:base}]);
+    await page.goto(base+'/login');await page.waitForSelector('.shell',{timeout:15000});await settle(page);
+    const menu=await page.evaluate(()=>[...document.querySelectorAll('aside [data-action="navigate"]')].map(b=>b.dataset.id));
+    assert.ok(menu.includes('weather'),`${role}: Weather is in the menu once turned on`);
+    const text=await go(page,'weather');
+    assert.match(await page.locator('.content .page-title').innerText(),/^Weather/,`${role}: Weather page title`);
+    assert.match(text,/No weather alerts right now/,`${role}: empty active list`);
+    await axeCheck(page,`${role} weather (active)`);
+    const tabs=await page.evaluate(()=>[...document.querySelectorAll('.content .wx-tabs [data-action="weather-tab"]')].map(b=>b.dataset.id));
+    assert.deepEqual(tabs,role==='admin'?['active','recent','settings']:['active','recent'],`${role}: tabs`);
+    if(role==='admin'){
+     await click(page,'.content .wx-tabs [data-id="settings"]');await page.waitForSelector('#wxSettings',{timeout:5000});await settle(page);
+     assert.match(await mainText(page),/approximate residence coordinates/,'admin: privacy note in settings');
+     await axeCheck(page,'admin weather (settings)');
+    }
+    await page.waitForTimeout(200);
+    assert.deepEqual(errors,[],`${role}: page errors on Weather`);
+    assert.deepEqual((await toasts()).filter(t=>ERROR_TOAST.test(t)),[],`${role}: error toasts on Weather`);
+   }finally{await browser.close();}
+  }
+  await asAdmin('settings/weather',{enabled:false});
+ });
+}

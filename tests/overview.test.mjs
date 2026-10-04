@@ -132,7 +132,7 @@ test('setup checklist for a new company',()=>{
 test('the shell ships the Overview files and the quick fixes',()=>{
  const html=read('public/live.html'),sw=read('public/sw.js'),server=read('server.mjs'),live=read('public/live.js'),css=read('public/overview.css'),js=read('public/overview.js');
  assert.match(html,/<script src="\/overview-core\.js\?v=[^"]+"><\/script><script src="\/live\.js/,'rules load before live.js');
- assert.match(html,/<script src="\/overview\.js\?v=[^"]+"><\/script><script src="\/view-route\.js/);
+ assert.match(html,/<script src="\/overview\.js\?v=[^"]+"><\/script>(<script src="\/weather(-core)?\.js\?v=[^"]+"><\/script>)*<script src="\/view-route\.js/,'overview.js loads just before view-route.js (weather scripts may sit between)');
  assert.match(html,/<link rel="stylesheet" href="\/overview\.css\?v=[^"]+">/);
  for(const f of ['overview-core.js','overview.js','overview.css']){assert.ok(sw.includes(`'/${f}'`),'service worker caches '+f);assert.match(server,new RegExp(`SHELL_FILES = \\[[^\\]]*'${f.replace('.','\\.')}'`),'shell version covers '+f);assert.ok(server.includes(`'/${f}':'${f}'`),'served: '+f);}
  assert.doesNotMatch(js+read('public/overview-core.js'),/style=/,'no inline styles (CSP)');
