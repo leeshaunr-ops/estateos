@@ -1,6 +1,6 @@
 /* Billing page: "Your EstateAegis plan" panel. Palette and type match the Oct 2026 app refresh; no scrolling boxes. */
 .shell .plan-panel{padding:22px 24px}
-.shell .plan-panel .res-panel-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.shell .plan-panel .res-panel-head{padding:0;border:0;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 .shell .plan-panel h2{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:22px;color:#1f2933;margin:0}
 .shell .plan-status{margin:12px 0 4px;color:#1f2933;font-size:15px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
 .shell .plan-name{font-size:17px}

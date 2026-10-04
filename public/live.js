@@ -324,6 +324,7 @@ function messagesView(){
 }
 
 function view(){
+ if(page==='platform-owner'&&data.user.platformOwner&&window.EAOwner)return window.EAOwner.page();
  if(page==='approvals')return approvalsView();if(page==='automation')return automationPage();if(page==='email-activity')return deliveryView();if(page==='dashboard'&&data.user.role==='client')return clientHome();
  if(page==='messages')return messagesView();
  if(page==='workspace'&&data.user.role==='admin')return settingsView();

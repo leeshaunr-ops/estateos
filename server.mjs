@@ -4,6 +4,8 @@ import {createVisitChecklists,parseSnapshot,checklistLabel,EAChecklist,BUILT_IN}
 import {createPlatformGoogle} from './platform-google.mjs';
 import {createPlatformDashboard} from './platform-dashboard.mjs';
 import {createStripeBilling} from './stripe-billing.mjs';
+import {createPlatformMonitor} from './platform-monitor.mjs';
+import {createStripeClient} from './stripe-client.mjs';
 import {createPaidSignup} from './paid-signup.mjs';
 import {createStripeSandbox} from './stripe-sandbox.mjs';
 import {createSubscriptions} from './subscriptions.mjs';
@@ -212,6 +214,7 @@ const failAlerts=createFailAlerts({get,all,run,id,now,fail,json,body});
 const visitChecklists=createVisitChecklists({get,all,fail,note});
 const security=createSecurity({get,run,transaction,body,json,rate,fail,passwordMatches,audit,now});
 const billing=createStripeBilling({get,all,run,transaction,id,now,fail,json,body,audit});
+const platformMonitor=createPlatformMonitor({get,all,run,transaction,json,fail,now,platformOwner,audit,billing,stripeClient:createStripeClient({origin:process.env.ESTATEOS_PUBLIC_URL||'https://estateaegis.com'})});
 const paidSignup=createPaidSignup({get,all,run,transaction,id,now,hash,randomBytes,body,json,fail,rate,parseSubscription:billing.parseSubscription});
 const stripeSandbox=createStripeSandbox({get,run,transaction,id,now,fail,json,body,platformOwner});
 const subscriptions=createSubscriptions({get,all,run,transaction,id,now,fail,json,body,audit,platformOwner,communications});
@@ -262,6 +265,7 @@ async function api(req, res, url, user) {
     if(await billing.handle(req,res,url,user))return;
     if(await platformGoogle.handle(req,res,url,user))return;
     if(await master.handle(req,res,url,user))return;
+    if(await platformMonitor.handle(req,res,url,user))return;
     if(await subscriptions.handle(req,res,url,user))return;
     if(await saas(req,res,url,user))return;
     if(await staff.handle(req,res,url,user))return;
@@ -1249,6 +1253,8 @@ const server = http.createServer(async (req, res) => {
             fail(403, 'Invalid host.');
         // Signed webhooks from outside services (no browser Origin; each handler verifies its own signature).
         if (url.pathname.startsWith('/api/webhooks/')) { if (await smartLocks.webhook(req, res, url)) return; fail(404, 'Endpoint not found.'); }
+        // Stripe calls this server-to-server (no Origin, signed body), so it is handled before the same-origin check.
+        if (url.pathname === '/api/stripe/webhook' && req.method === 'POST') return await platformMonitor.webhook(req, res);
         if (req.method !== 'GET' && req.method !== 'HEAD') {
             const origin = req.headers.origin;
             if (!origin || new URL(origin).host !== host)
@@ -1294,7 +1300,7 @@ const server = http.createServer(async (req, res) => {
             return res.end(url.pathname === '/sw.js' ? content.replace('__SHELL_VERSION__', shellVersion()) : content);
         }
         const appHome = url.pathname === '/' && (url.searchParams.has('invite') || url.searchParams.has('workspaceInvite') || await actor(req));
-        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/home-refresh.css':'home-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js','/visit-verification.js':'visit-verification.js','/visit-card.js':'visit-card.js','/storm-core.js':'storm-core.js','/smart-locks.js':'smart-locks.js','/smart-locks.css':'smart-locks.css','/storm.js':'storm.js','/storm.css':'storm.css','/insurance.js':'insurance.js','/insurance.css':'insurance.css','/photo-spots.js':'photo-spots.js','/photo-spots.css':'photo-spots.css','/certificate.js':'certificate.js','/certificate.css':'certificate.css','/view-route.js':'view-route.js', '/sidebar-core.js':'sidebar-core.js','/overview-core.js':'overview-core.js','/app-format.js':'app-format.js','/app.css':'app.css', '/overview.js':'overview.js', '/overview.css':'overview.css', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/login.js':'login.js','/login.css':'login.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/faq.js':'faq.js','/site-menu.js':'site-menu.js','/home-compact.js':'home-compact.js','/plan-panel.js':'plan-panel.js','/plan-panel.css':'plan-panel.css','/security':'security.html' };
+        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/home-refresh.css':'home-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js','/visit-verification.js':'visit-verification.js','/visit-card.js':'visit-card.js','/storm-core.js':'storm-core.js','/smart-locks.js':'smart-locks.js','/smart-locks.css':'smart-locks.css','/storm.js':'storm.js','/storm.css':'storm.css','/insurance.js':'insurance.js','/insurance.css':'insurance.css','/photo-spots.js':'photo-spots.js','/photo-spots.css':'photo-spots.css','/certificate.js':'certificate.js','/certificate.css':'certificate.css','/view-route.js':'view-route.js', '/sidebar-core.js':'sidebar-core.js','/overview-core.js':'overview-core.js','/app-format.js':'app-format.js','/app.css':'app.css', '/overview.js':'overview.js', '/overview.css':'overview.css', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/login.js':'login.js','/login.css':'login.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/faq.js':'faq.js','/site-menu.js':'site-menu.js','/home-compact.js':'home-compact.js','/plan-panel.js':'plan-panel.js','/platform-owner.js':'platform-owner.js','/platform-owner.css':'platform-owner.css','/plan-panel.css':'plan-panel.css','/security':'security.html' };
         const file = names[url.pathname] || (url.pathname === '/client-login' || /^\/client\/[a-z0-9-]+$/i.test(url.pathname) ? 'live.html' : /^\/certificate\/[A-Za-z0-9_-]{43}$/.test(url.pathname) ? 'certificate.html' : null);
         if (!file) {
             // Unknown pages get a friendly HTML 404 with the site navigation; /api/* keeps its JSON errors above.
@@ -1324,7 +1330,7 @@ const server = http.createServer(async (req, res) => {
         json(res, status, { error: status === 500 ? 'The action could not be saved. Check the server log.' : error.message, ...(status !== 500 && error.extra ? error.extra : {}) });
     }
 });
-const SHELL_FILES = ['live.html','live.js','login.js','login.css','inspection-checklist.js','visit-verification.js','visit-card.js','view-route.js','sidebar-core.js','overview-core.js','overview.js','overview.css','app-format.js','app.css','storm-core.js','storm.js','storm.css','smart-locks.js','smart-locks.css','insurance.js','insurance.css','photo-spots.js','photo-spots.css','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png','ea-shield-80.png','ea-shield-120.png','plan-panel.js','plan-panel.css'];
+const SHELL_FILES = ['live.html','live.js','login.js','login.css','inspection-checklist.js','visit-verification.js','visit-card.js','view-route.js','sidebar-core.js','overview-core.js','overview.js','overview.css','app-format.js','app.css','storm-core.js','storm.js','storm.css','smart-locks.js','smart-locks.css','insurance.js','insurance.css','photo-spots.js','photo-spots.css','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png','ea-shield-80.png','ea-shield-120.png','plan-panel.js','plan-panel.css','platform-owner.js','platform-owner.css'];
 let cachedShellVersion = null;
 function shellVersion() { if (!cachedShellVersion) { const digest = createHash('sha256'); for (const name of SHELL_FILES) { try { digest.update(name).update(fs.readFileSync(path.join(root, 'public', name))); } catch { digest.update(name + ':missing'); } } cachedShellVersion = digest.digest('hex').slice(0, 12); } return cachedShellVersion; }
 setInterval(() => offlineInspections.purge().catch(e => console.error('Idempotency cleanup:', e.message)), 3600000).unref();
@@ -1397,6 +1403,7 @@ const backupWorker=createBackupWorker({get,run,transaction,putBytes,readBytes,de
 setTimeout(()=>subscriptions.tick().catch(e=>console.error("Storage monitoring:",e.message)),20000).unref();
 setInterval(()=>subscriptions.tick().catch(e=>console.error("Storage monitoring:",e.message)),3600000).unref();
 setTimeout(()=>billing.tick().catch(()=>console.error('Billing sync needs retry.')),30000).unref();
+setTimeout(()=>platformMonitor.backfill().catch(()=>console.error('Platform monitor backfill needs retry.')),25000).unref();
 setInterval(()=>billing.tick().catch(()=>console.error('Billing sync needs retry.')),300000).unref();
 setTimeout(()=>paidSignup.tick().catch(()=>console.error('Signup sync needs retry.')),30000).unref();
 setInterval(()=>paidSignup.tick().catch(()=>console.error('Signup sync needs retry.')),60000).unref();
