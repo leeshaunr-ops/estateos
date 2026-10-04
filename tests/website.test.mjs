@@ -63,7 +63,7 @@ test('demo vs trial wording: no mailto demo requests or "contact us for pricing"
   assert.match(home, /Free 7-day demo workspace\. No credit card required\./);
   assert.match(home, /What’s the difference between the free demo and the 30-day trial\?/);
   assert.match(home, /Launch pricing · save \$20\/month/);
-  assert.match(home, /Plans start at \$59\/month \(launch pricing\) and include 2 admin\/staff users and 10 GB of storage\./);
+  assert.match(home, /Plans start at \$59\/month \(launch pricing\) and include 4 admin\/staff users and 10 GB of storage\. Client and vendor logins are unlimited on every plan/);
   assert.doesNotMatch(home, /launch pricing with two team accounts/);
   for (const file of ['home-watch-software.html', 'inspection-report-software.html', 'private-residence-management.html', 'about.html', 'resources.html', 'home-watch-checklist.html', 'arrival-preparation-checklist.html', 'example-workflow.html'])
     assert.match(read('public/' + file), /href="\/demo">Start your free demo →<\/a>/, file + ' links its demo button to /demo');
