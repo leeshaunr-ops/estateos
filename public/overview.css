@@ -233,3 +233,6 @@ body.signed-in #siteFooter,body:has(.shell) #siteFooter{display:none}
  .shell>aside .side-link{min-height:40px;padding:8px 14px}
 }
 @media(min-width:761px) and (max-height:900px){.shell>aside .side-item{padding:6px 10px}.side-heading{margin:11px 10px 3px}.shell>aside .side-toggle{margin:7px 0 1px;padding:5px 10px}.side-brand{padding-bottom:12px}}
+/* Setup checklist: "Or import them from another system" (data import). A text link with a full 44px tap target. */
+.shell .ov-alt-link{display:inline-flex;align-items:center;min-height:44px;padding:0;margin-top:2px;border:0;background:none;box-shadow:none;color:#8b242b;font-weight:600;font-size:14px;text-align:left;text-decoration:underline;text-underline-offset:3px}
+.shell .ov-alt-link:hover:not(:disabled){transform:none;box-shadow:none;color:#74191f}

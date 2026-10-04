@@ -17,7 +17,7 @@
   if(staff)nav.push(['staff-schedules','Staff schedules']);
   if(role==='admin')nav.push(['staff','Staff'],['workspace','Company settings'],['clients','Client families'],['vendors','Vendors'],['billing','Billing'],['users','Team & access'],['audit','Audit history']);
   if(role==='admin'||role==='client')nav.push(['approvals','Client approvals']);
-  if(role==='admin')nav.push(['automation','Schedules & automation'],['email-activity','Email activity'],['checklist-templates','Checklist templates']);
+  if(role==='admin')nav.push(['automation','Schedules & automation'],['email-activity','Email activity'],['checklist-templates','Checklist templates'],['import','Import data']);
   // Platform owner only: read-only monitoring of every company (plans, trials, payments, usage). Not 'platform',
   // which used to repeat Billing.
   if(role==='admin'&&user.platformOwner)nav.push(['platform-owner','Platform']);
@@ -29,7 +29,7 @@
   staff:[['Daily work',['inspections','routes','calendar','work','requests','arrivals','storm','weather','approvals']],
    ['Residences',['properties','insurance','clients','documents','assets','maintenance']],
    ['Team',['staff','staff-schedules','vendors','users']],
-   ['Company',['workspace','checklist-templates','automation','billing','email-activity','audit','platform','platform-owner']]],
+   ['Company',['workspace','import','checklist-templates','automation','billing','email-activity','audit','platform','platform-owner']]],
   client:[['Your home',['properties','inspections','work','requests','documents']],
    ['Plans',['arrivals','shopping','calendar','approvals']],['Company',['platform']]],
   vendor:[['Your work',['work','properties']],['Company',['platform']]]
