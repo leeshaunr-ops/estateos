@@ -658,6 +658,7 @@ async function inspectorJourney(launch,contextOptions){
 }
 for(const [name,launch,options] of browsers.length?browsers:[['browser',null,null]]){
  test(`signed in (${name}): a field inspector sees only Today and their assigned visit`,{skip,timeout:120000},async()=>{await inspectorJourney(launch,options);});
+}
 // Weather alerts (off by default, so the menus above do not list it). Turned on here, last: admin and staff open the
 // Weather page (Active, Recent, admin Settings) with no errors, the menu item appears, and axe finds no serious or
 // critical accessibility problems. axe-core is optional: set AXE_CORE to axe.min.js, or it looks in node_modules.

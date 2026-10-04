@@ -180,7 +180,7 @@ function allApiRoutes(){
 }
 // Public endpoints that run before sign-in is considered at all (signup, demo signup, public insurance links,
 // client error reports, the Stripe webhook). They behave the same for an inspector as for anyone signed out.
-const PUBLIC=/^\/api\/(signup|demo-signup|demo-request|demo\/start|client-error|stripe\/webhook|webhooks\/|insurance\/public|public)/;
+const PUBLIC=/^\/api\/(signup|demo-signup|demo-request|demo\/start|client-error|stripe\/webhook|webhooks\/|internal\/cron\/|insurance\/public|public)/;
 
 for(const [label,envFor] of engines)test('server on '+label+': inspectors reach only their assigned visits', async () => {
  const dir=tmp(),pw='Test-only-strong-password-928!';
