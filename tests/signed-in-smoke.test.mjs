@@ -11,7 +11,7 @@
 import {test,after,before} from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
-import {mkdtempSync,rmSync,existsSync} from 'node:fs';
+import {mkdtempSync,rmSync,existsSync,readFileSync} from 'node:fs';
 import {randomBytes,randomUUID} from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
@@ -26,6 +26,8 @@ const dir=mkdtempSync(path.join(os.tmpdir(),'estateos-smoke-'));
 let proc,base,log='';
 const password='Test-only-strong-password-928!';
 async function start(){const env={...process.env,PORT:'0',ESTATEOS_DATA_DIR:dir,ESTATEOS_VAULT_KEY:randomBytes(32).toString('base64')};delete env.DATABASE_URL;delete env.RENDER;delete env.ESTATEOS_SECURE_COOKIES;
+ // AI summaries: server switch on with the offline fake provider (no network, no key); each company still opts in.
+ env.AI_FEATURES_ENABLED='true';env.AI_PROVIDER='fake';delete env.OPENAI_API_KEY;
  proc=spawn(process.execPath,['server.mjs'],{cwd:root,env,windowsHide:true});proc.stderr.on('data',c=>{log+=c;});
  base=await new Promise((resolve,reject)=>{proc.stdout.on('data',c=>{const m=String(c).match(/http:\/\/127\.0\.0\.1:\d+/);if(m)resolve(m[0]);});proc.once('exit',code=>reject(Error('Server exited: '+code+' '+log)));setTimeout(()=>reject(Error('Startup timeout')),10000).unref();});}
 function client(){let cookie='';const call=async(endpoint,b,expected=200)=>{const res=await fetch(base+'/api/'+endpoint,{method:b===undefined?'GET':'POST',headers:{Origin:base,'Content-Type':'application/json',Cookie:cookie},body:b===undefined?undefined:JSON.stringify(b)});const set=res.headers.get('set-cookie');if(set)cookie=set.split(';')[0];const result=await res.json();assert.equal(res.status,expected,endpoint+': '+JSON.stringify(result));return result;};call.cookie=()=>cookie;return call;}
@@ -52,17 +54,37 @@ before(async()=>{if(skip)return;await start();const admin=client();
  const cottage=await admin('properties',{clientId:fam.id,name:'Bay Cottage',streetAddress:'9 Bay Rd',city:'Stuart',state:'FL',postalCode:'34994',country:'United States'},201);
  await family('requests',{propertyId:cottage.id,title:'Check the dock lights',description:'',priority:'Normal'},201);
  await family('requests',{propertyId:home.id,title:'Stock the fridge',description:'Sparkling water.',priority:'Normal'},201);
- await family('arrivals',{propertyId:home.id,arrivalAt:day(5)+'T15:00',notes:'Arriving with grandchildren.'},201);
+ const arrival=await family('arrivals',{propertyId:home.id,arrivalAt:day(5)+'T15:00',notes:'Arriving with grandchildren.'},201);
+ // Flight-aware arrival: the family adds their flight (manual mode: no flight service in tests); staff add the suggested timed plan.
+ await family('flights/add',{arrivalId:arrival.id,airline:'DL',flightNumber:'1287',date:day(5),scheduledAt:day(5)+'T13:00'});
+ await staff('flights/tasks/suggested',{arrivalId:arrival.id});
  const job=(await admin('data')).work.find(w=>w.title==='Replace pool light');
  await admin('operations/approval',{workId:job.id,amountMinor:12500,description:'New pool light fixture and labor.'},200);
  // Batch 3a: a third home where the vendor has a job, so the vendor can open a residence.
  const loft=await admin('properties',{clientId:fam.id,name:'Harbor Loft',streetAddress:'3 Harbor Way',city:'Stuart',state:'FL',postalCode:'34994',country:'United States'},201);
  await admin('work',{propertyId:loft.id,title:'Service the pool pump',priority:'Normal',dueDate:day(4),vendorId:ven.id},201);
+ // Smart locks: a manual keypad at Harbor Loft; the vendor's job gets a temporary door code the office enters.
+ await admin('smart-locks/locks',{propertyId:loft.id,name:'Front door keypad',provider:'manual'});
+ const lockCode=(await admin('data')).smartLocks.codes.find(c=>c.provider==='manual'&&c.status==='needs_code');
+ await admin('smart-locks/codes/set',{id:lockCode.id,code:'2468'});
  // Batch 5: a storm-prep shift (tomorrow, so it never overlaps the smoke shift) and two unassigned jobs for Assign all
  // (the pool light gets assigned by the batch 0 Assign check).
  await admin('staff/schedule',{staffId:id('staff@example.test'),title:'Storm shutters up',startsAt:new Date(day(1)+'T09:00').toISOString(),endsAt:new Date(day(1)+'T11:00').toISOString(),propertyId:home.id},200);
  await admin('work',{propertyId:loft.id,title:'Clear the dock drains',priority:'Normal',dueDate:day(2)},201);
  await admin('work',{propertyId:loft.id,title:'Rinse the pool deck',priority:'Normal',dueDate:day(3)},201);
+ // Insurance compliance: Ocean House has a 7-day unoccupancy rule and nothing scheduled, so it is At risk; the family may share the certificate.
+ await admin('insurance/'+home.id,{carrier:'Example Mutual',policy_number:'EM-1001',renewal_date:day(20),inspect_every_days:7,devices:[{key:'water_shutoff',required:true,installed:true}],client_share:true});
+ // Field inspector: a visit-only login with today's visit at Harbor Loft (door codes open today) and one next week.
+ // (Not at Ocean House: its insurance check expects nothing scheduled there.)
+ const inspector=await accept('inspector','inspector@example.test');sessions['inspector@example.test']=inspector.cookie();
+ const inspectorId=(await admin('data')).users.find(u=>u.email==='inspector@example.test').id;
+ await admin('access-codes/save',{propertyId:loft.id,version:0,details:{gate:'1357',door:'5678',alarm:'2468',lockbox:'',instructions:'Use the side door.'}},201);
+ await admin('inspectors/assign',{propertyId:loft.id,inspectorId,date:day(0)},201);
+ await admin('inspectors/assign',{propertyId:cottage.id,inspectorId,date:day(6)},201);
+ // Photo spots: Ocean House has one spot with a baseline and one still waiting for its first photo.
+ const sink=(await admin('photo-spots',{propertyId:home.id,name:'Kitchen sink cabinet',location:'Kitchen',notes:'Door open, from the left.'},201)).id;
+ await admin('photo-spots',{propertyId:home.id,name:'Water heater',location:'Garage'},201);
+ await admin('files',{propertyId:home.id,name:'kitchen-baseline.jpg',base64:readFileSync(path.join(root,'tests/fixture.jpg')).toString('base64'),spotId:sink},201);
 });
 after(async()=>{if(proc&&!proc.killed){proc.kill();await new Promise(r=>proc.once('exit',r));}rmSync(dir,{recursive:true,force:true});});
 
@@ -248,7 +270,7 @@ async function residenceChecks(page,role,name,expect,done){
  assert.equal(r.title,name,`${role}: residence title`);assert.equal(r.wide,false,`${role}: residence page fits the screen`);
  if(expect.tabs===null){assert.equal(r.tabs,null,`${role}: no lone tab strip`);done.push('residence');return;}
  assert.deepEqual(r.tabs,expect.tabs,`${role}: residence sections`);assert.equal(r.overflow,false,`${role}: sections wrap instead of scrolling`);
- assert.equal(r.facts,5,`${role}: facts strip`);assert.equal(r.closed,0,`${role}: nothing hidden behind closed toggles`);
+ assert.equal(r.facts,expect.facts||5,`${role}: facts strip`);assert.equal(r.closed,0,`${role}: nothing hidden behind closed toggles`);
  for(const p of expect.panels)assert.ok(r.panels.includes(p),`${role}: Summary shows ${p} (got ${r.panels.join(', ')})`);
  if(expect.alias){await page.evaluate(([t])=>action('tab',t),[expect.alias[0]]);await settle(page);
   assert.equal(await page.locator('.content .res-tabs button.active').getAttribute('data-id'),expect.alias[1],`${role}: old tab ${expect.alias[0]} opens ${expect.alias[1]}`);}
@@ -402,10 +424,92 @@ async function inspectionChecks(page,role,mobile,done){
  if(r.roomsLeft!==null){assert.ok(r.roomsLeft<40,`${role}: Room-by-room checks heading is left-aligned (${r.roomsLeft}px)`);assert.notEqual(r.align,'right');assert.notEqual(r.align,'center');}
  done.push('inspection-fill-in');
 }
+// Insurance compliance: the Residences page, sorting and filters, and the Home records section it links to.
+async function insuranceChecks(page,role,mobile,done){
+ // Phones get one card per residence; wider screens get the sortable table (only one of them is shown).
+ const rowsOf=()=>page.evaluate(m=>[...document.querySelectorAll(m?'.content .ins-cards .ins-card':'.content .ins-list tbody tr')].map(r=>r.innerText.replace(/\s+/g,' ')),mobile);
+ if(role!=='client'){
+  await go(page,'insurance');assert.equal(await page.locator('.content .page-title').innerText(),'Insurance compliance',`${role}: insurance page title`);
+  let rows=await rowsOf();
+  assert.ok(rows.some(r=>/Ocean House/.test(r)&&/At risk/.test(r)),`${role}: Ocean House is at risk (got ${rows.join(' | ')})`);
+  if(role==='admin'){assert.ok(rows.some(r=>/Bay Cottage/.test(r)&&/Not set up/.test(r)),'admin: homes without a policy say Not set up');
+   assert.match(rows[0],/Ocean House/,'admin: most urgent first');
+   if(mobile)await page.locator('.content .ins-sort-mobile .chip[data-id="name"]').click();else await page.locator('.content .ins-list th button[data-id="name"]').click();await settle(page);
+   rows=await rowsOf();assert.match(rows[0],/Bay Cottage/,'admin: sorted by name');
+   if(!mobile)assert.equal(await page.locator('.content .ins-list th[aria-sort="ascending"]').count(),1,'admin: the sorted column is announced');
+   await page.locator('.content .ins-chips .chip[data-id="at_risk"]').click();await settle(page);rows=await rowsOf();assert.equal(rows.length,1,'admin: status filter');
+   await page.locator('.content .ins-chips .chip[data-id=""]').click();await settle(page);}
+  else assert.deepEqual(rows.map(r=>/Ocean House/.test(r)),[true],`${role}: staff see only the residences they look after`);
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${role}: insurance page fits the screen`);
+  const shown=await page.evaluate(()=>({cards:getComputedStyle(document.querySelector('.content .ins-cards')).display!=='none',table:getComputedStyle(document.querySelector('.content .ins-list')).display!=='none'}));
+  assert.deepEqual(shown,{cards:mobile,table:!mobile},`${role}: cards on phones, the table on wider screens`);
+  if(mobile){const card=page.locator('.content .ins-card',{hasText:'Ocean House'});assert.match(await card.innerText(),/At risk[\s\S]*Visit due (by|today|tomorrow)[^\n]*nothing scheduled/i,`${role}: the card says what is due in plain words`);
+   assert.ok((await card.locator('.ins-card-name').boundingBox()).height>=44,`${role}: the residence name is a 44px tap target`);}
+  await page.locator(mobile?'.content .ins-cards .ins-card-name':'.content .ins-list .ins-name',{hasText:'Ocean House'}).click();await settle(page);
+ }else{await go(page,'properties');await page.evaluate(()=>action('insurance-open',data.properties.find(p=>p.name==='Ocean House').id));await settle(page);}
+ const sec=await page.evaluate(()=>{const s=document.getElementById('res-insurance');return s?{text:s.innerText,edit:!!s.querySelector('[data-action="insurance-edit"]'),cert:!!s.querySelector('a[href*="certificate.pdf"]'),share:!!s.querySelector('[data-action="insurance-share"]')}:null;});
+ assert.ok(sec,`${role}: Home records has the insurance section`);
+ assert.match(sec.text,/Example Mutual/);assert.match(sec.text,/EM-1001/);assert.match(sec.text,/Inspect at least every 7 days/i);assert.doesNotMatch(sec.text,MACHINE_DATE,`${role}: readable dates`);
+ assert.equal(sec.edit,role==='admin',`${role}: only admins edit`);assert.equal(sec.cert,true,`${role}: certificate download`);assert.equal(sec.share,role!=='employee',`${role}: share links for admins and allowed families`);
+ assert.equal(await page.locator('.content .res-tabs button.active').getAttribute('data-id'),'records');
+ done.push('insurance');
+}
+// Photo spots: Home records lists the spots (staff can add, only admins see Archive; the family sees no staff notes
+// or edit controls), and the draft visit shows the Photo spots panel with Take photo.
+async function photoSpotChecks(page,role,mobile,done){
+ await go(page,'properties');await page.evaluate(()=>{action('property',data.properties.find(p=>p.name==='Ocean House').id);});await settle(page);await page.evaluate(()=>{tab='records';render();});await settle(page);
+ const sec=await page.evaluate(()=>{const s=document.getElementById('res-photo-spots');return s?{text:s.innerText,cards:s.querySelectorAll('.ps-card').length,add:!!s.querySelector('[data-action="spot-new"]'),archive:!!s.querySelector('[data-action="spot-archive"]'),img:!!s.querySelector('img.ps-thumb, .ps-thumb img')}:null;});
+ assert.ok(sec,`${role}: Home records has Photo spots`);
+ assert.match(sec.text,/Kitchen sink cabinet[\s\S]*Water heater/,`${role}: spots listed by name`);assert.doesNotMatch(sec.text,MACHINE_DATE,`${role}: readable dates`);
+ assert.equal(sec.add,role!=='client',`${role}: staff add spots`);assert.equal(sec.archive,role==='admin',`${role}: only admins archive`);
+ if(role==='client')assert.doesNotMatch(sec.text,/Door open, from the left/,'client: staff notes stay internal');else assert.match(sec.text,/Door open, from the left/,`${role}: staff see the shooting notes`);
+ await page.locator('#res-photo-spots [data-action="spot-timeline"]').first().click();await settle(page);
+ assert.match(await page.locator('#res-photo-spots .ps-tl-wrap').first().innerText(),/Baseline/,`${role}: the timeline shows the baseline`);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${role}: photo spots fit the screen`);
+ if(role!=='client'){
+  await page.evaluate(id=>action('inspection',id),draftId);await settle(page);
+  const panel=await page.evaluate(()=>{const s=document.getElementById('ps-visit');return s?{rows:s.querySelectorAll('.ps-visit-row').length,take:s.querySelectorAll('[data-action="spot-capture"]').length,text:s.innerText}:null;});
+  assert.ok(panel,`${role}: the draft visit has the Photo spots panel`);assert.equal(panel.rows,2);assert.equal(panel.take,2,`${role}: Take photo for each spot`);
+  assert.match(panel.text,/No baseline yet/,`${role}: a spot without a baseline says so`);
+ }
+ done.push('photo-spots');
+}
+// Smart locks: the admin reveals the job's door code (audited) and sees the residence's locks and the settings panel;
+// the vendor sees the code is coming but cannot reveal it before the window; the family never sees door access.
+async function lockChecks(page,role,done){
+ const openJob=()=>page.evaluate(()=>{const w=data.work.find(x=>x.title==='Service the pool pump');page='work';activeWork=w.id;render();});
+ if(role==='client'){assert.deepEqual(await page.evaluate(()=>data.smartLocks?.codes||[]),[],'client: no door codes');assert.equal(await page.locator('.sl-door').count(),0);done.push('smart-locks');return;}
+ await go(page,'work');await openJob();await settle(page);
+ const panel=page.locator('.sl-door').first();assert.match(await panel.innerText(),/Door access[\s\S]*Front door keypad/,`${role}: door access on the job`);
+ if(role==='vendor'){assert.match(await panel.innerText(),/shows here from/,'vendor: code shows only in its window');assert.equal(await page.locator('[data-action="sl-reveal"]').count(),0,'vendor: no reveal before the window');done.push('smart-locks');return;}
+ await click(page,'[data-action="sl-reveal"]');await page.waitForSelector('.sl-code-digits',{timeout:5000});
+ assert.equal(await page.locator('.sl-code-digits').innerText(),'2 4 6 8','admin: revealed code');
+ await page.evaluate(()=>{action('property',data.properties.find(p=>p.name==='Harbor Loft').id);});await settle(page);await page.evaluate(()=>{tab='records';render();});await settle(page);
+ assert.match(await page.locator('#res-locks').innerText(),/Smart locks[\s\S]*Front door keypad[\s\S]*Upcoming door codes/,'admin: residence lists locks and codes');
+ assert.match(await go(page,'workspace'),/Smart locks[\s\S]*Manual codes/,'admin: settings show the lock connection');
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'admin: settings fit the screen');
+ done.push('smart-locks');
+}
+// Flight-aware arrivals: the arrival shows the flight and the timed plan (staff) or the flight and progress (family);
+// arrival cards carry the flight status; settings show the flight connection; vendors never see arrivals.
+async function flightChecks(page,role,done){
+ if(role==='vendor'){assert.deepEqual(await page.evaluate(()=>data.flights?.flights||[]),[],'vendor: no flights');done.push('flights');return;}
+ const list=await go(page,'arrivals');assert.match(list,/DL1287 · On time · lands 1:00 PM/,`${role}: arrival card shows the flight status`);
+ await page.evaluate(()=>action('arrival-open',data.arrivals[0].id));await settle(page);
+ const panels=await page.locator('.fl-panel').allInnerTexts();
+ assert.match(panels[0],/Flights[\s\S]*DL1287[\s\S]*Lands .*1:00 PM/,`${role}: flight on the arrival`);
+ assert.match(panels[1]||'',/Arrival plan[\s\S]*Turn on air conditioning or heat[\s\S]*4 h before landing[\s\S]*Driver waiting at the airport[\s\S]*At landing/,`${role}: timed plan`);
+ assert.doesNotMatch(panels.join(' '),/\d{4}-\d{2}-\d{2}T/,`${role}: no machine dates`);
+ if(role==='client'){assert.match(await mainText(page),/Preparing your residence[\s\S]*\d+ of \d+ checklist items done/,'client: preparation progress');assert.equal(await page.locator('[data-action="fl-task-done"]').count(),0,'client: cannot tick the plan');}
+ else{assert.equal(await page.locator('[data-action="fl-task-done"]').count(),3,'admin: plan can be ticked');
+  assert.match(await go(page,'workspace'),/Flight tracking[\s\S]*Manual updates/,'admin: settings show the flight connection');}
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${role}: fits the screen`);
+ done.push('flights');
+}
 const PAGE_CHECKS={
  admin:async(page,mobile,done)=>{
   await headerChecks(page,mobile,'admin',['properties','work','inspections','requests','maintenance','documents','assets','audit','billing','messages','notifications','storm'],done);
-  await residenceChecks(page,'admin','Ocean House',{tabs:['overview','inspections','services','arrivals','records','people','notes'],panels:['Needs attention here','Visits','Work orders','Owners & family','Next arrival','Home records','Latest note'],alias:['assets','records']},done);
+  await residenceChecks(page,'admin','Ocean House',{facts:6,tabs:['overview','inspections','services','arrivals','records','people','notes'],panels:['Needs attention here','Visits','Work orders','Owners & family','Next arrival','Home records','Latest note'],alias:['assets','records']},done);
   if(!await page.evaluate(()=>data.assets.length))await emptyCheck(page,'admin','assets',/No assets yet/,'new-asset');await emptyCheck(page,'admin','documents',/No documents yet/,'new-document');await emptyCheck(page,'admin','billing',/No invoices yet/,'');done.push('empty-states');
   assert.equal(await page.locator('aside [data-id="platform"]').count(),0,'admin: no duplicate Platform Administration item');
   for(const id of ['arrivals','calendar']){const t=await go(page,id);assert.doesNotMatch(t,MACHINE_DATE,`admin: ${id} has no machine dates`);done.push(id);}
@@ -449,8 +553,14 @@ const PAGE_CHECKS={
   await inboxChecks(page,'admin',{subject:'Ocean House gate',preview:'side gate latch'},done);
   await inspectionChecks(page,'admin',mobile,done);
   await calendarChecks(page,'admin',{arrival:'Owners arrive',chips:['Everything','Visits','Arrivals','Work','Shifts']},done);
+  await insuranceChecks(page,'admin',mobile,done);
+  await photoSpotChecks(page,'admin',mobile,done);
+  await lockChecks(page,'admin',done);
+  await flightChecks(page,'admin',done);
  },
  employee:async(page,mobile,done)=>{
+  await insuranceChecks(page,'employee',mobile,done);
+  await photoSpotChecks(page,'employee',mobile,done);
   await scheduleChecks(page,'employee',mobile,done);
   await requestServiceCheck(page,'employee',done);
  },
@@ -468,12 +578,16 @@ const PAGE_CHECKS={
   await residenceChecks(page,'vendor','Harbor Loft',{tabs:null},done);
   await workChecks(page,'vendor',{chips:['Open','Completed'],rows:['Service the pool pump'],primary:'Start work'},done);
   assert.match(await go(page,'messages'),/company that sends you jobs/,'vendor: messages subtitle for vendors');done.push('wording');
+  await lockChecks(page,'vendor',done);
+  await flightChecks(page,'vendor',done);
  },
  client:async(page,mobile,done)=>{
   await headerChecks(page,mobile,'client',['properties','work','inspections','requests','documents','messages','notifications'],done);
   await emptyCheck(page,'client','documents',/No documents yet/,'');
   await workChecks(page,'client',{chips:['Open','Needs your approval','Completed'],rows:['Replace pool light'],primary:'Review the estimate'},done);
-  await residenceChecks(page,'client','Ocean House',{tabs:['overview','inspections','services','arrivals','records','people'],panels:['Needs attention here','Visits','Service updates','Owners & family','Next arrival','Home records'],alias:['shopping','arrivals']},done);
+  await residenceChecks(page,'client','Ocean House',{facts:6,tabs:['overview','inspections','services','arrivals','records','people'],panels:['Needs attention here','Visits','Service updates','Owners & family','Next arrival','Home records'],alias:['shopping','arrivals']},done);
+  await insuranceChecks(page,'client',mobile,done);
+  await photoSpotChecks(page,'client',mobile,done);
   // Batch 2 wording: written for the family, not for staff.
   const home=await go(page,'dashboard');assert.match(await page.locator('.content .page-title').innerText(),/^Good (morning|afternoon|evening)/,'client: home greets the family');
   assert.equal(await page.locator('details.action-needed').evaluate(d=>d.open),true,'client: Action needed starts open');assert.doesNotMatch(home,/\b1 work orders\b/,'client: singular work order');
@@ -486,6 +600,8 @@ const PAGE_CHECKS={
   assert.doesNotMatch(await go(page,'profile'),/Account ID/,'client: no raw account ID');done.push('profile');
   await calendarChecks(page,'client',{arrival:'You arrive',chips:['Everything','Visits','Arrivals','Service']},done);
   await requestServiceCheck(page,'client',done);
+  await lockChecks(page,'client',done);
+  await flightChecks(page,'client',done);
  }
 };
 async function pageJourney(launch,contextOptions,role,email){
@@ -504,5 +620,129 @@ for(const [name,launch,options] of browsers.length?browsers:[['browser',null,nul
    assert.deepEqual(errors,[],`${role}: page errors after ${done.join(', ')}`);
    assert.deepEqual(shown.filter(t=>ERROR_TOAST.test(t)),[],`${role}: error toasts`);
   }
+ });
+}
+
+// Field inspector: a visit-only login. Today page, door codes on the visit day, the visit checklist without office
+// actions, a three-item menu, and admin screens falling back to Today. The admin sees the Field inspectors panel.
+async function inspectorJourney(launch,contextOptions){
+ const browser=await launch();
+ try{
+  const ctx=await browser.newContext({...contextOptions,serviceWorkers:'block'});const {page,errors,toasts}=await watch(ctx);
+  const [name,value]=sessions['inspector@example.test'].split('=');await ctx.addCookies([{name,value,url:base}]);
+  await page.goto(base+'/login');await page.waitForSelector('.shell .fi-today',{timeout:15000});await settle(page);
+  assert.match(await page.locator('.content .page-title').innerText(),/^Good (morning|afternoon|evening)/);
+  assert.deepEqual(await page.evaluate(()=>[...document.querySelectorAll('aside [data-action="navigate"]')].map(b=>b.dataset.id).sort()),['dashboard','notifications','profile']);
+  assert.equal(await page.locator('.topbar-messages').count(),0,'inspector: no Messages button');
+  const today=await page.locator('.fi-today').innerText();assert.match(today,/Harbor Loft/);assert.doesNotMatch(today,/Bay Cottage/);
+  assert.match(await page.locator('.content').innerText(),/Coming up · next 14 days[\s\S]*Bay Cottage/);
+  assert.match(await page.locator('.fi-route').getAttribute('href'),/^https:\/\/www\.google\.com\/maps\/dir\/\?api=1/);
+  for(const w of ['Rivera Family','Ocean House','Service the pool pump','Replace pool light','Bluewater Pools'])assert.ok(!(await page.locator('.shell').innerText()).includes(w),'inspector never sees '+w);
+  await click(page,'.fi-today [data-action="inspector-codes"]');await page.locator('#modal[open] .fi-codes').waitFor({timeout:5000});
+  assert.match(await page.locator('#modalBody').innerText(),/Door & alarm codes[\s\S]*5678/);
+  await click(page,'#modal [data-action="close"]');await settle(page);
+  await click(page,'.fi-today [data-action="inspection"]');await settle(page);
+  assert.equal(await page.evaluate(()=>page),'inspection');
+  assert.equal(await page.locator('.inspection-actionbar [data-action="inspection-complete"]').count(),1,'inspector can mark the visit complete');
+  for(const a of ['inspection-delete','inspection-publish','inspector-reassign'])assert.equal(await page.locator(`[data-action="${a}"]`).count(),0,'no '+a);
+  // Office screens are not reachable, by menu action or by URL.
+  for(const id of ['clients','billing','users','work','properties']){await page.evaluate(i=>action('navigate',i),id);await settle(page);assert.equal(await page.evaluate(()=>page),'dashboard',id+' falls back to Today');}
+  await page.goto(base+'/login#/billing');await page.waitForSelector('.shell .fi-today',{timeout:15000});assert.equal(await page.evaluate(()=>page),'dashboard');
+  await page.waitForTimeout(300);
+  assert.deepEqual(errors,[],'inspector: page errors');assert.deepEqual((await toasts()).filter(t=>ERROR_TOAST.test(t)),[],'inspector: error toasts');
+  // Admin: Team & access lists the inspector, the free allowance and Assign a visit; the invite dialog offers the role.
+  const actx=await browser.newContext({...contextOptions,serviceWorkers:'block'});const admin=await watch(actx);
+  const [an,av]=sessions['admin@example.test'].split('=');await actx.addCookies([{name:an,value:av,url:base}]);
+  await admin.page.goto(base+'/login');await admin.page.waitForSelector('.shell',{timeout:15000});
+  await admin.page.evaluate(()=>action('navigate','users'));await admin.page.locator('.fi-team').waitFor({timeout:5000});
+  const team=await admin.page.locator('.fi-team').innerText();assert.match(team,/Field inspectors/);assert.match(team,/inspector@example\.test/);assert.match(team,/never use an admin\/staff seat/);
+  assert.equal(await admin.page.locator('.fi-team [data-action="inspector-assign"]').count(),1);
+  await click(admin.page,'.fi-team [data-action="inspector-invite"]');await admin.page.locator('#modal[open] #f-role').waitFor({timeout:5000});
+  assert.equal(await admin.page.locator('#f-role').inputValue(),'inspector');assert.match(await admin.page.locator('#modalBody').innerText(),/never use an admin\/staff seat/);
+  await admin.page.waitForTimeout(300);
+  assert.deepEqual(admin.errors,[],'admin: page errors on the field inspector panel');
+ }finally{await browser.close();}
+}
+for(const [name,launch,options] of browsers.length?browsers:[['browser',null,null]]){
+ test(`signed in (${name}): a field inspector sees only Today and their assigned visit`,{skip,timeout:120000},async()=>{await inspectorJourney(launch,options);});
+}
+// Weather alerts (off by default, so the menus above do not list it). Turned on here, last: admin and staff open the
+// Weather page (Active, Recent, admin Settings) with no errors, the menu item appears, and axe finds no serious or
+// critical accessibility problems. axe-core is optional: set AXE_CORE to axe.min.js, or it looks in node_modules.
+const axePath=[process.env.AXE_CORE,path.join(root,'node_modules/axe-core/axe.min.js'),path.join(path.dirname(pwCore||'/x/x'),'..','axe-core','axe.min.js')].find(p=>p&&existsSync(p));
+const asAdmin=async(endpoint,b)=>{const res=await fetch(base+'/api/'+endpoint,{method:b===undefined?'GET':'POST',headers:{Origin:base,'Content-Type':'application/json',Cookie:sessions['admin@example.test']},body:b===undefined?undefined:JSON.stringify(b)});assert.equal(res.status,200,endpoint);return res.json();};
+async function axeCheck(page,label){
+ if(!axePath)return;
+ await page.addScriptTag({path:axePath});
+ const r=await page.evaluate(()=>window.axe.run(document.querySelector('.shell main')||document,{resultTypes:['violations']}));
+ const bad=r.violations.filter(v=>['serious','critical'].includes(v.impact)).map(v=>`${v.id}: ${v.nodes.slice(0,3).map(n=>n.target.join(' ')).join(', ')}`);
+ assert.deepEqual(bad,[],`${label}: accessibility`);
+}
+for(const [name,launch,options] of browsers.length?browsers:[['browser',null,null]]){
+ test(`signed in (${name}): Weather page for admin and staff, with an accessibility check`,{skip,timeout:120000},async()=>{
+  await asAdmin('settings/weather',{enabled:true});
+  for(const [role,email] of [['admin','admin@example.test'],['employee','staff@example.test']]){
+   // bypassCSP only so the test can inject axe; the app itself runs under its normal policy everywhere else.
+   const browser=await launch();const ctx=await browser.newContext({...options,serviceWorkers:'block',bypassCSP:!!axePath});
+   const {page,errors,toasts}=await watch(ctx);
+   try{
+    const [cookieName,value]=sessions[email].split('=');await ctx.addCookies([{name:cookieName,value,url:base}]);
+    await page.goto(base+'/login');await page.waitForSelector('.shell',{timeout:15000});await settle(page);
+    const menu=await page.evaluate(()=>[...document.querySelectorAll('aside [data-action="navigate"]')].map(b=>b.dataset.id));
+    assert.ok(menu.includes('weather'),`${role}: Weather is in the menu once turned on`);
+    const text=await go(page,'weather');
+    assert.match(await page.locator('.content .page-title').innerText(),/^Weather/,`${role}: Weather page title`);
+    assert.match(text,/No weather alerts right now/,`${role}: empty active list`);
+    await axeCheck(page,`${role} weather (active)`);
+    const tabs=await page.evaluate(()=>[...document.querySelectorAll('.content .wx-tabs [data-action="weather-tab"]')].map(b=>b.dataset.id));
+    assert.deepEqual(tabs,role==='admin'?['active','recent','settings']:['active','recent'],`${role}: tabs`);
+    if(role==='admin'){
+     await click(page,'.content .wx-tabs [data-id="settings"]');await page.waitForSelector('#wxSettings',{timeout:5000});await settle(page);
+     assert.match(await mainText(page),/approximate residence coordinates/,'admin: privacy note in settings');
+     await axeCheck(page,'admin weather (settings)');
+    }
+    await page.waitForTimeout(200);
+    assert.deepEqual(errors,[],`${role}: page errors on Weather`);
+    assert.deepEqual((await toasts()).filter(t=>ERROR_TOAST.test(t)),[],`${role}: error toasts on Weather`);
+   }finally{await browser.close();}
+  }
+  await asAdmin('settings/weather',{enabled:false});
+ });
+}
+
+// AI inspection summaries (company switch off by default). Turned on here, last: the admin asks for a draft on a
+// draft visit, the review panel passes axe, "Use this draft" fills the summary box and tags it, and Complete & publish
+// asks for a confirmation first.
+for(const [name,launch,options] of browsers.length?browsers:[['browser',null,null]]){
+ test(`signed in (${name}): AI summary draft, review panel and publish confirmation`,{skip,timeout:120000},async()=>{
+  await asAdmin('settings/ai',{enabled:true});
+  const d=await asAdmin('data');const i=d.inspections.find(x=>x.id===draftId);
+  if(i.answers.every(a=>a.status==='unchecked')){
+   const answers=i.answers.map((a,k)=>({...a,status:k===0?'attention':k<4?'pass':a.status,note:k===0?'Slow drip under the kitchen sink':a.note}));
+   const res=await fetch(base+'/api/inspections/save',{method:'POST',headers:{Origin:base,'Content-Type':'application/json',Cookie:sessions['admin@example.test']},body:JSON.stringify({id:draftId,version:i.version,answers,summary:'',notes:'',internalNotes:''})});
+   assert.equal(res.status,201,'seed answers');
+  }
+  const browser=await launch();const ctx=await browser.newContext({...options,serviceWorkers:'block',bypassCSP:!!axePath});
+  const {page,errors,toasts}=await watch(ctx);
+  try{
+   const [cookieName,value]=sessions['admin@example.test'].split('=');await ctx.addCookies([{name:cookieName,value,url:base}]);
+   await page.goto(base+'/login');await page.waitForSelector('.shell',{timeout:15000});await settle(page);
+   await page.evaluate(id=>action('inspection',id),draftId);await page.waitForSelector('.ai-panel .ai-generate',{timeout:5000});
+   assert.equal(await page.locator('.ai-panel .ai-generate').isDisabled(),false,'Generate is enabled');
+   await click(page,'.ai-panel .ai-generate');await page.waitForSelector('#ai-draft-text',{timeout:10000});await settle(page);
+   const draft=await page.locator('#ai-draft-text').innerText();
+   assert.match(draft,/needs attention: Slow drip under the kitchen sink/,draft);
+   await axeCheck(page,'AI review panel');
+   await page.locator('.ai-review [data-action="ai-use"]').click();await page.waitForSelector('.ai-panel .ai-tag',{timeout:5000});await settle(page);
+   assert.equal(await page.inputValue('#f-summary'),draft,'the draft fills the summary box');
+   await page.evaluate(id=>action('inspection-publish',id),draftId);await page.waitForSelector('#modal[open] input[name="confirm"]',{timeout:5000});
+   assert.match(await page.locator('#modalBody h2').innerText(),/Confirm the AI-assisted summary/);
+   if(axePath){await page.addScriptTag({path:axePath});const r=await page.evaluate(()=>window.axe.run(document.querySelector('#modal'),{resultTypes:['violations']}));assert.deepEqual(r.violations.filter(v=>['serious','critical'].includes(v.impact)).map(v=>v.id),[],'publish confirmation: accessibility');}
+   await click(page,'#modal [data-action="close"]');
+   await page.waitForTimeout(300);
+   assert.deepEqual(errors,[],'page errors on the AI panel');
+   assert.deepEqual((await toasts()).filter(t=>ERROR_TOAST.test(t)),[],'error toasts on the AI panel');
+  }finally{await browser.close();}
+  await asAdmin('settings/ai',{enabled:false});
  });
 }

@@ -1,0 +1,30 @@
+{
+ "properties": {
+  "timestamp": "{{-0h}}",
+  "textDescription": "Light Snow",
+  "temperature": {
+   "unitCode": "wmoUnit:degC",
+   "value": 1.1
+  },
+  "windChill": {
+   "unitCode": "wmoUnit:degC",
+   "value": -4
+  },
+  "relativeHumidity": {
+   "unitCode": "wmoUnit:percent",
+   "value": 91
+  },
+  "windSpeed": {
+   "unitCode": "wmoUnit:km_h-1",
+   "value": 19.3
+  },
+  "windGust": {
+   "unitCode": "wmoUnit:km_h-1",
+   "value": 40.2
+  },
+  "precipitationLastHour": {
+   "unitCode": "wmoUnit:mm",
+   "value": null
+  }
+ }
+}

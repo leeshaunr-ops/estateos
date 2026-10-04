@@ -1,19 +1,19 @@
-import {PLANS,ADDONS,subscriptionQuote,GOOD_STANDING,CHECKOUT_SETTLED} from './stripe-plans.mjs';
+import {PLANS,ADDONS,subscriptionQuote,sameSelection,SEAT_ROLE_SQL,GOOD_STANDING,CHECKOUT_SETTLED,freeInspectors,inspectorAddonAvailable,FREE_INSPECTORS_PER_SEAT} from './stripe-plans.mjs';
 import {createStripeClient} from './stripe-client.mjs';
 
 // Stripe is the source of payment truth. Redirect query parameters never grant access.
 // Polling reconciles pending checkouts and current subscriptions even if a browser closes.
 export function createStripeBilling({get,all,run,transaction,id,now,fail,json,body,audit,client=createStripeClient({origin:process.env.ESTATEOS_PUBLIC_URL||'https://estateaegis.com'}),enabled=()=>process.env.STRIPE_BILLING_ENABLED==='1'&&String(process.env.STRIPE_SECRET_KEY||'').startsWith('sk_live_')}) {
  const busy=new Map();
- async function usage(org){return {residences:Number((await get('SELECT COUNT(*) n FROM properties WHERE organization_id=? AND archived_at IS NULL',org)).n),seats:Number((await get("SELECT COUNT(*) n FROM users WHERE organization_id=? AND active=1 AND role IN ('admin','employee')",org)).n),bytes:Number((await get('SELECT COALESCE(SUM(bytes),0) n FROM (SELECT f.storage_key,MAX(f.bytes) bytes FROM files f JOIN properties p ON p.id=f.property_id WHERE p.organization_id=? GROUP BY f.storage_key) q',org)).n)};}
+ async function usage(org){return {residences:Number((await get('SELECT COUNT(*) n FROM properties WHERE organization_id=? AND archived_at IS NULL',org)).n),seats:Number((await get(`SELECT COUNT(*) n FROM users WHERE organization_id=? AND active=1 AND ${SEAT_ROLE_SQL}`,org)).n),inspectors:Number((await get("SELECT COUNT(*) n FROM users WHERE organization_id=? AND active=1 AND role='inspector'",org)).n),bytes:Number((await get('SELECT COALESCE(SUM(bytes),0) n FROM (SELECT f.storage_key,MAX(f.bytes) bytes FROM files f JOIN properties p ON p.id=f.property_id WHERE p.organization_id=? GROUP BY f.storage_key) q',org)).n)};}
  function parseSubscription(sub){
   if(sub.items?.has_more || !Array.isArray(sub.items?.data))throw Error('Subscription items require review.');
-  let plan,extraSeats=0,storagePacks=0;const seen=new Set();
+  let plan,extraSeats=0,storagePacks=0,extraInspectors=0;const seen=new Set();
   for(const item of sub.items.data){const p=item.price,product=typeof p?.product==='string'?p.product:p?.product?.id;const match=Object.entries(PLANS).find(([,v])=>v.product===product);const expected=match?.[1]||Object.values(ADDONS).find(v=>v.product===product);
    if(!expected || seen.has(product) || p.currency!=='usd' || p.unit_amount!==expected.monthlyMinor || p.recurring?.interval!=='month' || p.recurring.interval_count!==1 || !Number.isSafeInteger(item.quantity) || item.quantity<1)throw Error('Subscription price requires review.');seen.add(product);
-   if(match){if(plan || item.quantity!==1)throw Error('Invalid base plan.');plan=match[0];}else if(product===ADDONS.seats.product)extraSeats=item.quantity;else storagePacks=item.quantity;
+   if(match){if(plan || item.quantity!==1)throw Error('Invalid base plan.');plan=match[0];}else if(product===ADDONS.seats.product)extraSeats=item.quantity;else if(product===ADDONS.storage.product)storagePacks=item.quantity;else if(ADDONS.inspectors.product&&product===ADDONS.inspectors.product)extraInspectors=item.quantity;else throw Error('Subscription price requires review.');
   }
-  return subscriptionQuote(plan,extraSeats,storagePacks);
+  return subscriptionQuote(plan,extraSeats,storagePacks,extraInspectors);
  }
  async function reconcile(org){
   if(busy.has(org))return busy.get(org);
@@ -37,13 +37,18 @@ export function createStripeBilling({get,all,run,transaction,id,now,fail,json,bo
    if(sub.metadata?.organization_id!==org || (typeof sub.customer==='string'?sub.customer:sub.customer?.id)!==record.customer_id)throw Error('Subscription ownership mismatch.');
    const q=parseSubscription(sub),paid=sub.latest_invoice?.status==='paid';
    await transaction(async()=>{
-    if((sub.status==='active'&&paid)||sub.status==='trialing')await run('UPDATE stripe_billing SET plan=?,extra_seats=?,storage_packs=?,status=?,verified_at=?,last_error=NULL WHERE organization_id=?',q.plan,q.extraSeats,q.storagePacks,sub.status,now(),org);
+    if((sub.status==='active'&&paid)||sub.status==='trialing')await run('UPDATE stripe_billing SET plan=?,extra_seats=?,storage_packs=?,extra_inspectors=?,status=?,verified_at=?,last_error=NULL WHERE organization_id=?',q.plan,q.extraSeats,q.storagePacks,q.extraInspectors,sub.status,now(),org);
     else await run('UPDATE stripe_billing SET status=?,verified_at=?,last_error=NULL WHERE organization_id=?',sub.status==='active'?'payment_pending':sub.status,now(),org);
    });
   })();busy.set(org,task);try{await task;}finally{busy.delete(org);}
  }
- async function state(org){const row=await get('SELECT * FROM stripe_billing WHERE organization_id=?',org);return {enabled:enabled(),status:row?.status||'not_subscribed',plan:row?.plan||null,extraSeats:row?.extra_seats||0,storagePacks:row?.storage_packs||0,verifiedAt:row?.verified_at||null,connected:!!row?.subscription_id,quote:row?.plan?subscriptionQuote(row.plan,row.extra_seats,row.storage_packs):null,usage:await usage(org)};}
- async function assertCapacity(org,kind,increment=1){const row=await get('SELECT * FROM stripe_billing WHERE organization_id=?',org);if(!row?.subscription_id)return;if(!GOOD_STANDING.includes(row.status))fail(409,'Resolve your subscription payment in Company settings before adding records. Existing records remain available.');if(!row.plan)fail(409,'Subscription activation is pending.');const q=subscriptionQuote(row.plan,row.extra_seats,row.storage_packs),u=await usage(org);if(u[kind]+increment>q[kind])fail(409,'Your subscription allowance is full. Contact sales@estateaegis.com to confirm an upgrade before adding more '+kind+'.');}
+ async function state(org){const row=await get('SELECT * FROM stripe_billing WHERE organization_id=?',org);return {enabled:enabled(),status:row?.status||'not_subscribed',plan:row?.plan||null,extraSeats:row?.extra_seats||0,storagePacks:row?.storage_packs||0,verifiedAt:row?.verified_at||null,connected:!!row?.subscription_id,extraInspectors:Number(row?.extra_inspectors||0),quote:row?.plan?subscriptionQuote(row.plan,row.extra_seats,row.storage_packs,Number(row.extra_inspectors||0)):null,usage:await usage(org),catalog:Object.entries(PLANS).map(([key,p])=>({key,name:p.name,monthlyMinor:p.monthlyMinor,regularMinor:p.regularMinor,residences:p.residences,seats:p.seats,storageGB:p.storageGB,freeInspectors:freeInspectors(key)})),inspectorAddon:{monthlyMinor:ADDONS.inspectors.monthlyMinor,available:inspectorAddonAvailable(),freePerSeat:FREE_INSPECTORS_PER_SEAT}};}
+ // Data import: remaining room on the plan, or null when the company has no Stripe subscription (no limits enforced, same as assertCapacity).
+ async function capacity(org){const row=await get('SELECT * FROM stripe_billing WHERE organization_id=?',org);if(!row?.subscription_id)return null;const u=await usage(org);if(!GOOD_STANDING.includes(row.status)||!row.plan)return {blocked:true,usage:u,limits:{residences:0,seats:0,inspectors:0}};const q=subscriptionQuote(row.plan,row.extra_seats,row.storage_packs,Number(row.extra_inspectors||0));return {blocked:false,usage:u,limits:{residences:q.residences,seats:q.seats,inspectors:q.inspectors}};}
+ async function assertCapacity(org,kind,increment=1){const row=await get('SELECT * FROM stripe_billing WHERE organization_id=?',org);if(!row?.subscription_id)return;if(!GOOD_STANDING.includes(row.status))fail(409,'Resolve your subscription payment in Company settings before adding records. Existing records remain available.');if(!row.plan)fail(409,'Subscription activation is pending.');const q=subscriptionQuote(row.plan,row.extra_seats,row.storage_packs,Number(row.extra_inspectors||0)),u=await usage(org);if(u[kind]+increment>q[kind])fail(409,kind==='inspectors'?inspectorLimitMessage(q):kind==='seats'?`Your plan includes ${q.seats} admin/staff users and all are in use. Add a user for $15/month or upgrade by contacting sales@estateaegis.com. Client and vendor logins are unlimited and never use a seat.`:`Your plan includes up to ${q.residences} active residences and all are in use. Archive a residence or contact sales@estateaegis.com to upgrade.`);}
+ // Field inspectors: free up to 2x the plan's included seats; beyond that the $5 add-on, once it exists on Stripe.
+ function inspectorLimitMessage(q){const name=PLANS[q.plan]?.name||'Your';const included=`Your ${name} plan includes ${q.freeInspectors} free field inspector logins${q.extraInspectors?` plus ${q.extraInspectors} extra`:''}, and all are in use.`;
+  return inspectorAddonAvailable()?`${included} Extra field inspectors are $5 each per month: email sales@estateaegis.com to add them, or suspend an inspector who no longer needs access. Inspectors never use an admin/staff seat.`:`${included} Extra field inspector logins ($5 each per month) can't be added yet. Suspend an inspector who no longer needs access, or email sales@estateaegis.com. Inspectors never use an admin/staff seat.`;}
  async function handle(req,res,url,user){
   if(!url.pathname.startsWith('/api/billing/'))return false;
   if(!user)fail(401,'Please sign in.');if(user.role!=='admin')fail(403,'Administrator access required.');const org=user.organization_id;
@@ -53,19 +58,20 @@ export function createStripeBilling({get,all,run,transaction,id,now,fail,json,bo
   if(url.pathname==='/api/billing/portal'){await reconcile(org);const row=await get('SELECT customer_id,subscription_id FROM stripe_billing WHERE organization_id=?',org);if(!row?.customer_id||!row.subscription_id)fail(409,'Subscribe before opening billing management.');json(res,200,await client.portal(row.customer_id));return true;}
   if(url.pathname!=='/api/billing/checkout')fail(404,'Billing action not found.');
   await reconcile(org);
-  let q;try{q=subscriptionQuote(b.plan,b.extraSeats,b.storagePacks);}catch{fail(422,'Select a valid plan and add-ons.');}
+  let q;try{q=subscriptionQuote(b.plan,b.extraSeats,b.storagePacks,b.extraInspectors);}catch{fail(422,'Select a valid plan and add-ons.');}
+  if(q.extraInspectors&&!inspectorAddonAvailable())fail(422,'Extra field inspector logins are not available yet. Choose 0 extra inspectors.');
   if(b.acceptMonthlyMinor!==q.monthlyMinor)fail(422,'Confirm the monthly subscription amount.');
-  const u=await usage(org);if(u.residences>q.residences || u.seats>q.seats || u.bytes>q.storageGB*1e9)fail(422,'Choose a plan and add-ons that cover your current residences, users, and storage.');
+  const u=await usage(org);if(u.residences>q.residences || u.seats>q.seats || u.inspectors>q.inspectors || u.bytes>q.storageGB*1e9)fail(422,'Choose a plan and add-ons that cover your current residences, users, field inspectors and storage.');
   const selection=JSON.stringify(q);let attempt;
   await transaction(async()=>{
    if((await get('SELECT subscription_id FROM stripe_billing WHERE organization_id=?',org))?.subscription_id)fail(409,'A subscription already exists. Contact sales to change your plan; do not create a second subscription.');
    attempt=await get("SELECT * FROM stripe_checkout_attempts WHERE organization_id=? AND status IN ('creating','open') AND expires_at>? ORDER BY created_at DESC LIMIT 1",org,now());
-   if(attempt&&attempt.selection!==selection)fail(409,'A checkout is already pending. Finish that selection or wait for it to expire before changing plans.');
+   if(attempt&&!sameSelection(attempt.selection,selection))fail(409,'A checkout is already pending. Finish that selection or wait for it to expire before changing plans.');
    if(!attempt){attempt={id:id(),organization_id:org,selection,created_at:now(),expires_at:new Date(Date.now()+25*3600000).toISOString()};await run('INSERT INTO stripe_checkout_attempts(id,organization_id,selection,created_at,expires_at) VALUES(?,?,?,?,?)',attempt.id,org,selection,attempt.created_at,attempt.expires_at);}
   });
   if(!attempt.checkout_url){const session=await client.checkout({organizationId:org,email:user.email,...q,attemptId:attempt.id});await run("UPDATE stripe_checkout_attempts SET session_id=?,checkout_url=?,status='open' WHERE id=?",session.id,session.url,attempt.id);attempt.checkout_url=session.url;await audit(user,'billing.checkout_created',attempt.id);}
   json(res,200,{url:attempt.checkout_url});return true;
  }
  async function tick(){if(!enabled())return;const orgs=await all("SELECT organization_id FROM stripe_billing WHERE subscription_id IS NOT NULL UNION SELECT organization_id FROM stripe_checkout_attempts WHERE status IN ('creating','open') AND session_id IS NOT NULL");for(const row of orgs)try{await reconcile(row.organization_id);}catch{await run('UPDATE stripe_billing SET last_error=? WHERE organization_id=?','Payment sync needs retry',row.organization_id);}}
- return {handle,state,reconcile,assertCapacity,tick,parseSubscription};
+ return {handle,state,reconcile,assertCapacity,capacity,tick,parseSubscription};
 }

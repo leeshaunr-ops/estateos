@@ -4,6 +4,8 @@ import {createVisitChecklists,parseSnapshot,checklistLabel,EAChecklist,BUILT_IN}
 import {createPlatformGoogle} from './platform-google.mjs';
 import {createPlatformDashboard} from './platform-dashboard.mjs';
 import {createStripeBilling} from './stripe-billing.mjs';
+import {createPlatformMonitor} from './platform-monitor.mjs';
+import {createStripeClient} from './stripe-client.mjs';
 import {createPaidSignup} from './paid-signup.mjs';
 import {createStripeSandbox} from './stripe-sandbox.mjs';
 import {createSubscriptions} from './subscriptions.mjs';
@@ -32,7 +34,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inspectionPdf, jpegSize } from './pdf.mjs';
 import { createVisitVerification } from './visit-verification.mjs';
-import { createStorm } from './storm.mjs';
+import { createWeather } from './weather.mjs';
+import { createAiSummaries } from './ai-summaries.mjs';
+import { createStorm, portalLink } from './storm.mjs';
+import { createInsurance } from './insurance.mjs';
+import { createPhotoSpots } from './photo-spots.mjs';
+import { createSmartLocks } from './smart-locks.mjs';
+import { createInspectors } from './inspector.mjs';
+import { createFlights } from './flights.mjs';
+import { createDataImport } from './data-import.mjs';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const db = await openDatabase(root);
 let storage;
@@ -122,6 +132,9 @@ async function property(user, propertyId, operation = 'read') {
         return p;
     if (user.role === 'vendor' && operation === 'job' && (await get("SELECT 1 FROM work_orders WHERE property_id=? AND vendor_id=? AND status NOT IN ('cancelled')", p.id, user.vendor_id)))
         return p;
+    // Field inspectors reach a residence only through a visit or recurring schedule assigned to them (see inspector.mjs).
+    if (user.role === 'inspector' && (operation === 'read' || operation === 'operate') && await inspectors.assigned(user, p.id))
+        return p;
     fail(404, 'Residence not found.');
 }
 async function entity(user, table, entityId, operation = 'read') { const row = (await get(`SELECT * FROM ${table} WHERE id=?`, entityId)); if (!row)
@@ -188,7 +201,7 @@ async function snapshot(user) {
             return { id: p.id, name: p.name, address: p.address, account_manager_name:p.account_manager_name }; if (user.role === 'client') {
             const { manual, ...safe } = p;
             return safe;
-    } return p; }), archivedProperties, invitations: await invitationHistory(all, user), clients: user.role === 'admin' ? (await all('SELECT * FROM clients WHERE organization_id=?', user.organization_id)) : [], vendors: ['admin', 'employee'].includes(user.role) ? (await all('SELECT * FROM vendors WHERE organization_id=?', user.organization_id)) : [], users: user.role === 'admin' ? (await all('SELECT id,name,email,role,client_id,vendor_id,active FROM users WHERE organization_id=?', user.organization_id)) : [], assets, asset_inspections: assetInspections, work: jobs, requests: user.role === 'vendor' ? [] : (await scoped('requests')), inspections, files, shopping: user.role === 'vendor' ? [] : (await scoped('shopping_items')), arrivals: user.role === 'vendor' ? [] : (await scoped('arrivals')).map(a => ({ ...a, items: JSON.parse(a.items), room_status: JSON.parse(a.room_status || '[]'), guests: JSON.parse(a.guests || '[]') })), maintenance: ['admin', 'employee'].includes(user.role) ? (await scoped('maintenance_plans')) : [], notes: ['admin', 'employee'].includes(user.role) ? (await scoped('notes')) : [], invoices: user.role === 'admin' ? (await all('SELECT invoices.*,clients.name client_name,COALESCE((SELECT SUM(amount_minor) FROM payments WHERE invoice_id=invoices.id),0) paid_minor FROM invoices JOIN clients ON clients.id=invoices.client_id WHERE invoices.organization_id=?', user.organization_id)) : [], audit: user.role === 'admin' ? (await all('SELECT audit.*,users.name actor_name FROM audit JOIN users ON users.id=audit.actor_id WHERE audit.organization_id=? ORDER BY audit.created_at DESC LIMIT 100', user.organization_id)) : [], notifications: (await failAlerts.list(user)), template, checklists: ['admin','employee'].includes(user.role) ? await visitChecklists.published(user.organization_id, {items: true}) : [] };
+    } return p; }), archivedProperties, invitations: await invitationHistory(all, user), clients: user.role === 'admin' ? (await all('SELECT * FROM clients WHERE organization_id=?', user.organization_id)) : [], vendors: ['admin', 'employee'].includes(user.role) ? (await all('SELECT * FROM vendors WHERE organization_id=?', user.organization_id)) : [], users: user.role === 'admin' ? (await all("SELECT id,name,email,role,client_id,vendor_id,active,CASE WHEN password_hash='' THEN 1 ELSE 0 END invite_pending FROM users WHERE organization_id=?", user.organization_id)) : [], assets, asset_inspections: assetInspections, work: jobs, requests: user.role === 'vendor' ? [] : (await scoped('requests')), inspections, files, shopping: user.role === 'vendor' ? [] : (await scoped('shopping_items')), arrivals: user.role === 'vendor' ? [] : (await scoped('arrivals')).map(a => ({ ...a, items: JSON.parse(a.items), room_status: JSON.parse(a.room_status || '[]'), guests: JSON.parse(a.guests || '[]') })), maintenance: ['admin', 'employee'].includes(user.role) ? (await scoped('maintenance_plans')) : [], notes: ['admin', 'employee'].includes(user.role) ? (await scoped('notes')) : [], invoices: user.role === 'admin' ? (await all('SELECT invoices.*,clients.name client_name,COALESCE((SELECT SUM(amount_minor) FROM payments WHERE invoice_id=invoices.id),0) paid_minor FROM invoices JOIN clients ON clients.id=invoices.client_id WHERE invoices.organization_id=?', user.organization_id)) : [], audit: user.role === 'admin' ? (await all('SELECT audit.*,users.name actor_name FROM audit JOIN users ON users.id=audit.actor_id WHERE audit.organization_id=? ORDER BY audit.created_at DESC LIMIT 100', user.organization_id)) : [], notifications: (await failAlerts.list(user)), template, checklists: ['admin','employee'].includes(user.role) ? await visitChecklists.published(user.organization_id, {items: true}) : [] };
 }
 async function fileAllowed(user, f, inspectionIds, jobIds) {
     if (['admin', 'employee'].includes(user.role))
@@ -202,13 +215,14 @@ async function fileAllowed(user, f, inspectionIds, jobIds) {
     return f.visibility === 'client';
 }
 async function readFile(user, fileId) { const f = (await get('SELECT * FROM files WHERE id=?', fileId)); if (!f)
-    fail(404, 'File not found.'); if(user.role==='employee'&&f.work_order_id){await work(user,f.work_order_id);return f;} (await property(user, f.property_id, user.role === 'vendor' ? 'job' : 'read')); const ins = new Set((await all("SELECT id FROM inspections WHERE property_id=? AND status='published'", f.property_id)).map(x => x.id)); const jobs = new Set((await all('SELECT * FROM work_orders WHERE property_id=?', f.property_id)).filter(x => user.role !== 'vendor' || x.vendor_id === user.vendor_id).map(x => x.id)); if (!(await fileAllowed(user, f, ins, jobs)))
+    fail(404, 'File not found.'); if(user.role==='inspector'){if(!(await inspectors.fileAllowed(user,f)))fail(404,'File not found.');return f;} if(user.role==='employee'&&f.work_order_id){await work(user,f.work_order_id);return f;} (await property(user, f.property_id, user.role === 'vendor' ? 'job' : 'read')); const ins = new Set((await all("SELECT id FROM inspections WHERE property_id=? AND status='published'", f.property_id)).map(x => x.id)); const jobs = new Set((await all('SELECT * FROM work_orders WHERE property_id=?', f.property_id)).filter(x => user.role !== 'vendor' || x.vendor_id === user.vendor_id).map(x => x.id)); if (!(await fileAllowed(user, f, ins, jobs)))
     fail(404, 'File not found.'); return f; }
 const communications=createCommunications({get,all,run,transaction,id,now,fail,text,json,body,rate,audit});
 const failAlerts=createFailAlerts({get,all,run,id,now,fail,json,body});
 const visitChecklists=createVisitChecklists({get,all,fail,note});
 const security=createSecurity({get,run,transaction,body,json,rate,fail,passwordMatches,audit,now});
 const billing=createStripeBilling({get,all,run,transaction,id,now,fail,json,body,audit});
+const platformMonitor=createPlatformMonitor({get,all,run,transaction,json,fail,now,platformOwner,audit,billing,stripeClient:createStripeClient({origin:process.env.ESTATEOS_PUBLIC_URL||'https://estateaegis.com'})});
 const paidSignup=createPaidSignup({get,all,run,transaction,id,now,hash,randomBytes,body,json,fail,rate,parseSubscription:billing.parseSubscription});
 const stripeSandbox=createStripeSandbox({get,run,transaction,id,now,fail,json,body,platformOwner});
 const subscriptions=createSubscriptions({get,all,run,transaction,id,now,fail,json,body,audit,platformOwner,communications});
@@ -222,7 +236,21 @@ const staff = createStaff({get,all,run,transaction,fail,text,note,id,now,passwor
 const workExtras = createWorkExtras({get,all,run,transaction,id,now,fail,roles,work,property,audit,body,communications});
 const checklistTemplates = createChecklistTemplates({get,all,run,transaction,body,json,fail,roles,property,id,now,audit});
 const visitVerification = createVisitVerification({get,all,run,transaction,id,now,fail,json,body,roles,property,entity,audit,captureTime});
-const storm = createStorm({get,all,run,transaction,id,now,fail,text,note,date,json,body,roles,property,audit,visitChecklists,visitVerification,readFile,readBytes,checklistLabel});
+const smartLocks = createSmartLocks({get,all,run,transaction,id,now,fail,text,note,json,body,roles,property,audit,communications,timezoneFor:async p=>visitVerification.timezoneFor(p,await visitVerification.settings(p.organization_id))});
+smartLocks.extendReports(visitVerification);
+const flights = createFlights({get,all,run,transaction,id,now,fail,text,json,body,roles,property,audit,communications,visitChecklists,EAChecklist,template,timezoneFor:async p=>visitVerification.timezoneFor(p,await visitVerification.settings(p.organization_id))});
+const storm = createStorm({get,all,run,transaction,id,now,fail,text,note,date,json,body,roles,property,audit,visitChecklists,visitVerification,readFile,readBytes,checklistLabel,spotPairs:(organizationId,pre,post)=>photoSpots.stormPairs(organizationId,pre,post)});
+const photoSpots = createPhotoSpots({get,all,run,transaction,id,now,fail,json,body,roles,property,audit,visitVerification,readBytes});
+// Severe-weather alerts (per-company flag, default off). Freezes report.weather at publish through visitVerification.publishFields.
+const weather = createWeather({get,all,run,transaction,id,now,fail,json,body,roles,property,audit,platformOwner,visitVerification,storm,portalLink});
+weather.extendReports(visitVerification);weather.hookCheckIn(visitVerification);
+// AI inspection summaries (off unless AI_FEATURES_ENABLED=true and the company turns them on). Adds report.aiNote at publish when the company labels reports.
+const aiSummaries = createAiSummaries({get,all,run,transaction,id,now,fail,json,body,roles,property,audit,platformOwner,visitVerification});
+aiSummaries.extendReports(visitVerification);
+const insurance = createInsurance({get,all,run,transaction,id,now,fail,json,body,roles,property,audit,visitVerification,failAlerts,readFile,readBytes});
+const inspectors = createInspectors({get,all,run,transaction,id,now,fail,json,body,roles,property,audit,date,communications,failAlerts,visitChecklists,visitVerification,demos,template});
+// Import from another system (CSV/Excel): admins only, own company only; access codes sealed like Access & codes.
+const dataImport = createDataImport({get,all,run,transaction,id,now,fail,json,body,roles,audit,billing,addressFields,clientProfile,seal,unseal,vaultReady:()=>{try{seal({},'check');return true;}catch{return false;}},sendWorkspaceInvitation,hash,randomBytes});
 const offlineInspections = createOfflineInspections({get,all,run,body,json,fail,roles,property,entity,hash,now,template,visitChecklists,visitVerification});
 async function assertWorkspaceActive(organizationId){if((await get('SELECT status FROM workspace_settings WHERE organization_id=?',organizationId))?.status==='suspended')fail(403,'This company workspace is suspended. Contact support.');const d=await demos.lookup(organizationId);if(d&&Number(d.expires_at)<=Date.now())fail(403,'Your seven-day demo has ended. Contact sales@estateaegis.com for more time.');}
 const clientErrorWindows = new Map();
@@ -245,24 +273,36 @@ async function api(req, res, url, user) {
         console.error('Client error:',JSON.stringify(clean));
         return json(res,204,{});
     }
+    if(await insurance.handlePublic(req,res,url))return;
     if(await demoSignup.handle(req,res,url))return;
     if(await paidSignup.handle(req,res,url))return;
     if(user&&!['/api/login','/api/logout','/api/status'].includes(p))await assertWorkspaceActive(user.organization_id);
+    // Field inspectors: explicit allow-list, checked before any other handler (inspector.mjs).
+    await inspectors.gate(req,url,user);
     if(await demos.handle(req,res,url,user))return;
     if(user&&await demos.lookup(user.organization_id)&&method!=='GET'&&(p.startsWith('/api/billing/')||p==='/api/subscription/request'))fail(403,'Billing is disabled in private demos. Contact sales@estateaegis.com to subscribe.');
     if(await stripeSandbox.handle(req,res,url,user))return;
+    if(await inspectors.handle(req,res,url,user))return;
     if(await billing.handle(req,res,url,user))return;
     if(await platformGoogle.handle(req,res,url,user))return;
     if(await master.handle(req,res,url,user))return;
+    if(await platformMonitor.handle(req,res,url,user))return;
     if(await subscriptions.handle(req,res,url,user))return;
     if(await saas(req,res,url,user))return;
     if(await staff.handle(req,res,url,user))return;
     if(await workExtras.handle(req,res,url,user))return;
     if(await checklistTemplates.handle(req,res,url,user))return;
+    if(await dataImport.handle(req,res,url,user))return;
     if(await offlineInspections.handle(req,res,url,user))return;
     if(await failAlerts.handle(req,res,url,user))return;
     if(await visitVerification.handle(req,res,url,user))return;
     if(await storm.handle(req,res,url,user))return;
+    if(await weather.handle(req,res,url,user))return;
+    if(await aiSummaries.handle(req,res,url,user))return;
+    if(await insurance.handle(req,res,url,user))return;
+    if(await photoSpots.handle(req,res,url,user))return;
+    if(await smartLocks.handle(req,res,url,user))return;
+    if(await flights.handle(req,res,url,user))return;
     if(await communications.handle(req,res,url,user))return;
     if(await operations.handle(req,res,url,user))return;
     if(await security.handle(req,res,url,user))return;
@@ -367,12 +407,18 @@ async function api(req, res, url, user) {
         if (!invitation)
             fail(422, 'Invitation expired, cancelled, or already accepted.');
         await assertWorkspaceActive(invitation.organization_id);
-        const pw = passwordHash(b.password), uid = id();
+        const pw = passwordHash(b.password);
+        let uid = id();
         await transaction(async () => {
             const family = invitation.role === 'client' ? await lockFamily({get,run}, invitation.organization_id, invitation.client_id) : null;
             if (!await claimInvitation(run, invitation.token_hash, now())) fail(409, 'Invitation expired, cancelled, or already accepted.');
             if(['admin','employee'].includes(invitation.role))await billing.assertCapacity(invitation.organization_id,'seats');
-            await run('INSERT INTO users VALUES(?,?,?,?,?,?,?,?,?,?)', uid, invitation.organization_id, text(b.name, 'Name', 160), invitation.email, pw, invitation.role, invitation.client_id, invitation.vendor_id, 1, now());
+            if(invitation.role==='inspector')await billing.assertCapacity(invitation.organization_id,'inspectors');
+            // Imported staff (data import) already have an inactive account with no password: activate it in place.
+            const imported = await get("SELECT id FROM users WHERE LOWER(email)=? AND organization_id=? AND active=0 AND password_hash=''", invitation.email.toLowerCase(), invitation.organization_id);
+            if (imported && !['admin','employee','inspector'].includes(invitation.role)) fail(409, 'That account already exists.');
+            if (imported) { uid = imported.id; await run('UPDATE users SET name=?,password_hash=?,role=?,active=1 WHERE id=?', text(b.name, 'Name', 160), pw, invitation.role, uid); }
+            else await run('INSERT INTO users VALUES(?,?,?,?,?,?,?,?,?,?)', uid, invitation.organization_id, text(b.name, 'Name', 160), invitation.email, pw, invitation.role, invitation.client_id, invitation.vendor_id, 1, now());
             await linkAcceptedMember({run}, invitation, uid, family);
         });
         const u = (await get('SELECT * FROM users WHERE id=?', uid));
@@ -388,8 +434,10 @@ async function api(req, res, url, user) {
         res.setHeader('Set-Cookie', 'estateos_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0');
         return json(res, 200, { ok: true });
     }
+    if (p === '/api/data' && method === 'GET' && user.role === 'inspector')
+        return json(res, 200, await visitVerification.decorate(user, await inspectors.snapshot(user, {safeUser, profile: await get('SELECT phone,preferred_contact FROM user_profiles WHERE user_id=?', user.id) || {phone:'',preferred_contact:'Email'}})));
     if (p === '/api/data' && method === 'GET')
-        return json(res, 200, await visitVerification.decorate(user, await snapshot(user)));
+        return json(res, 200, await dataImport.decorate(user, await aiSummaries.decorate(user, await photoSpots.decorate(user, await flights.decorate(user, await weather.decorate(user, await insurance.decorate(user, await smartLocks.decorate(user, await visitVerification.decorate(user, await snapshot(user))))))))));
     if (p.startsWith('/api/files/') && method === 'GET') {
         const f = (await readFile(user, p.split('/')[3]));
         const bytes = (await readBytes(f.storage_key));
@@ -401,6 +449,7 @@ async function api(req, res, url, user) {
         if (row.status !== 'published')
             fail(409, 'Publish the inspection first.');
         const report = await visitVerification.reportForPdf(user, row, {...JSON.parse(row.report_snapshot),companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'', completedAt:JSON.parse(row.report_snapshot).completedAt||row.published_at});
+        report.comparisons = await photoSpots.comparisons(user.organization_id, row.id, report.timezone || 'America/New_York');
         const pdf = inspectionPdf(report, await inspectionPhotos(user, report));
         res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="EstateAegis-Inspection-${row.id}.pdf"`, 'Cache-Control': 'no-store' });
         return res.end(pdf);
@@ -433,7 +482,7 @@ async function api(req, res, url, user) {
     }
     if (p === '/api/backup' && method === 'GET') {
         roles(user, 'admin');
-        const tables = ['organizations', 'clients', 'properties', 'vendors', 'assets', 'asset_inspections', 'work_orders', 'requests', 'inspections', 'files', 'shopping_items', 'arrivals', 'maintenance_plans', 'invoices', 'payments', 'notes', 'audit'];
+        const tables = ['organizations', 'clients', 'properties', 'vendors', 'assets', 'asset_inspections', 'work_orders', 'requests', 'inspections', 'files', 'shopping_items', 'arrivals', 'maintenance_plans', 'invoices', 'payments', 'notes', 'imported_visits', 'audit'];
         const backup = { version: 1, createdAt: now(), tables: {} };
         backup.tables.staff_profiles=await all('SELECT sp.* FROM staff_profiles sp JOIN users u ON u.id=sp.user_id WHERE u.organization_id=?',user.organization_id);
         backup.tables.staff_schedules=await all('SELECT * FROM staff_schedules WHERE organization_id=?',user.organization_id);
@@ -574,7 +623,8 @@ async function api(req, res, url, user) {
         result = { id: row.id, archived: false };
     }
     else if (p === '/api/access-codes/read' || p === '/api/access-codes/save') {
-        roles(user, 'admin', 'employee');
+        // Inspectors only read, and only on the day of an assigned visit (checked in inspectors.gate).
+        if (p.endsWith('/read')) roles(user, 'admin', 'employee', 'inspector'); else roles(user, 'admin', 'employee');
         result = await transaction(async()=>{
             const home = await property(user, b.propertyId, 'operate');
             const context = home.organization_id + ':' + home.id;
@@ -681,8 +731,10 @@ async function api(req, res, url, user) {
     else if (p === '/api/invitations') {
         roles(user, 'admin');
         const role = b.role;
-        if (!['admin', 'employee', 'client', 'vendor'].includes(role))
+        if (!['admin', 'employee', 'inspector', 'client', 'vendor'].includes(role))
             fail(422, 'Invalid role.');
+        // Field inspectors have their own allowance (never an admin/staff seat); check it before sending the invitation.
+        if (role === 'inspector') await billing.assertCapacity(user.organization_id, 'inspectors');
         if (role === 'client' && !(await get('SELECT 1 FROM clients WHERE id=? AND organization_id=?', b.clientId, user.organization_id)))
             fail(422, 'Select the client family.');
         if (role === 'vendor' && !(await get('SELECT 1 FROM vendors WHERE id=? AND organization_id=?', b.vendorId, user.organization_id)))
@@ -691,7 +743,9 @@ async function api(req, res, url, user) {
         const email = text(b.email, 'Email', 254).toLowerCase();
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
             fail(422, 'Enter a valid email.');
-        if ((await get('SELECT 1 FROM users WHERE email=?', email)))
+        // An imported staff member (inactive, no password yet) can be invited from here too; any other existing login can't.
+        const existing = await get('SELECT organization_id,active,password_hash FROM users WHERE LOWER(email)=?', email);
+        if (existing && !(existing.organization_id === user.organization_id && !Number(existing.active) && existing.password_hash === '' && ['admin','employee','inspector'].includes(role)))
             fail(409, 'That account already exists.');
         (await run('INSERT INTO invitations VALUES(?,?,?,?,?,?,?,?)', hash(token), user.organization_id, email, role, role === 'client' ? b.clientId : null, role === 'vendor' ? b.vendorId : null, Date.now() + 48 * 3600000, null));
         (await audit(user, 'invitation.created', email));
@@ -726,7 +780,11 @@ async function api(req, res, url, user) {
         const member = (await get('SELECT * FROM users WHERE id=? AND organization_id=?', b.userId, user.organization_id));
         if (!member || member.id === user.id)
             fail(422, 'Cannot reactivate this account.');
-        await run('UPDATE users SET active=1 WHERE id=? AND organization_id=?', member.id, user.organization_id);
+        if (!member.active && member.password_hash === '')
+            fail(422, 'This person was imported and hasn’t accepted an invitation yet. Use Send invite instead.');
+        // Reactivating an admin or staff account takes a seat again; client and vendor logins never count.
+        await transaction(async()=>{if(!member.active&&['admin','employee'].includes(member.role))await billing.assertCapacity(user.organization_id,'seats');if(!member.active&&member.role==='inspector')await billing.assertCapacity(user.organization_id,'inspectors');
+        await run('UPDATE users SET active=1 WHERE id=? AND organization_id=?', member.id, user.organization_id);});
         await audit(user, 'user.reactivated', member.id);
         result = { ok: true };
     }
@@ -853,7 +911,7 @@ async function api(req, res, url, user) {
         (await run('INSERT INTO inspections(id,property_id,inspector_id,inspection_date,answers,created_at,frequency,next_due,visit_type,template_id,template_version,template_version_id,checklist_snapshot) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)', key, b.propertyId, user.id, inspectionDate, JSON.stringify(snap ? EAChecklist.propertyAnswers(snap) : template), now(), frequency, next, chosen.visit_type, snap?.template_id ?? null, snap?.template_version ?? null, snap?.template_version_id ?? null, snap ? JSON.stringify(snap) : null));
         const defaultEmail=inspectionProperty.inspection_report_email||'';
         await run('UPDATE inspections SET report_email=? WHERE id=?',defaultEmail,key);
-        (await audit(user, 'inspection.started', key));
+        (await audit(user, 'inspection.started', key));weather.captureLater(key);
         result = { id: key, checklist: checklistLabel(snap) };
     }
     else if (p === '/api/inspections/checklist') {
@@ -909,7 +967,7 @@ async function api(req, res, url, user) {
         result={deleted:true};
     }
     else if (p === '/api/inspections/save') {
-        roles(user, 'admin', 'employee');
+        roles(user, 'admin', 'employee', 'inspector');
         const row = (await entity(user, 'inspections', b.id, 'operate'));
         assertVersion(row, b);
         if (row.status !== 'draft')
@@ -932,7 +990,7 @@ async function api(req, res, url, user) {
     }
     else if (p === '/api/inspections/submit') {
         // Field techs (and admins) mark a visit complete, often from an offline queue. It waits as `submitted` for an admin to publish.
-        roles(user, 'admin', 'employee');
+        roles(user, 'admin', 'employee', 'inspector');
         const row = (await entity(user, 'inspections', b.id, 'operate'));
         if (row.status === 'submitted' || row.status === 'published') result = { id: row.id, status: row.status, version: row.version, alreadyCompleted: true };
         else {
@@ -954,8 +1012,12 @@ async function api(req, res, url, user) {
             result = { id: row.id, status: 'submitted', version: row.version + 1, submitted_at: submittedAt };
             if (b.autoPublish === true && user.role === 'admin') {
                 const fresh = await get('SELECT * FROM inspections WHERE id=?', row.id);
+                // An AI-assisted summary nobody has confirmed stays submitted; the admin confirms it when publishing.
+                if (aiSummaries.reviewPending(fresh)) result = { ...result, autoPublishSkipped: 'ai_review_required' };
+                else {
                 const published = await publishInspection(user, fresh, { key: 'submit:' + row.id + ':' + fresh.version, route: '/api/inspections/publish', requestHash: hash('auto-publish:' + row.id) });
                 result = { ...result, ...published, status: 'published', version: fresh.version + 1 };
+                }
             }
         }
     }
@@ -984,7 +1046,8 @@ async function api(req, res, url, user) {
         result = await publishInspection(user, row, { key, route: p, requestHash });
     }
     else if (p === '/api/files') {
-        roles(user, 'admin', 'employee', 'vendor');
+        roles(user, 'admin', 'employee', 'vendor', 'inspector');
+        if (user.role === 'inspector') b.visibility = 'internal';
         const authorizedJob=b.workId?await work(user,b.workId):null;
         const pRow = authorizedJob&&authorizedJob.property_id===b.propertyId?await get('SELECT * FROM properties WHERE id=? AND organization_id=?',b.propertyId,user.organization_id):(await property(user, b.propertyId, user.role === 'vendor' ? 'job' : 'operate'));
         // Offline photo uploads carry the outbox operation ID so a retried upload never creates a second file.
@@ -992,7 +1055,7 @@ async function api(req, res, url, user) {
         if (clientOpId != null && !isUuid(clientOpId)) fail(422, 'Upload ID must be a UUID.');
         if (clientOpId) { const existing = await get('SELECT id,inspection_id,work_order_id FROM files WHERE created_by=? AND client_op_id=?', user.id, clientOpId); if (existing) { if ((existing.inspection_id || null) !== (b.inspectionId || null) || (existing.work_order_id || null) !== (b.workId || null)) fail(422, 'This upload ID was already used for another record.'); return json(res, 201, { id: existing.id, existing: true }); } }
         if (b.inspectionId) {
-            roles(user, 'admin', 'employee');
+            roles(user, 'admin', 'employee', 'inspector');
             const inspection = (await entity(user, 'inspections', b.inspectionId, 'operate'));
             if (inspection.property_id !== pRow.id || inspection.status !== 'draft')
                 fail(422, 'Photos require a draft at this residence.');
@@ -1015,6 +1078,8 @@ async function api(req, res, url, user) {
             jpegSize(bytes);
         else if (bytes.subarray(0, 5).toString() !== '%PDF-' || b.inspectionId || b.workId)
             fail(422, 'Use JPEG photos or PDF documents.');
+        // Photo spots: a photo taken for a spot is tied to it in the same transaction (photo-spots.mjs).
+        const spot = await photoSpots.checkUpload(user, pRow, b, isJpeg);
         // Location privacy: EXIF GPS / XMP are always removed from stored JPEGs; with visit verification on, the photo's
         // position (device, else EXIF) and EXIF capture time are kept as columns instead.
         const meta = await visitVerification.uploadMeta(user, pRow, b, bytes, isJpeg);
@@ -1027,6 +1092,7 @@ async function api(req, res, url, user) {
                 const receivedAt=now();
                 await run('INSERT INTO files(id,property_id,inspection_id,work_order_id,name,mime,bytes,storage_key,visibility,created_by,created_at,answer_key,client_op_id,captured_at,received_at,capture_lat,capture_lon,capture_accuracy_m,capture_source) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',key,pRow.id,b.inspectionId||null,b.workId||null,text(b.name,'Filename',200),isJpeg?'image/jpeg':'application/pdf',meta.bytes.length,storageKey,b.visibility==='client'?'client':'internal',user.id,receivedAt,null,clientOpId||null,meta.capturedAt||capturedAt,receivedAt,meta.lat,meta.lon,meta.accuracy,meta.source);
                 await audit(user,'file.uploaded',key);
+                await photoSpots.linkUpload(user,pRow,key,b,spot);
             });
         } catch(e){if(stored)await deleteBytes(storageKey);throw e;}
         await subscriptions.monitor(user.organization_id).catch(e=>console.error('Storage monitoring:',e.message));
@@ -1104,6 +1170,7 @@ async function api(req, res, url, user) {
             fail(422, 'Mark every residence room ready before completing arrival preparation.');
         if (status === 'ready' && !b.confirmNeeds)
             fail(422, 'Confirm all additional preparation needs are complete.');
+        if (status === 'ready' && row.status !== 'ready') await flights.assertReady(row.id);
         (await run('UPDATE arrivals SET items=?,room_status=?,status=?,version=version+1 WHERE id=?', JSON.stringify(items), JSON.stringify(roomStatus), status, row.id));
         (await audit(user, 'arrival.updated', row.id));
         result = { ok: true };
@@ -1230,6 +1297,12 @@ const server = http.createServer(async (req, res) => {
         const localHost = process.env.ESTATEOS_HOST || '127.0.0.1';
         if (localHost === '127.0.0.1' && !/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host))
             fail(403, 'Invalid host.');
+        // Scheduler hook (Render Cron Job or any external scheduler): authenticated by X-Cron-Secret, not a browser session.
+        if (url.pathname.startsWith('/api/internal/cron/')) { if (await weather.cron(req, res, url)) return; fail(404, 'Not found.'); }
+        // Signed webhooks from outside services (no browser Origin; each handler verifies its own signature).
+        if (url.pathname.startsWith('/api/webhooks/')) { if (await smartLocks.webhook(req, res, url)) return; if (await flights.webhook(req, res, url)) return; fail(404, 'Endpoint not found.'); }
+        // Stripe calls this server-to-server (no Origin, signed body), so it is handled before the same-origin check.
+        if (url.pathname === '/api/stripe/webhook' && req.method === 'POST') return await platformMonitor.webhook(req, res);
         if (req.method !== 'GET' && req.method !== 'HEAD') {
             const origin = req.headers.origin;
             if (!origin || new URL(origin).host !== host)
@@ -1238,7 +1311,7 @@ const server = http.createServer(async (req, res) => {
                 fail(415, 'JSON content required.');
         }
         if (url.pathname.startsWith('/api/'))
-{ const user = await actor(req); return await offlineInspections.idempotent(req, res, url, user, () => api(req, res, url, user)); }
+{ const user = await actor(req); if (user && req.method === 'POST') res.once('finish', () => { if (res.statusCode < 400) smartLocks.changed(user.organization_id); }); return await offlineInspections.idempotent(req, res, url, user, () => api(req, res, url, user)); }
         if (url.pathname === '/robots.txt' || url.pathname === '/sitemap.xml') {
             const sitemap = url.pathname === '/sitemap.xml';
             const content = sitemap ? '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://estateaegis.com/</loc></url><url><loc>https://estateaegis.com/home-watch-software</loc></url><url><loc>https://estateaegis.com/private-residence-management</loc></url><url><loc>https://estateaegis.com/inspection-report-software</loc></url><url><loc>https://estateaegis.com/about</loc></url><url><loc>https://estateaegis.com/home-watch-checklist</loc></url><url><loc>https://estateaegis.com/arrival-preparation-checklist</loc></url><url><loc>https://estateaegis.com/example-workflow</loc></url><url><loc>https://estateaegis.com/resources</loc></url></urlset>' : 'User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /login\nSitemap: https://estateaegis.com/sitemap.xml\n';
@@ -1275,8 +1348,8 @@ const server = http.createServer(async (req, res) => {
             return res.end(url.pathname === '/sw.js' ? content.replace('__SHELL_VERSION__', shellVersion()) : content);
         }
         const appHome = url.pathname === '/' && (url.searchParams.has('invite') || url.searchParams.has('workspaceInvite') || await actor(req));
-        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/home-refresh.css':'home-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js','/visit-verification.js':'visit-verification.js','/visit-card.js':'visit-card.js','/storm-core.js':'storm-core.js','/storm.js':'storm.js','/storm.css':'storm.css','/view-route.js':'view-route.js', '/sidebar-core.js':'sidebar-core.js','/overview-core.js':'overview-core.js','/app-format.js':'app-format.js','/app.css':'app.css', '/overview.js':'overview.js', '/overview.css':'overview.css', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/login.js':'login.js','/login.css':'login.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/faq.js':'faq.js','/site-menu.js':'site-menu.js','/home-compact.js':'home-compact.js','/security':'security.html' };
-        const file = names[url.pathname] || (url.pathname === '/client-login' || /^\/client\/[a-z0-9-]+$/i.test(url.pathname) ? 'live.html' : null);
+        const names = { '/demo-guide':'demo-guide.html','/demo-guide.js':'demo-guide.js','/demo-guide.css':'demo-guide.css', '/demo':'demo.html','/demo.js':'demo.js','/demo.css':'demo.css','/demo-refresh.css':'demo-refresh.css', '/home-refresh.css':'home-refresh.css', '/platform':'platform.html', '/platform.js':'platform.js', '/platform.css':'platform.css', '/signup':'signup.html', '/pricing':'signup.html', '/signup.js':'signup.js', '/signup.css':'signup.css', '/share':'share.html', '/resources':'resources.html', '/example-workflow':'example-workflow.html', '/arrival-preparation-checklist':'arrival-preparation-checklist.html', '/home-watch-checklist':'home-watch-checklist.html', '/inspection-report-software':'inspection-report-software.html', '/private-residence-management':'private-residence-management.html', '/home-watch-software':'home-watch-software.html', '/': appHome ? 'live.html' : 'marketing.html', '/login':'live.html', '/about':'about.html', '/marketing.css':'marketing.css', '/marketing.js':'marketing.js', '/live.js': 'live.js', '/live.css': 'live.css', '/checklist-editor.mjs':'checklist-editor.mjs', '/checklist-editor-model.mjs':'checklist-editor-model.mjs', '/checklist-editor.css':'checklist-editor.css', '/company.css':'company.css', '/logo-background.js':'logo-background.js', '/inspection-drafts.js':'inspection-drafts.js', '/offline-core.js':'offline-core.js', '/inspection-checklist.js':'inspection-checklist.js','/visit-verification.js':'visit-verification.js','/visit-card.js':'visit-card.js','/storm-core.js':'storm-core.js','/smart-locks.js':'smart-locks.js','/smart-locks.css':'smart-locks.css','/flights.js':'flights.js','/flights.css':'flights.css', '/weather-core.js':'weather-core.js', '/weather.js':'weather.js', '/weather.css':'weather.css','/ai-summaries.js':'ai-summaries.js','/ai-summaries.css':'ai-summaries.css','/storm.js':'storm.js','/storm.css':'storm.css','/insurance.js':'insurance.js','/insurance.css':'insurance.css','/photo-spots.js':'photo-spots.js','/photo-spots.css':'photo-spots.css','/certificate.js':'certificate.js','/certificate.css':'certificate.css','/view-route.js':'view-route.js', '/sidebar-core.js':'sidebar-core.js','/overview-core.js':'overview-core.js','/app-format.js':'app-format.js','/app.css':'app.css', '/overview.js':'overview.js', '/overview.css':'overview.css', '/offline-store.js':'offline-store.js', '/offline.css':'offline.css', '/proactive.js':'proactive.js', '/proactive.css':'proactive.css', '/refresh.css':'refresh.css','/login.js':'login.js','/login.css':'login.css','/terms':'terms.html','/privacy':'privacy.html','/refunds':'refunds.html','/faq':'faq.html','/faq.js':'faq.js','/site-menu.js':'site-menu.js','/home-compact.js':'home-compact.js','/plan-panel.js':'plan-panel.js','/inspector.js':'inspector.js','/inspector.css':'inspector.css','/data-import.js':'data-import.js','/data-import.css':'data-import.css','/platform-owner.js':'platform-owner.js','/platform-owner.css':'platform-owner.css','/plan-panel.css':'plan-panel.css','/security':'security.html' };
+        const file = names[url.pathname] || (url.pathname === '/client-login' || /^\/client\/[a-z0-9-]+$/i.test(url.pathname) ? 'live.html' : /^\/certificate\/[A-Za-z0-9_-]{43}$/.test(url.pathname) ? 'certificate.html' : null);
         if (!file) {
             // Unknown pages get a friendly HTML 404 with the site navigation; /api/* keeps its JSON errors above.
             if (req.method !== 'GET' && req.method !== 'HEAD') fail(404, 'Page not found.');
@@ -1305,7 +1378,7 @@ const server = http.createServer(async (req, res) => {
         json(res, status, { error: status === 500 ? 'The action could not be saved. Check the server log.' : error.message, ...(status !== 500 && error.extra ? error.extra : {}) });
     }
 });
-const SHELL_FILES = ['live.html','live.js','login.js','login.css','inspection-checklist.js','visit-verification.js','visit-card.js','view-route.js','sidebar-core.js','overview-core.js','overview.js','overview.css','app-format.js','app.css','storm-core.js','storm.js','storm.css','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png','ea-shield-80.png','ea-shield-120.png'];
+const SHELL_FILES = ['live.html','live.js','login.js','login.css','inspection-checklist.js','visit-verification.js','visit-card.js','view-route.js','sidebar-core.js','overview-core.js','overview.js','overview.css','app-format.js','app.css','storm-core.js','storm.js','storm.css','weather-core.js','weather.js','weather.css','ai-summaries.js','ai-summaries.css','smart-locks.js','smart-locks.css','flights.js','flights.css','insurance.js','insurance.css','photo-spots.js','photo-spots.css','inspection-drafts.js','proactive.js','offline-core.js','offline-store.js','offline.css','live.css','company.css','refresh.css','checklist-editor.css','proactive.css','logo-background.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','icon-maskable-512.png','ea-shield.png','ea-shield-80.png','ea-shield-120.png','plan-panel.js','plan-panel.css','platform-owner.js','platform-owner.css','inspector.js','data-import.js','data-import.css','inspector.css'];
 let cachedShellVersion = null;
 function shellVersion() { if (!cachedShellVersion) { const digest = createHash('sha256'); for (const name of SHELL_FILES) { try { digest.update(name).update(fs.readFileSync(path.join(root, 'public', name))); } catch { digest.update(name + ':missing'); } } cachedShellVersion = digest.digest('hex').slice(0, 12); } return cachedShellVersion; }
 setInterval(() => offlineInspections.purge().catch(e => console.error('Idempotency cleanup:', e.message)), 3600000).unref();
@@ -1314,6 +1387,9 @@ if (host !== '127.0.0.1' && (!process.env.ESTATEOS_SETUP_KEY || process.env.ESTA
     throw Error('Nonlocal hosting requires a strong setup key, HTTPS termination and secure cookies. Complete the production deployment review first.');
 server.listen(port, host, () => console.log(`EstateOS running at http://${host}:${server.address().port}`));
 visitVerification.startGeocoder();
+// Weather jobs run in-process every minute (when WEATHER_JOBS_ENABLED=true and a company has the flag on); a lease in job_locks keeps one runner.
+weather.applyPilots().catch(e=>console.error('Weather pilot:',e.message));
+setInterval(()=>weather.tick().catch(e=>console.error('Weather jobs:',e.message)),60000).unref();setTimeout(()=>weather.tick().catch(()=>{}),20000).unref();
 process.on('SIGTERM', () => server.close(async () => { await db.close(); process.exit(0); }));
 
 async function publishInspection(user,row,{key,route,requestHash}){
@@ -1324,6 +1400,7 @@ async function publishInspection(user,row,{key,route,requestHash}){
  const linked=parseSnapshot(row.checklist_snapshot);
  if(linked&&EAChecklist.photoRequired(answers).length&&!(await get('SELECT id FROM files WHERE inspection_id=? LIMIT 1',row.id)))fail(422,'Add a photo for the failed items that require one before publishing.');
  if(!row.summary.trim())fail(422,'Add an inspection summary.');
+ aiSummaries.assertReviewed(row);
  const pRow=await property(user,row.property_id);
  await visitVerification.autoCheckOut(user,row);
  const fileIds=(await all('SELECT id FROM files WHERE inspection_id=? ORDER BY created_at',row.id)).map(f=>f.id);
@@ -1359,7 +1436,7 @@ async function deliverInspection(user,inspectionId){
  let result;
  try{
   const report=await visitVerification.reportForPdf(user,row,{...JSON.parse(row.report_snapshot),companyLogo:(await get('SELECT logo_data FROM workspace_settings WHERE organization_id=?',user.organization_id))?.logo_data||'',completedAt:JSON.parse(row.report_snapshot).completedAt||row.published_at});
-  result=await sendInspectionEmail({to:row.report_email,report,pdf:inspectionPdf(report,await inspectionPhotos(user,report))});
+  report.comparisons=await photoSpots.comparisons(user.organization_id,row.id,report.timezone||'America/New_York');result=await sendInspectionEmail({to:row.report_email,report,pdf:inspectionPdf(report,await inspectionPhotos(user,report))});
  }catch{result={emailStatus:'failed'};}
  await run('UPDATE inspection_email_delivery SET email_status=? WHERE inspection_id=?',result.emailStatus,row.id);
  return result;
@@ -1367,6 +1444,11 @@ async function deliverInspection(user,inspectionId){
 
 setInterval(()=>communications.drain().catch(error=>console.error('Email queue:',error.message)),15000).unref();
 
+setTimeout(()=>insurance.tick().catch(e=>console.error('Insurance compliance:',e.message)),45000).unref();
+setInterval(()=>insurance.tick().catch(e=>console.error('Insurance compliance:',e.message)),3600000).unref();
+
+setInterval(()=>smartLocks.tick().catch(e=>console.error('Smart locks:',e.message)),60000).unref();
+setInterval(()=>flights.tick().catch(e=>console.error('Flights:',e.message)),60000).unref();
 setInterval(()=>operations.tick().catch(e=>console.error("Automation:",e.message)),60000).unref();
 
 const backupWorker=createBackupWorker({get,run,transaction,putBytes,readBytes,deleteBytes});setTimeout(()=>backupWorker.tick(),15000).unref();setInterval(()=>backupWorker.tick(),3600000).unref();
@@ -1374,6 +1456,7 @@ const backupWorker=createBackupWorker({get,run,transaction,putBytes,readBytes,de
 setTimeout(()=>subscriptions.tick().catch(e=>console.error("Storage monitoring:",e.message)),20000).unref();
 setInterval(()=>subscriptions.tick().catch(e=>console.error("Storage monitoring:",e.message)),3600000).unref();
 setTimeout(()=>billing.tick().catch(()=>console.error('Billing sync needs retry.')),30000).unref();
+setTimeout(()=>platformMonitor.backfill().catch(()=>console.error('Platform monitor backfill needs retry.')),25000).unref();
 setInterval(()=>billing.tick().catch(()=>console.error('Billing sync needs retry.')),300000).unref();
 setTimeout(()=>paidSignup.tick().catch(()=>console.error('Signup sync needs retry.')),30000).unref();
 setInterval(()=>paidSignup.tick().catch(()=>console.error('Signup sync needs retry.')),60000).unref();

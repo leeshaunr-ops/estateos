@@ -3,26 +3,33 @@
 (function(root){
  'use strict';
  // Every screen a signed-in user can open from the menu, by role. Same rules and order as before the refresh.
- function navFor(user,{unreadMessages=0}={}){
+ function navFor(user,{unreadMessages=0,weather=false}={}){
   const role=user&&user.role,staff=role==='admin'||role==='employee';
+  // Field inspectors only run the visits assigned to them (see inspector.js).
+  if(role==='inspector')return [['dashboard','Today'],['notifications','Notifications'],['profile','My profile']];
   const nav=[['dashboard','Overview'],['messages','Messages'+(unreadMessages?' ('+unreadMessages+')':'')],['properties',role==='client'?'My residences':'Residences'],['work',role==='vendor'?'My jobs':'Work orders']];
   if(role==='client')nav.push(['shopping','Shopping list']);
   if(role!=='vendor')nav.push(['inspections','Inspection reports'],['requests','Service requests'],['arrivals','Arrival preparation'],['calendar','Calendar'],['documents','Documents']);
-  if(staff)nav.push(['maintenance','Maintenance'],['assets','Assets'],['routes','Daily route'],['storm','Storms']);
+  if(staff)nav.push(['maintenance','Maintenance'],['assets','Assets'],['routes','Daily route'],['storm','Storms'],['insurance','Insurance compliance']);
+  // Weather appears once the company turns weather alerts on (admins turn it on from Company settings).
+  if(staff&&weather)nav.push(['weather','Weather']);
   // No 'platform' item: it only repeated Billing. Platform owners get the Platform console link in the sidebar footer.
   if(staff)nav.push(['staff-schedules','Staff schedules']);
   if(role==='admin')nav.push(['staff','Staff'],['workspace','Company settings'],['clients','Client families'],['vendors','Vendors'],['billing','Billing'],['users','Team & access'],['audit','Audit history']);
   if(role==='admin'||role==='client')nav.push(['approvals','Client approvals']);
-  if(role==='admin')nav.push(['automation','Schedules & automation'],['email-activity','Email activity'],['checklist-templates','Checklist templates']);
+  if(role==='admin')nav.push(['automation','Schedules & automation'],['email-activity','Email activity'],['checklist-templates','Checklist templates'],['import','Import data']);
+  // Platform owner only: read-only monitoring of every company (plans, trials, payments, usage). Not 'platform',
+  // which used to repeat Billing.
+  if(role==='admin'&&user.platformOwner)nav.push(['platform-owner','Platform']);
   nav.push(['profile','My profile'],['notifications','Notifications']);
   return nav;
  }
  const TOP=['dashboard','messages','notifications'];
  const SECTIONS={
-  staff:[['Daily work',['inspections','routes','calendar','work','requests','arrivals','storm','approvals']],
-   ['Residences',['properties','clients','documents','assets','maintenance']],
+  staff:[['Daily work',['inspections','routes','calendar','work','requests','arrivals','storm','weather','approvals']],
+   ['Residences',['properties','insurance','clients','documents','assets','maintenance']],
    ['Team',['staff','staff-schedules','vendors','users']],
-   ['Company',['workspace','checklist-templates','automation','billing','email-activity','audit','platform']]],
+   ['Company',['workspace','import','checklist-templates','automation','billing','email-activity','audit','platform','platform-owner']]],
   client:[['Your home',['properties','inspections','work','requests','documents']],
    ['Plans',['arrivals','shopping','calendar','approvals']],['Company',['platform']]],
   vendor:[['Your work',['work','properties']],['Company',['platform']]]
@@ -32,7 +39,7 @@
   client:{work:'Service updates',requests:'Requests',arrivals:'Arrivals',approvals:'Approvals',messages:'Messages'},
   vendor:{messages:'Messages'}
  };
- const SUBTITLE={admin:'Admin workspace',employee:'Staff workspace',client:'Client portal',vendor:'Vendor portal'};
+ const SUBTITLE={admin:'Admin workspace',employee:'Staff workspace',inspector:'Field inspector',client:'Client portal',vendor:'Vendor portal'};
  const kind=role=>role==='client'?'client':role==='vendor'?'vendor':'staff';
  // The flat menu: a top block, titled sections and a footer (profile). Anything in nav that no section lists
  // still gets a place under "More", so a screen can never drop out of the menu.

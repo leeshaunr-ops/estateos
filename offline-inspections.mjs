@@ -1,5 +1,6 @@
 // Offline mobile inspections: replay-safe writes (Idempotency-Key) and the per-user offline visit snapshot.
 // Everything here is scoped to the caller's company and the residences their role can operate.
+import { inspectorRooms } from './inspector.mjs';
 import {EAChecklist, parseSnapshot, defaultChecklist} from './visit-checklists.mjs';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export const isUuid = value => typeof value === 'string' && UUID.test(value);
@@ -64,7 +65,9 @@ export function createOfflineInspections({ get, all, run, body, json, fail, role
  async function handle(req, res, url, user) {
   const p = url.pathname;
   if (p === '/api/offline/visits' && req.method === 'GET') {
-   roles(user, 'admin', 'employee');
+   roles(user, 'admin', 'employee', 'inspector');
+   // Field inspectors get only their own open visits: no earlier reports, family names or report recipients.
+   const field = user.role === 'inspector';
    const requested = String(url.searchParams.get('propertyIds') || '').split(',').map(s => s.trim()).filter(Boolean);
    if (requested.length > 100) fail(422, 'Choose at most 100 residences.');
    const homes = [];
@@ -73,9 +76,9 @@ export function createOfflineInspections({ get, all, run, body, json, fail, role
    const names = new Map((await all('SELECT id,name FROM users WHERE organization_id=?', user.organization_id)).map(u => [u.id, u.name]));
    let visits = [], files = [];
    if (ids.length) {
-    const open = await all(`SELECT * FROM inspections WHERE property_id IN (${marks}) AND status IN ('draft','submitted') ORDER BY inspection_date`, ...ids);
+    const open = await all(`SELECT * FROM inspections WHERE property_id IN (${marks}) AND status IN ('draft','submitted')${field ? ' AND inspector_id=?' : ''} ORDER BY inspection_date`, ...ids, ...(field ? [user.id] : []));
     const lastPublished = [];
-    for (const id of ids) { const row = await get("SELECT * FROM inspections WHERE property_id=? AND status='published' ORDER BY inspection_date DESC,published_at DESC LIMIT 1", id); if (row) lastPublished.push(row); }
+    if (!field) for (const id of ids) { const row = await get("SELECT * FROM inspections WHERE property_id=? AND status='published' ORDER BY inspection_date DESC,published_at DESC LIMIT 1", id); if (row) lastPublished.push(row); }
     visits = [...open, ...lastPublished].map(i => inspectionFields(i, names));
     const visitIds = open.map(i => i.id);
     if (visitIds.length) files = await all(`SELECT id,property_id,inspection_id,name,mime,bytes,created_at,captured_at,capture_lat,capture_lon,capture_accuracy_m,capture_source FROM files WHERE inspection_id IN (${visitIds.map(() => '?').join(',')}) ORDER BY created_at`, ...visitIds);
@@ -94,7 +97,7 @@ export function createOfflineInspections({ get, all, run, body, json, fail, role
     checklist: routine ? { source: 'template', template_id: routine.template_id, template_version: routine.template_version, template_version_id: routine.template_version_id, name: routine.name, items: routine.items } : { source: 'built-in', template_id: null, template_version: null, items: template },
     checklists,
     template,
-    properties: homes.map(h => ({ id: h.id, name: h.name, address: h.address, client_id: h.client_id, client_name: client.get(h.client_id) || '', account_manager_id: h.account_manager_id, account_manager_name: names.get(h.account_manager_id) || '', timezone: h.timezone || '', room_profile: h.room_profile, inspection_report_email: h.inspection_report_email || '' })),
+    properties: homes.map(h => field ? { id: h.id, name: h.name, address: h.address, timezone: h.timezone || '', room_profile: inspectorRooms(h.room_profile) } : ({ id: h.id, name: h.name, address: h.address, client_id: h.client_id, client_name: client.get(h.client_id) || '', account_manager_id: h.account_manager_id, account_manager_name: names.get(h.account_manager_id) || '', timezone: h.timezone || '', room_profile: h.room_profile, inspection_report_email: h.inspection_report_email || '' })),
     inspections: visits,
     files
    };
@@ -104,7 +107,7 @@ export function createOfflineInspections({ get, all, run, body, json, fail, role
   }
   const match = /^\/api\/offline\/inspections\/([^/]+)$/.exec(p);
   if (match && req.method === 'GET') {
-   roles(user, 'admin', 'employee');
+   roles(user, 'admin', 'employee', 'inspector');
    const row = await entity(user, 'inspections', decodeURIComponent(match[1]), 'operate');
    const names = new Map([[row.inspector_id, (await get('SELECT name FROM users WHERE id=?', row.inspector_id))?.name]]);
    json(res, 200, { inspection: inspectionFields(row, names) });

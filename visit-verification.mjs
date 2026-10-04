@@ -36,7 +36,7 @@ export function createVisitVerification({get, all, run, transaction, id, now, fa
  const timezoneFor = (p, s) => V.effectiveTimezone(p, s.timezone);
  const visitRow = inspectionId => get('SELECT * FROM inspection_visits WHERE inspection_id=?', inspectionId);
  const userName = async userId => (userId ? (await get('SELECT name FROM users WHERE id=?', userId))?.name || '' : '');
- const fullFor = (user, row, inspection) => user.role === 'admin' || (user.role === 'employee' && (row?.check_in_user_id === user.id || inspection?.inspector_id === user.id));
+ const fullFor = (user, row, inspection) => user.role === 'admin' || (['employee', 'inspector'].includes(user.role) && (row?.check_in_user_id === user.id || inspection?.inspector_id === user.id));
  async function shape(user, row, inspection) {
   if (!row) return null;
   const full = fullFor(user, row, inspection);
@@ -55,7 +55,7 @@ export function createVisitVerification({get, all, run, transaction, id, now, fa
 
  /** Record a check-in or check-out. The first one wins; a repeat can only add the reason note (after "outside"). */
  async function record(user, inspectionId, which, b, sentAt) {
-  roles(user, 'admin', 'employee');
+  roles(user, 'admin', 'employee', 'inspector');
   const inspection = await entity(user, 'inspections', inspectionId, 'operate');
   const s = await settings(user.organization_id);
   const existing = await visitRow(inspection.id);
@@ -180,7 +180,7 @@ export function createVisitVerification({get, all, run, transaction, id, now, fa
  /** /api/data additions: settings, effective time zones, per-visit summaries sanitized by role. */
  async function decorate(user, data) {
   const s = await settings(user.organization_id);
-  const staff = ['admin', 'employee'].includes(user.role);
+  const staff = ['admin', 'employee', 'inspector'].includes(user.role); // field inspectors check in like staff
   data.companyTimezone = s.timezone || '';
   data.visitVerification = staff ? {...s, notice: V.NOTICE, geocoding: !!env.GEOAPIFY_API_KEY} : {enabled: s.enabled, showOnPdf: s.showOnPdf};
   if (!staff) for (const f of data.files || []) for (const k of ['capture_lat', 'capture_lon', 'capture_accuracy_m', 'capture_source']) delete f[k];
@@ -282,7 +282,7 @@ export function createVisitVerification({get, all, run, transaction, id, now, fa
  /** Background geocoding: only companies with the feature on, only with GEOAPIFY_API_KEY, about one request a second. */
  async function geocodePending(limit = 25) {
   if (!env.GEOAPIFY_API_KEY) return 0;
-  const rows = await all(`SELECT p.* FROM properties p JOIN workspace_settings w ON w.organization_id=p.organization_id WHERE w.visit_verification_enabled=1 AND p.archived_at IS NULL AND p.address<>'' AND ((p.latitude IS NULL AND (p.geocode_source IS NULL OR (p.geocode_source='geoapify_failed' AND p.geocoded_address<>p.address))) OR (p.geocode_source='geoapify' AND p.geocoded_address<>p.address)) LIMIT ${Math.max(1, Math.min(100, limit))}`);
+  const rows = await all(`SELECT p.* FROM properties p JOIN workspace_settings w ON w.organization_id=p.organization_id WHERE (w.visit_verification_enabled=1 OR EXISTS(SELECT 1 FROM weather_settings ws WHERE ws.organization_id=p.organization_id AND ws.enabled=1)) AND p.archived_at IS NULL AND p.address<>'' AND ((p.latitude IS NULL AND (p.geocode_source IS NULL OR (p.geocode_source='geoapify_failed' AND p.geocoded_address<>p.address))) OR (p.geocode_source='geoapify' AND p.geocoded_address<>p.address)) LIMIT ${Math.max(1, Math.min(100, limit))}`);
   let done = 0;
   for (const pRow of rows) {
    if (done) await new Promise(r => setTimeout(r, Number(env.ESTATEOS_GEOCODE_DELAY_MS ?? 1100)));

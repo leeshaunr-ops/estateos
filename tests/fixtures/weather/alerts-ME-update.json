@@ -1,0 +1,47 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.me-ws-2",
+   "type": "Feature",
+   "geometry": null,
+   "properties": {
+    "id": "urn:oid:2.49.0.1.840.0.me-ws-2",
+    "areaDesc": "Coastal Hancock",
+    "geocode": {
+     "UGC": [
+      "MEZ029"
+     ],
+     "SAME": []
+    },
+    "sent": "{{-1h}}",
+    "effective": "{{-1h}}",
+    "onset": "{{+6h}}",
+    "expires": "{{+6h}}",
+    "ends": "{{+36h}}",
+    "status": "Actual",
+    "messageType": "Update",
+    "category": "Met",
+    "severity": "Severe",
+    "certainty": "Likely",
+    "urgency": "Expected",
+    "event": "Winter Storm Warning",
+    "sender": "w-nws.webmaster@noaa.gov",
+    "senderName": "NWS Gray ME",
+    "headline": "Winter Storm Warning extended",
+    "description": "* WHAT...Winter Storm Warning conditions expected.\n* WHERE...Coastal Hancock.",
+    "instruction": "Prepare now. Follow local officials.",
+    "references": [
+     {
+      "identifier": "urn:oid:2.49.0.1.840.0.me-ws-1",
+      "sender": "w-nws.webmaster@noaa.gov",
+      "sent": "{{-2h}}"
+     }
+    ],
+    "parameters": {
+     "VTEC": []
+    }
+   }
+  }
+ ]
+}

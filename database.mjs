@@ -72,7 +72,9 @@ export async function openDatabase(root,env=process.env){
    const exec=sql=>pglite?conn.exec(sql):conn.query(sql);
    await exec('CREATE SCHEMA IF NOT EXISTS estateos; REVOKE ALL ON SCHEMA estateos FROM PUBLIC; SET search_path TO estateos,pg_catalog;');
    await exec(fs.readFileSync(path.join(root,'postgres.sql'),'utf8'));
-   for(const migration of fs.readdirSync(path.join(root,'migrations')).filter(n=>n.endsWith('.sql')).sort()){
+   // NNN_name.sqlite.sql runs only on SQLite and NNN_name.postgres.sql only on Postgres (for changes such as a CHECK
+   // constraint that the two engines alter differently); every other .sql file runs on both.
+   for(const migration of fs.readdirSync(path.join(root,'migrations')).filter(n=>n.endsWith('.sql')&&!n.endsWith('.sqlite.sql')).sort()){
     if(!await api.get('SELECT name FROM schema_migrations WHERE name=?',migration)){
      await exec(fs.readFileSync(path.join(root,'migrations',migration),'utf8'));
      await api.run('INSERT INTO schema_migrations VALUES(?,?)',migration,new Date().toISOString());
@@ -83,8 +85,15 @@ export async function openDatabase(root,env=process.env){
  }else{
   sqlite.exec(fs.readFileSync(path.join(root,'schema.sql'),'utf8'));
   sqlite.exec('CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)');
-  for(const name of fs.readdirSync(path.join(root,'migrations')).filter(n=>n.endsWith('.sql')).sort()){
-   if(!await api.get('SELECT name FROM schema_migrations WHERE name=?',name))await transaction(async()=>{sqlite.exec(fs.readFileSync(path.join(root,'migrations',name),'utf8'));await api.run('INSERT INTO schema_migrations VALUES(?,?)',name,new Date().toISOString());});
+  for(const name of fs.readdirSync(path.join(root,'migrations')).filter(n=>n.endsWith('.sql')&&!n.endsWith('.postgres.sql')).sort()){
+   if(await api.get('SELECT name FROM schema_migrations WHERE name=?',name))continue;
+   const sql=fs.readFileSync(path.join(root,'migrations',name),'utf8');
+   // A table rebuild (SQLite's documented way to change a CHECK constraint) needs foreign keys off for the copy; they are
+   // checked before the migration commits and switched back on afterwards.
+   const rebuild=/^--\s*sqlite:\s*foreign-keys-off\b/m.test(sql);
+   if(rebuild)sqlite.exec('PRAGMA foreign_keys=OFF');
+   try{await transaction(async()=>{sqlite.exec(sql);if(rebuild&&sqlite.prepare('PRAGMA foreign_key_check').all().length)throw Error('Migration '+name+' left foreign key problems.');await api.run('INSERT INTO schema_migrations VALUES(?,?)',name,new Date().toISOString());});}
+   finally{if(rebuild)sqlite.exec('PRAGMA foreign_keys=ON');}
   }
  }
  return api;

@@ -31,7 +31,7 @@ export function createCommunications({get,all,run,transaction,id,now,fail,text,j
     const last=await get('SELECT x.body,x.sender_id,x.created_at,u.name sender_name FROM messages x JOIN users u ON u.id=x.sender_id WHERE x.thread_id=? ORDER BY x.created_at DESC,x.id DESC LIMIT 1',t.id);
     t.last=last?{body:snippet(last.body),sender_id:last.sender_id,sender_name:last.sender_name,created_at:last.created_at}:null;
    }
-   json(res,200,{threads,people:await all('SELECT id,name,role FROM users WHERE organization_id=? AND active=1 AND id<>? ORDER BY name',user.organization_id,user.id)});return true;
+   json(res,200,{threads,people:await all("SELECT id,name,role FROM users WHERE organization_id=? AND active=1 AND id<>? AND role<>'inspector' ORDER BY name",user.organization_id,user.id)});return true;
   }
   if(url.pathname==='/api/messages/thread'&&req.method==='GET'){
    const t=await membership(user,url.searchParams.get('id'));
@@ -49,8 +49,8 @@ export function createCommunications({get,all,run,transaction,id,now,fail,text,j
    if(threadId)await membership(user,threadId);
    else{
     const subject=text(b.subject,'Subject',160);let targets;
-    if(b.recipientId==='everyone')targets=await all('SELECT id,email FROM users WHERE organization_id=? AND active=1 AND id<>?',user.organization_id,user.id);
-    else{const u=await get('SELECT id,email FROM users WHERE id=? AND organization_id=? AND active=1 AND id<>?',b.recipientId,user.organization_id,user.id);if(!u)fail(422,'Choose an active account in your company.');targets=[u];}
+    if(b.recipientId==='everyone')targets=await all("SELECT id,email FROM users WHERE organization_id=? AND active=1 AND id<>? AND role<>'inspector'",user.organization_id,user.id);
+    else{const u=await get("SELECT id,email FROM users WHERE id=? AND organization_id=? AND active=1 AND id<>? AND role<>'inspector'",b.recipientId,user.organization_id,user.id);if(!u)fail(422,'Choose an active account in your company.');targets=[u];}
     if(!targets.length)fail(422,'There are no other active accounts to message.');
     threadId=id();await run('INSERT INTO message_threads VALUES(?,?,?,?,?,?)',threadId,user.organization_id,subject,b.recipientId==='everyone'?'announcement':'direct',user.id,now());
     for(const uid of [user.id,...targets.map(u=>u.id)])await run('INSERT INTO message_members(thread_id,user_id) VALUES(?,?)',threadId,uid);
