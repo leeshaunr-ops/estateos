@@ -23,17 +23,8 @@
 .shell .ins-proof{display:inline-flex;align-items:center;min-height:44px}
 .shell .ins-foot{color:#5f6b76;font-size:13px;line-height:1.5;margin:14px 22px 18px}
 .shell .ins-record>.empty-state{margin:0 22px 18px}
-.shell .ins-list{padding:0}
-.shell .ins-list table{table-layout:auto}
-.shell .ins-list th{padding:0;vertical-align:bottom}
-.shell .ins-sort{display:flex;align-items:center;gap:4px;width:100%;min-height:44px;padding:10px 13px;border:0;border-radius:0;background:transparent;font:inherit;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#5f6b76;font-weight:700;text-align:left}
-.shell .ins-sort:hover,.shell .ins-sort.active{color:#1f2933;background:#f6f8f7}
-.shell .ins-list td{vertical-align:top}
-.shell .ins-name{font-weight:700;font-size:15px;min-height:44px;display:inline-flex;align-items:center}
-.shell .ins-reason{color:#5f6b76;font-size:13px;margin-top:4px;max-width:280px;line-height:1.45}
-.shell .ins-chips{margin-bottom:14px}
-.shell .ins-sort-mobile{display:none}
-.shell .ins-chips .chip{min-height:44px}
+.shell .ins-list .ins-sort{display:flex;align-items:center;gap:4px;width:100%;min-height:44px;padding:10px 13px;border:0;border-radius:0;background:transparent;font:inherit;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#5f6b76;font-weight:700;text-align:left}
+.shell .ins-list .ins-sort:hover,.shell .ins-list .ins-sort.active{color:#1f2933;background:#f6f8f7}
 .shell .ins-client{margin-bottom:20px}
 .shell .ins-client-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 22px;border-top:1px solid #edf0f2}
 .shell .ins-client-row:first-of-type{border-top:0}
@@ -56,9 +47,75 @@
  .shell .ins-status,.shell .ins-foot{margin-left:14px;margin-right:14px}
  .shell .ins-devices{padding:0 14px}
  .shell .ins-client-row{padding:12px 14px}
- .shell .ins-list thead{display:none}
- .shell .ins-sort-mobile{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:-4px 0 14px;font-size:13px;color:#5f6b76}
- .shell .ins-sort-mobile .chip{min-height:44px;padding:8px 14px;border-radius:22px;font-size:13px}
- .shell .ins-sort-mobile .chip.active{background:#173e35;color:#fff;border-color:#173e35}
- .shell .ins-reason{max-width:none}
+}
+/* ---------- Insurance compliance page ---------- */
+/* Status pill: tinted background, coloured text and an icon (the text carries the meaning). */
+.shell .ins-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 8px;border-radius:999px;font-size:13px;font-weight:650;line-height:1.3;white-space:nowrap;border:1px solid transparent}
+.shell .ins-pill svg{flex:none}
+.shell .ins-pill-ok{background:#e9f4ee;border-color:#cfe6d9;color:#1e6142}
+.shell .ins-pill-due_soon{background:#fff6e0;border-color:#f0dfb1;color:#7a5512}
+.shell .ins-pill-at_risk{background:#fdeee2;border-color:#f3d2b8;color:#8a4310}
+.shell .ins-pill-breached{background:#fbeceb;border-color:#efc9c6;color:#8b242b}
+.shell .ins-pill-not_set{background:#fff;border-color:#d5dce2;color:#4a5560}
+/* Filter and sort chips: the app's standard chips (app.css .work-chips), 44px tall here. */
+.shell .ins-chips{margin-bottom:12px}
+.shell .ins-chips .chip,.shell .ins-sort-mobile .chip{min-height:44px}
+.shell .ins-sort-mobile{display:none}
+.shell .ins-sort-label{font-size:13px;font-weight:600;color:#5f6b76;margin-right:2px}
+.shell .ins-dir{margin-left:4px}
+/* Desktop table. */
+.shell .ins-list{padding:0;overflow:visible}
+.shell .ins-list table{table-layout:auto}
+.shell .ins-list th{padding:0;vertical-align:bottom}
+.shell .ins-list td{vertical-align:top;padding-top:16px;padding-bottom:16px}
+.shell .ins-list .ins-name{font-family:Georgia,"Times New Roman",serif;font-size:17px;font-weight:400;color:#1f2933;background:none;border:0;border-radius:0;box-shadow:none;padding:0;min-height:32px;text-align:left;cursor:pointer}
+.shell .ins-list .ins-name:hover:not(:disabled){color:#8b242b;text-decoration:underline;text-underline-offset:3px;background:none;transform:none;box-shadow:none}
+.shell .ins-list td:first-child{min-width:190px}
+.shell .ins-list td[data-label="Last visit"],.shell .ins-list td[data-label="Visit due by"],.shell .ins-list td[data-label="Next scheduled"],.shell .ins-list td[data-label="Renewal"]{white-space:nowrap}
+.shell .ins-family{color:#5f6b76;font-size:13.5px;margin-top:2px}
+.shell .ins-reason{color:#344654;font-size:13.5px;margin-top:8px;max-width:300px;line-height:1.45}
+.shell .ins-none{color:#66727d}
+.shell .ins-list .ins-setup{margin-top:10px;min-height:44px;padding:8px 14px;font-size:14px;font-weight:600;color:#8b242b;border-color:#e8c9c7;background:#fff}
+.shell .ins-list .ins-setup:hover{background:#f6e9e8;border-color:#e0b7b4}
+/* Phone cards (shown instead of the table at 760px and below). */
+.shell .ins-cards{display:none;list-style:none;margin:0;padding:0}
+.shell .ins-card{background:#fff;border:1px solid #e2e7eb;border-radius:14px;box-shadow:0 1px 3px rgba(24,39,56,.05);padding:16px 16px 14px;margin:0 0 12px}
+.shell .ins-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.shell .ins-card-title{min-width:0;flex:1}
+.shell .ins-card-title h2{margin:0;font-size:inherit;line-height:1.2}
+.shell .ins-card-name{display:block;width:100%;font-family:Georgia,"Times New Roman",serif;font-size:19px;font-weight:400;color:#1f2933;background:none;border:0;border-radius:0;box-shadow:none;padding:0;min-height:44px;text-align:left;line-height:1.25;cursor:pointer;overflow-wrap:anywhere}
+/* No lift or shadow on hover: iOS keeps :hover after a tap, which drew a box around the name. */
+.shell .ins-card-name:hover:not(:disabled),.shell .ins-card-name:active{color:#8b242b;background:none;transform:none;box-shadow:none}
+.shell .ins-card-family{margin:-8px 0 0;color:#5f6b76;font-size:14px}
+.shell .ins-card-head .ins-pill{margin-top:10px}
+.shell .ins-card-line{margin:12px 0 0;font-size:15px;line-height:1.45;color:#1f2933;font-weight:550}
+.shell .ins-card-breached .ins-card-line{color:#8b242b}
+.shell .ins-card-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px;margin:14px 0 0;padding:14px 0 0;border-top:1px solid #edf0f2}
+.shell .ins-card-facts dt{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#7a6847;font-weight:700;margin:0 0 3px}
+.shell .ins-card-facts dd{margin:0;font-size:15px;color:#1f2933}
+.shell .ins-card-empty-body{margin-top:12px;padding-top:14px;border-top:1px solid #edf0f2}
+.shell .ins-card-empty-body p{margin:0;color:#4a5560;font-size:15px;line-height:1.5}
+.shell .ins-card-empty-body strong{color:#1f2933;font-weight:650}
+.shell .ins-card-cta{display:flex;align-items:center;justify-content:center;width:100%;min-height:48px;margin-top:14px;font-size:15px}
+/* Legend. */
+.shell .ins-legend{margin:18px 0 8px;padding:16px 20px;background:#fff;border:1px solid #e2e7eb;border-radius:14px}
+.shell .ins-legend h2{margin:0 0 10px;font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:17px;color:#1f2933}
+.shell .ins-legend dl{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px 20px;margin:0}
+.shell .ins-legend dl>div{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.shell .ins-legend dt{flex:none}
+.shell .ins-legend dd{margin:0;color:#4a5560;font-size:13.5px;line-height:1.45}
+.shell .ins-legend p{margin:12px 0 0;color:#5f6b76;font-size:13px;line-height:1.5}
+@media(max-width:1100px) and (min-width:761px){.shell .ins-legend dl{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:760px){
+ .shell .ins-list{display:none}
+ .shell .ins-cards{display:block}
+ .shell .ins-chips{flex-wrap:wrap;gap:8px}
+ .shell .ins-sort-mobile{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 16px}
+ .shell .ins-sort-label{grid-column:1/-1;margin:0}
+ .shell .ins-sort-mobile .chip{padding:6px 4px;justify-content:center;text-align:center;white-space:nowrap}
+ .shell .ins-legend{padding:16px}
+ .shell .ins-legend dl{grid-template-columns:1fr;gap:12px}
+ .shell .ins-legend dl>div{flex-direction:row;gap:10px}
+ .shell .ins-legend dt{width:112px}
+ .shell .ins-legend dd{margin-top:3px}
 }

@@ -96,23 +96,79 @@ residenceView=function(...args){
 
 /* ---------- Insurance compliance page ---------- */
 const INS_COLS=[['name','Residence'],['status','Status'],['occupancy','Occupancy'],['last','Last visit'],['deadline','Visit due by'],['next','Next scheduled'],['renewal','Renewal']];
+const INS_LABEL={breached:'Breached',at_risk:'At risk',due_soon:'Due soon',ok:'OK',not_set:'Not set up'};
+// Small status icons (decorative; the badge text carries the meaning).
+const INS_ICON={
+ ok:'<path d="M3.5 8.5l3 3 6-7"/>',
+ due_soon:'<circle cx="8" cy="8" r="6"/><path d="M8 4.8V8l2.2 1.6"/>',
+ at_risk:'<path d="M8 2.2l6.2 11H1.8z"/><path d="M8 6.6v3"/><path d="M8 11.6v.1"/>',
+ breached:'<circle cx="8" cy="8" r="6"/><path d="M5.8 5.8l4.4 4.4M10.2 5.8l-4.4 4.4"/>',
+ not_set:'<circle cx="8" cy="8" r="6" stroke-dasharray="2.2 2.2"/><path d="M8 5.5v5M5.5 8h5"/>'
+};
+function insPill(st){const code=INS_ICON[st?.code]?st.code:'not_set';return `<span class="ins-pill ins-pill-${code}"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${INS_ICON[code]}</svg>${esc(st?.label||INS_LABEL[code])}</span>`;}
+/** "Oct 20", or today / tomorrow / yesterday, in plain words for one-line summaries. */
+function insWhen(d){if(!/^\d{4}-\d{2}-\d{2}$/.test(String(d||'')))return '';const t=fmtDay(d,{relative:true,weekday:false});return /^(Today|Tomorrow|Yesterday)$/.test(t)?t.toLowerCase():t;}
+const insBy=d=>{const w=insWhen(d);return /^(today|tomorrow|yesterday)$/.test(w)?w:'by '+w;};
+function insDaysSince(d){const t=new Date(),k=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;return Math.round((Date.parse(k)-Date.parse(d))/864e5);}
+/** One plain-English line for a residence's compliance, e.g. "Visit due by Oct 20 — nothing scheduled". */
+function insLine(r){
+ const st=r.status||{};
+ if(st.code==='not_set')return r.profile?'The policy is saved, but the visit interval is missing.':'No insurance details yet.';
+ if(st.occupied)return `Owners in residence${st.occupiedSince?' since '+insWhen(st.occupiedSince):''} — no visits required while they’re home`;
+ if(st.code==='breached'&&st.vacancyLeft!==null&&st.vacancyLeft<0)return `Unoccupied ${insPlural(st.vacancyDays,'day')} — over the ${st.maxVacancy}-day vacancy limit`;
+ if(st.code==='breached'){const n=insDaysSince(st.deadline);return `Visit was due ${insWhen(st.deadline)}${n>0?` — ${insPlural(n,'day')} overdue`:''}`;}
+ const sched=st.nextScheduled?`scheduled ${insWhen(st.nextScheduled)}`:'nothing scheduled';
+ return st.deadline?`Visit due ${insBy(st.deadline)} — ${sched}`:`Next visit ${sched}`;
+}
+function insCardFacts(r){
+ const st=r.status||{},pr=r.profile||{},rows=[];
+ if(st.lastVisit)rows.push(['Last visit',insDay(st.lastVisit)]);
+ if(st.deadline&&!st.occupied)rows.push(['Visit due by',insDay(st.deadline)]);
+ if(st.nextScheduled)rows.push(['Next scheduled',insDay(st.nextScheduled)]);
+ if(pr.renewal_date)rows.push(['Renewal',insDay(pr.renewal_date)+(r.renewal?.due?` · in ${insPlural(r.renewal.daysLeft,'day')}`:'')]);
+ return rows.length?`<dl class="ins-card-facts">${rows.map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`:'';
+}
+function insCard(r){
+ const st=r.status||{},notSet=st.code==='not_set';
+ const head=`<div class="ins-card-head"><div class="ins-card-title"><h2><button type="button" class="ins-card-name" data-action="insurance-open" data-id="${esc(r.property_id)}">${esc(r.name)}</button></h2>${r.client_name?`<p class="ins-card-family">${esc(r.client_name)}</p>`:''}</div>${insPill(st)}</div>`;
+ if(notSet){
+  const msg=r.profile?'Add the policy’s visit interval to track compliance.':'Add the policy and vacancy rule to track compliance.';
+  return `<li class="ins-card ins-card-empty">${head}<div class="ins-card-empty-body"><p><strong>${esc(insLine(r))}</strong> ${esc(insAdmin()?msg:'An administrator can add the policy and vacancy rule.')}</p>${insAdmin()?`<button type="button" class="primary ins-card-cta" data-action="insurance-edit" data-id="${esc(r.property_id)}">${r.profile?'Finish insurance details':'Add insurance details'}</button>`:''}</div></li>`;
+ }
+ return `<li class="ins-card ins-card-${esc(st.code)}">${head}<p class="ins-card-line">${esc(insLine(r))}</p>${insCardFacts(r)}</li>`;
+}
 function insSortValue(r,key){const st=r.status||{};return key==='name'?String(r.name||'').toLowerCase():key==='status'?-(st.rank||0):key==='occupancy'?(st.occupied?1:0):key==='last'?(st.lastVisit||''):key==='deadline'?(st.deadline||'9999'):key==='next'?(st.nextScheduled||'9999'):key==='renewal'?(r.profile?.renewal_date||'9999'):'';}
 function insRows(){
  const list=(insData()?.residences||[]).filter(r=>!insState.filter||r.status.code===insState.filter);
  const k=insState.sort,d=insState.dir;
  return list.sort((a,b)=>{const x=insSortValue(a,k),y=insSortValue(b,k);return (x<y?-1:x>y?1:0)*d||String(a.status.deadline||'9999').localeCompare(String(b.status.deadline||'9999'))||String(a.name).localeCompare(String(b.name));});
 }
+const insNone=(text='None')=>`<span class="ins-none">${esc(text)}</span>`;
+function insTableRow(r){
+ const st=r.status,notSet=st.code==='not_set';
+ const status=notSet?`${insPill(st)}<div class="ins-reason">${esc(insLine(r))}</div>${insAdmin()?`<button type="button" class="ins-setup" data-action="insurance-edit" data-id="${esc(r.property_id)}">${r.profile?'Finish insurance details':'Add insurance details'}</button>`:''}`:`${insPill(st)}<div class="ins-reason">${esc(insLine(r))}</div>`;
+ const occ=notSet?insNone('—'):esc(st.occupied?'Owners in residence':st.vacantSince?'Unoccupied since '+insDay(st.vacantSince):'Unoccupied');
+ return `<tr class="ins-row-${esc(st.code)}"><td><button type="button" class="ins-name" data-action="insurance-open" data-id="${esc(r.property_id)}">${esc(r.name)}</button>${r.client_name?`<div class="ins-family">${esc(r.client_name)}</div>`:''}</td><td data-label="Status">${status}</td><td data-label="Occupancy">${occ}</td><td data-label="Last visit">${st.lastVisit?esc(insDay(st.lastVisit)):insNone('None yet')}</td><td data-label="Visit due by">${st.occupied?insNone('Not needed'):st.deadline?esc(insDay(st.deadline)):insNone('—')}</td><td data-label="Next scheduled">${st.nextScheduled?esc(insDay(st.nextScheduled)):insNone('Not scheduled')}</td><td data-label="Renewal">${r.profile?.renewal_date?esc(insDay(r.profile.renewal_date)):insNone('—')}${r.renewal?.due?' <span class="badge amber">Soon</span>':''}</td></tr>`;
+}
+function insLegend(){
+ const items=[['ok','A visit is scheduled in time, or the owners are home.'],['due_soon','The visit deadline is within the warning window.'],['at_risk','Nothing is scheduled before the deadline.'],['breached','The deadline or the vacancy limit has passed.'],['not_set','No policy rule recorded yet.']];
+ return `<section class="ins-legend" aria-labelledby="ins-legend-title"><h2 id="ins-legend-title">What the statuses mean</h2><dl>${items.map(([c,t])=>`<div><dt>${insPill({code:c,label:INS_LABEL[c]})}</dt><dd>${esc(t)}</dd></div>`).join('')}</dl><p>Dates follow each residence’s time zone. The policy wording decides what is required.</p></section>`;
+}
 function insurancePage(){
  const all=insData()?.residences||[],counts=Object.fromEntries(INS_STATES.map(s=>[s,all.filter(r=>r.status.code===s).length]));
- let html=head('Insurance compliance','Each residence\'s policy rule, who is home, and when the next visit is due. Dates follow each residence\'s time zone.');
+ let html=head('Insurance compliance','Each residence’s policy rule, who is home, and when the next visit is due.');
  if(!all.length)return html+`<div class="panel">${empty('No residences yet','Add a residence, then its insurance details.')}</div>`;
- const chips=[['','All',all.length],...INS_STATES.map(s=>[s,{breached:'Breached',at_risk:'At risk',due_soon:'Due soon',ok:'OK',not_set:'Not set up'}[s],counts[s]])].filter(([s,,n])=>!s||n);
- html+=`<div class="work-chips ins-chips" role="group" aria-label="Filter by status">${chips.map(([s,t,n])=>`<button type="button" class="chip${insState.filter===s?' active':''}" data-action="insurance-filter" data-id="${esc(s)}" aria-pressed="${insState.filter===s}">${esc(t)} <span>${n}</span></button>`).join('')}</div>`;
- html+=`<div class="ins-sort-mobile" role="group" aria-label="Sort by"><span>Sort by</span>${[['status','Status'],['deadline','Visit due'],['name','Name'],['renewal','Renewal']].map(([k,t])=>`<button type="button" class="chip${insState.sort===k?' active':''}" data-action="insurance-sort" data-id="${k}" aria-pressed="${insState.sort===k}">${esc(t)}</button>`).join('')}</div>`;
+ const chips=[['','All',all.length],...INS_STATES.map(s=>[s,INS_LABEL[s],counts[s]])].filter(([s,,n])=>!s||n);
+ // With a single residence, filters and sorting add nothing.
+ if(all.length>1){
+  html+=`<div class="work-chips ins-chips" role="group" aria-label="Filter by status">${chips.map(([s,t,n])=>`<button type="button" class="chip${insState.filter===s?' active':''}" data-action="insurance-filter" data-id="${esc(s)}" aria-pressed="${insState.filter===s}">${esc(t)} <span>${n}</span></button>`).join('')}</div>`;
+  html+=`<div class="work-chips ins-sort-mobile" role="group" aria-label="Sort by"><span class="ins-sort-label">Sort by</span>${[['status','Status'],['deadline','Visit due'],['name','Name'],['renewal','Renewal']].map(([k,t])=>{const on=insState.sort===k;return `<button type="button" class="chip${on?' active':''}" data-action="insurance-sort" data-id="${k}" aria-pressed="${on}">${esc(t)}${on?`<span class="ins-dir" aria-hidden="true">${insState.dir===1?'↑':'↓'}</span><span class="sr-only">${insState.dir===1?', ascending':', descending'}</span>`:''}</button>`;}).join('')}</div>`;
+ }
  const rows=insRows();
  const th=([key,title])=>{const on=insState.sort===key,dir=on?(insState.dir===1?'ascending':'descending'):'none';return `<th scope="col" aria-sort="${dir}"><button type="button" class="ins-sort${on?' active':''}" data-action="insurance-sort" data-id="${key}">${esc(title)}<span aria-hidden="true">${on?(insState.dir===1?' ↑':' ↓'):''}</span></button></th>`;};
- html+=`<section class="panel ins-list stack-table" aria-label="Insurance compliance by residence"><table><caption class="sr-only">Insurance compliance by residence, sorted by ${esc((INS_COLS.find(c=>c[0]===insState.sort)||[])[1]||'status')}</caption><thead><tr>${INS_COLS.map(th).join('')}</tr></thead><tbody>${rows.map(r=>{const st=r.status;return `<tr><td><button type="button" class="link-button ins-name" data-action="insurance-open" data-id="${esc(r.property_id)}">${esc(r.name)}</button>${r.client_name?`<div class="muted">${esc(r.client_name)}</div>`:''}</td><td data-label="Status">${insBadge(st)}${st.code==='not_set'&&insAdmin()?` ${btn('Set up','insurance-edit',r.property_id)}`:''}<div class="ins-reason">${esc(st.code==='not_set'?insShort(r):st.reason)}</div></td><td data-label="Occupancy">${esc(st.code==='not_set'?'—':st.occupied?'Owners in residence':st.vacantSince?'Unoccupied since '+insDay(st.vacantSince):'Unoccupied')}</td><td data-label="Last visit">${esc(st.lastVisit?insDay(st.lastVisit):'None yet')}</td><td data-label="Visit due by">${esc(st.occupied||!st.deadline?'—':insRel(st.deadline))}</td><td data-label="Next scheduled">${esc(st.nextScheduled?insRel(st.nextScheduled):'Not scheduled')}</td><td data-label="Renewal">${esc(r.profile?.renewal_date?insDay(r.profile.renewal_date):'—')}${r.renewal?.due?' <span class="badge amber">Soon</span>':''}</td></tr>`;}).join('')||`<tr><td colspan="7">${empty('No residences with this status.')}</td></tr>`}</tbody></table></section>`;
- html+=`<p class="ins-foot">OK means a visit is scheduled in time or the owners are in residence. Due soon means the deadline is within the warning window. At risk means nothing is scheduled before the deadline. Breached means the deadline or the vacancy limit has passed.</p>`;
+ html+=`<ul class="ins-cards" aria-label="Insurance compliance by residence">${rows.map(insCard).join('')||`<li class="ins-card">${empty('No residences with this status.')}</li>`}</ul>`;
+ html+=`<section class="panel ins-list" aria-label="Insurance compliance by residence"><table><caption class="sr-only">Insurance compliance by residence, sorted by ${esc((INS_COLS.find(c=>c[0]===insState.sort)||[])[1]||'status')}</caption><thead><tr>${INS_COLS.map(th).join('')}</tr></thead><tbody>${rows.map(insTableRow).join('')||`<tr><td colspan="7">${empty('No residences with this status.')}</td></tr>`}</tbody></table></section>`;
+ html+=insLegend();
  return html;
 }
 const insBaseView=view;
