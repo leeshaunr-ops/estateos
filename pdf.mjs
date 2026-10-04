@@ -63,6 +63,8 @@ export function inspectionPdf(report,photos=[]){
  // Summary first (audit batch 4c): the overall condition and the inspector's summary sit under the details, so the
  // family reads the outcome before the item-by-item checklist.
  heading('Summary');paragraph('Overall condition: '+(report.overall||'Not recorded'),11,C.ink,520,40);y+=4;paragraph(report.summary||'No summary recorded.',10,C.ink,520,40);
+ // AI label (only when the summary came from an AI draft and the company chose to label reports).
+ if(report.aiNote){y+=2;paragraph(report.aiNote,8,C.muted,520,40);}
  if(report.visit)visitBox(report.visit);
  // Weather at the visit (frozen at publish when the company shows weather on reports). Absent on every other report.
  if(report.weather?.line){const row=lines(report.weather.line,390,10);y+=4;need(row.length*15+9);text('Weather at visit',40,y,10,C.muted,true);for(const line of row){text(line,162,y,10);y+=15;}y+=5;}

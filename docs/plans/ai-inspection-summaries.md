@@ -41,7 +41,7 @@ Staff finish a visit, tap **Draft summary with AI**, read the draft next to the 
 | `POST /api/inspections/:id/ai-summary/review` | same | stores reviewer, time and summary hash |
 | `GET /api/ai/usage` | admin | month count, cap, by person, recent events |
 | `GET/POST /api/settings/ai` | admin | enabled, label on reports, company cap (≤ platform cap) |
-| `POST /api/platform/ai-cap` | platform owner | per-company cap override |
+| `POST /api/ai/platform-cap` | platform owner | per-company cap override |
 | publish / submit+autoPublish | | 422 `{code:'ai_review_required'}` when an AI-assisted summary is not reviewed |
 
 `/api/data` adds `data.ai = {available, enabled, reason, used, cap, labelReports}` for staff; inspections carry `summary_source` and `summary_reviewed_at` for staff only.
