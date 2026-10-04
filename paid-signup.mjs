@@ -1,5 +1,5 @@
 import {createStripeClient} from './stripe-client.mjs';
-import {PLANS,subscriptionQuote,sameSelection} from './stripe-plans.mjs';
+import {PLANS,subscriptionQuote,sameSelection,CHECKOUT_SETTLED} from './stripe-plans.mjs';
 import {sendInvitation} from './email.mjs';
 import {seal,unseal} from './vault.mjs';
 
@@ -31,10 +31,10 @@ export function createPaidSignup({get,all,run,transaction,id,now,hash,randomByte
    const s=await client.request('checkout/sessions/'+encodeURIComponent(row.session_id));
    if(s.livemode!==true||s.mode!=='subscription'||s.client_reference_id!==row.organization_id||s.metadata?.attempt_id!=='signup-'+row.id)throw Error('Signup payment ownership mismatch.');
    if(s.status==='expired'){await run("UPDATE paid_signups SET status='expired' WHERE id=?",row.id);return;}
-   if(s.status!=='complete'||s.payment_status!=='paid')return;
+   if(s.status!=='complete'||!CHECKOUT_SETTLED.includes(s.payment_status))return;
    const sid=ref(s.subscription),cid=ref(s.customer);if(!sid||!cid)throw Error('Missing paid subscription.');
    const sub=await client.request('subscriptions/'+encodeURIComponent(sid)+'?expand%5B%5D=latest_invoice');
-   if(sub.livemode!==true||sub.metadata?.organization_id!==row.organization_id||ref(sub.customer)!==cid||sub.status!=='active'||sub.latest_invoice?.status!=='paid')throw Error('Subscription payment is not verified.');
+   if(sub.livemode!==true||sub.metadata?.organization_id!==row.organization_id||ref(sub.customer)!==cid||!((sub.status==='active'&&sub.latest_invoice?.status==='paid')||sub.status==='trialing'))throw Error('Subscription payment is not verified.');
    const q=parseSubscription(sub),expected=JSON.parse(row.selection);
    if(!sameSelection(q,expected))throw Error('Paid plan does not match the selected plan.');
    const secrets=decrypt(row.secrets,'signup:'+row.id),inviteHash=hash(secrets.inviteToken);
@@ -43,7 +43,7 @@ export function createPaidSignup({get,all,run,transaction,id,now,hash,randomByte
     if(await get('SELECT id FROM users WHERE LOWER(email)=?',row.email))throw Error('Paid signup email requires support review.');
     await run('INSERT INTO organizations(id,name,created_at) VALUES(?,?,?)',row.organization_id,row.company,now());
     await run('INSERT INTO workspace_settings(organization_id) VALUES(?)',row.organization_id);
-    await run('INSERT INTO stripe_billing(organization_id,customer_id,subscription_id,status,plan,extra_seats,storage_packs,verified_at) VALUES(?,?,?,?,?,?,?,?)',row.organization_id,cid,sid,'active',q.plan,q.extraSeats,q.storagePacks,now());
+    await run('INSERT INTO stripe_billing(organization_id,customer_id,subscription_id,status,plan,extra_seats,storage_packs,verified_at) VALUES(?,?,?,?,?,?,?,?)',row.organization_id,cid,sid,sub.status,q.plan,q.extraSeats,q.storagePacks,now());
     await run('INSERT INTO workspace_invites(token_hash,company,email,created_by,expires_at,used_at) VALUES(?,?,?,?,?,NULL)',inviteHash,row.company,row.email,ownerId(),Date.now()+48*3600000);
     await run("UPDATE paid_signups SET status='invited',invite_hash=? WHERE id=?",inviteHash,row.id);
    });
