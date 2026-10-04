@@ -1,0 +1,42 @@
+/* Platform (owner monitoring) screen. Oct 2026 app palette: ink #1f2933, muted #5f6b76, hairline #e2e7eb,
+   wine #8b242b; Georgia headings, Inter body. Stacked cards only: nothing scrolls inside a box. */
+.shell .owner-page{display:flex;flex-direction:column;gap:22px}
+.shell .owner-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.shell .owner-kpi{background:#fff;border:1px solid #e2e7eb;border-radius:10px;padding:16px 18px;box-shadow:0 3px 12px rgba(24,39,56,.06);display:flex;flex-direction:column;gap:4px}
+.shell .owner-kpi span{color:#5f6b76;font-size:13px}
+.shell .owner-kpi b{font-size:28px;font-weight:650;color:#1f2933;line-height:1.15}
+.shell .owner-kpi:first-child b{color:#8b242b}
+.shell .owner-kpi small{color:#5f6b76;font-size:12.5px}
+.shell .owner-lists{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.shell .owner-list{margin:0;padding:18px 20px}
+.shell .owner-list-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.shell .owner-list-head h2{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:21px;color:#1f2933;margin:0}
+.shell .owner-count{background:#f3f4f6;color:#1f2933;border-radius:999px;padding:2px 10px;font-size:13px;font-weight:600}
+.shell .owner-list ul{list-style:none;margin:0;padding:0}
+.shell .owner-list li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e2e7eb}
+.shell .owner-list li:first-child{border-top:0}
+.shell .owner-list li>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.shell .owner-list li strong{color:#1f2933;font-size:15px;overflow-wrap:anywhere}
+.shell .owner-list li small{color:#5f6b76;font-size:13px;overflow-wrap:anywhere}
+.shell .owner-li-end{color:#1f2933;font-size:13.5px;text-align:right;flex:none;max-width:45%}
+.shell .owner-empty{color:#5f6b76;margin:4px 0}
+.shell .owner-companies{display:flex;flex-direction:column;gap:12px}
+.shell .owner-company{background:#fff;border:1px solid #e2e7eb;border-radius:10px;padding:16px 18px}
+.shell .owner-company-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.shell .owner-company h3{margin:0;font-size:17px;color:#1f2933}
+.shell .owner-sub{margin:2px 0 0;color:#5f6b76;font-size:13.5px;overflow-wrap:anywhere}
+.shell .owner-badges{display:flex;gap:6px;flex-wrap:wrap}
+.shell .owner-badge.plan{background:#f6eced;color:#8b242b}
+.shell .owner-badge.grey{background:#f3f4f6;color:#4a5560}
+.shell .owner-facts{margin:8px 0 10px;color:#1f2933;font-size:14px;line-height:1.5}
+.shell .owner-usage-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.shell .owner-usage{display:flex;flex-direction:column;gap:3px;border:1px solid #e2e7eb;border-radius:8px;padding:10px 12px}
+.shell .owner-usage-label{color:#5f6b76;font-size:12.5px}
+.shell .owner-usage-value{color:#1f2933;font-weight:600;font-size:14.5px}
+.shell .owner-usage.over .owner-usage-value,.shell .owner-alert{color:#8b242b}
+.shell .owner-alert{font-weight:600;margin:8px 0 0}
+.shell .owner-meter{width:100%;height:6px}
+.shell .owner-foot{color:#5f6b76;font-size:13px;line-height:1.5;max-width:90ch;margin:0}
+@media(max-width:1100px){.shell .owner-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.shell .owner-usage-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.shell .owner-lists{grid-template-columns:1fr}.shell .owner-kpi b{font-size:24px}.shell .owner-list li{align-items:flex-start;flex-direction:column;gap:4px}.shell .owner-li-end{text-align:left;max-width:none}}
+@media(max-width:420px){.shell .owner-kpis,.shell .owner-usage-grid{grid-template-columns:1fr}}
