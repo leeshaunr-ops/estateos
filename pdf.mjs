@@ -64,6 +64,8 @@ export function inspectionPdf(report,photos=[]){
  // family reads the outcome before the item-by-item checklist.
  heading('Summary');paragraph('Overall condition: '+(report.overall||'Not recorded'),11,C.ink,520,40);y+=4;paragraph(report.summary||'No summary recorded.',10,C.ink,520,40);
  if(report.visit)visitBox(report.visit);
+ // Weather at the visit (frozen at publish when the company shows weather on reports). Absent on every other report.
+ if(report.weather?.line){const row=lines(report.weather.line,390,10);y+=4;need(row.length*15+9);text('Weather at visit',40,y,10,C.muted,true);for(const line of row){text(line,162,y,10);y+=15;}y+=5;}
  if(report.assetDetails?.length){
   heading('Asset and equipment details');
   for(const asset of report.assetDetails){
@@ -96,6 +98,7 @@ export function inspectionPdf(report,photos=[]){
   const image=add(Buffer.concat([Buffer.from(`<< /Type /XObject /Subtype /Image /Width ${d.width} /Height ${d.height} /ColorSpace /${d.channels===1?'DeviceGray':'DeviceRGB'} /BitsPerComponent 8 /Filter /DCTDecode /Length ${photo.bytes.length} >>\nstream\n`),photo.bytes,Buffer.from('\nendstream')]));const name='Im'+image;page.images.push([name,image]);page.stream+=`q ${w} 0 0 ${h} ${40+(532-w)/2} ${792-y-h} cm /${name} Do Q\n`;y+=h+9;paragraph(photo.name||'Inspection evidence',9,C.muted,520,40);if(taken)paragraph(taken,9,C.muted,520,40);y+=12;
  }}
  heading('Notes to the client');paragraph(report.notes||'No additional notes.');
+ if(report.weather?.line&&report.weather.attribution){y+=6;paragraph(`${report.weather.attribution}. Weather information is provided for reference only.`,8,C.muted);}
  const pageIds=[];for(let index=0;index<pages.length;index++){page=pages[index];rect(40,750,532,1,C.line);text('Powered by EstateAegis  |  Confidential client report',40,762,8,C.muted);if(report.reportNumber&&report.id)text('Reference '+report.id,40,773,6,C.muted);text(`Page ${index+1} of ${pages.length}`,500,762,8,C.muted);const bytes=Buffer.from(page.stream,'latin1'),content=add(Buffer.concat([Buffer.from(`<< /Length ${bytes.length} >>\nstream\n`),bytes,Buffer.from('\nendstream')]));pageIds.push(add(`<< /Type /Page /Parent ${root} 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${regular} 0 R /F2 ${bold} 0 R >> /XObject << ${page.images.map(([name,id])=>`/${name} ${id} 0 R`).join(' ')} >> >> /Contents ${content} 0 R >>`));}
  objects[catalog-1]=`<< /Type /Catalog /Pages ${root} 0 R >>`;objects[root-1]=`<< /Type /Pages /Count ${pageIds.length} /Kids [${pageIds.map(id=>id+' 0 R').join(' ')}] >>`;
  const parts=[Buffer.from('%PDF-1.4\n%\xe2\xe3\xcf\xd3\n','latin1')],offsets=[0];let size=parts[0].length;for(const [i,obj] of objects.entries()){offsets.push(size);const chunk=Buffer.concat([Buffer.from(`${i+1} 0 obj\n`),Buffer.isBuffer(obj)?obj:Buffer.from(obj),Buffer.from('\nendobj\n')]);parts.push(chunk);size+=chunk.length;}
