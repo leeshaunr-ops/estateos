@@ -177,6 +177,7 @@
   if(att.counts.failed)bits.push(plural(att.counts.failed,'failed item'));
   if(att.counts.sign)bits.push(`${att.counts.sign} ${att.counts.sign===1?'report':'reports'} to sign`);
   if(att.counts.overdue)bits.push(plural(att.counts.overdue,'overdue item'));
+  if(att.counts.insurance)bits.push(plural(att.counts.insurance,'insurance item'));
   if(att.counts.clients)bits.push(plural(att.counts.clients,'new client request'));
   const verb=bits.length===1&&/^1 /.test(bits[0])?'needs':'need';
   let storm='';const s=stormList.find(s=>s.prepDeadline&&isoDay(s.prepDeadline)>=today);

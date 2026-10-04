@@ -177,7 +177,7 @@ export function createInsurance({get, all, run, transaction, id, now, fail, json
     id: i.id, date: i.inspection_date, dateLabel: R.dayLabel(i.inspection_date), type: VISIT_TYPES[i.visit_type] || 'Visit', inspector: snap.inspector || i.inspector_name || 'Not recorded',
     reportNumber: snap.reportNumber || i.report_number || '', arrivedAt: pv?.check_in?.at || null, departedAt: pv?.check_out?.at || null,
     arrived: pv?.check_in ? V.formatTime(pv.check_in.at, tz, {date: false}) : '', departed: pv?.check_out ? V.formatTime(pv.check_out.at, tz, {date: false}) : '',
-    verified, verification: d ? d.label : 'Not checked in', findings: counts, summary: String(snap.summary || i.summary || '').trim().slice(0, 400)
+    verified, verification: verified ? (pv.override ? 'Verified by administrator' : 'GPS verified at the residence') : d ? d.label : 'Not checked in', findings: counts, summary: String(snap.summary || i.summary || '').trim().slice(0, 400)
    });
   }
   // Longest gap between consecutive visits in the period (calendar days).
@@ -238,7 +238,7 @@ export function createInsurance({get, all, run, transaction, id, now, fail, json
   await logView(req, link, m[2] ? 'pdf' : 'page');
   if (m[2]) return sendPdf(res, cert);
   const {companyLogo, ...rest} = cert;
-  json(res, 200, {certificate: {...rest, companyLogo: /^data:image\/(png|jpeg);base64,/.test(companyLogo) ? companyLogo : ''}, expiresAt: link.expires_at, expiresLabel: R.dayLabel(R.localDay(link.expires_at, cert.timezone))}, {'Referrer-Policy': 'no-referrer', 'X-Robots-Tag': 'noindex, nofollow'});
+  json(res, 200, {certificate: {...rest, visits: rest.visits.map(({id, ...v}) => v), companyLogo: /^data:image\/(png|jpeg);base64,/.test(companyLogo) ? companyLogo : ''}, expiresAt: link.expires_at, expiresLabel: R.dayLabel(R.localDay(link.expires_at, cert.timezone))}, {'Referrer-Policy': 'no-referrer', 'X-Robots-Tag': 'noindex, nofollow'});
   return true;
  }
 

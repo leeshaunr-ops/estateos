@@ -32,12 +32,15 @@
 .shell .ins-name{font-weight:700;font-size:15px;min-height:44px;display:inline-flex;align-items:center}
 .shell .ins-reason{color:#5f6b76;font-size:13px;margin-top:4px;max-width:280px;line-height:1.45}
 .shell .ins-chips{margin-bottom:14px}
+.shell .ins-sort-mobile{display:none}
 .shell .ins-chips .chip{min-height:44px}
 .shell .ins-client{margin-bottom:20px}
 .shell .ins-client-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 22px;border-top:1px solid #edf0f2}
 .shell .ins-client-row:first-of-type{border-top:0}
 .shell .ins-client-row .res-row-end{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .shell .ins-client-row .button,.shell .ins-client-row button{min-height:44px}
+#modal .ins-hint{color:#4a5560;font-size:14px;line-height:1.5;margin:0}
+#modal small.ins-hint{font-size:13px}
 #modal .ins-device-edit{border:1px solid #e3e9e6;border-radius:10px;padding:12px 14px;margin:0;display:grid;gap:10px}
 #modal .ins-device-edit legend{font-weight:700;padding:0 6px}
 #modal .ins-check-row{display:flex;gap:4px 18px;flex-wrap:wrap}
@@ -54,5 +57,8 @@
  .shell .ins-devices{padding:0 14px}
  .shell .ins-client-row{padding:12px 14px}
  .shell .ins-list thead{display:none}
+ .shell .ins-sort-mobile{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:-4px 0 14px;font-size:13px;color:#5f6b76}
+ .shell .ins-sort-mobile .chip{min-height:44px;padding:8px 14px;border-radius:22px;font-size:13px}
+ .shell .ins-sort-mobile .chip.active{background:#173e35;color:#fff;border-color:#173e35}
  .shell .ins-reason{max-width:none}
 }

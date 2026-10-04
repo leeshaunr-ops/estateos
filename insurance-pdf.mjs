@@ -56,7 +56,7 @@ export function certificatePdf(c) {
  else header();
  for (const v of c.visits) {
   const f = v.findings, findings = [f.pass ? `${f.pass} passed` : '', f.monitor ? `${f.monitor} to monitor` : '', f.attention ? `${f.attention} needing attention` : ''].filter(Boolean).join(', ') || 'No checklist items';
-  const cells = [wrap(v.dateLabel, cols[0][2], 9, true), [...wrap(v.type, cols[1][2], 8), ...wrap(v.inspector, cols[1][2], 8)], wrap(v.arrived ? `${v.arrived}${v.departed ? ' to ' + v.departed : ''}` : 'Not checked in', cols[2][2], 8), wrap((v.verified ? 'GPS verified: ' : '') + v.verification, cols[3][2], 8), wrap(findings, cols[4][2], 8)];
+  const cells = [wrap(v.dateLabel, cols[0][2], 9, true), [...wrap(v.type, cols[1][2], 8), ...wrap(v.inspector, cols[1][2], 8)], wrap(v.arrived ? `${v.arrived}${v.departed ? ' to ' + v.departed : ''}` : 'Not checked in', cols[2][2], 8), wrap(v.verification, cols[3][2], 8), wrap(findings, cols[4][2], 8)];
   const h = Math.max(1, ...cells.map(l => l.length)) * 11 + 8;
   if (doc.y + h > BOTTOM) { doc.newPage(); header(); }
   if (v.verified) doc.rect(40, doc.y - 3, 2.5, h - 4, C.pass);
